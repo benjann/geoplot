@@ -70,8 +70,7 @@
     loads the data from {it:{help filename}} into a new frame called
     {it:name}, where {it:filename} is a valid Stata dataset. For example,
     {it:filename} may contain coordinate data from shape files obtained by
-    {helpb shp2dta} (see {stata ssc describe shp2dta}) or by
-    {helpb mif2dta} (see {stata ssc describe mif2dta}). Alternatively, 
+    {helpb spshape2dta}. Alternatively, 
     {it:filename} may contain attribute data of the units (countries, regions, etc.)
     represented in a shape file, that can then be linked to the frame containing
     the coordinate data, or it could contain coordinates and related
@@ -317,5 +316,4 @@
 
 {psee}
     Online:  help for
-    {helpb geoplot}, {helpb frames}, {helpb shp2data} (if installed),
-    {helpb mif2dta} (if installed)
+    {helpb geoplot}, {helpb frames}, {helpb spshape2dta}

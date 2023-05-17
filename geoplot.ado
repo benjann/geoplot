@@ -1,4 +1,4 @@
-*! version 0.1.1  17may2023  Ben Jann
+*! version 0.1.2  17may2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -67,6 +67,7 @@ program geoplot, rclass
     // process layers
         gen byte LAYER = .
         char LAYER[Layers] `layer_n'
+        gen byte ID = .
         local p 0
         local plots
         nobreak {
@@ -695,13 +696,16 @@ program _layer
             */ MISsing(str asis) * ]
         marksample touse, novarlist
         geoframe get TYPE, l(TYPE)
+        // get ID if existing
+        capt geoframe get ID, l(ORG)
+        if _rc exit _rc
+        local hasID = _rc==0
+        if `hasID' local TGT ID
         // handle coordinates
-        local ORG
-        local TGT
         foreach V of local YX {
             gettoken v0 yx : yx
             if `colvlist' local v
-            else          gettoken v varlist : varlist
+            else         gettoken v varlist : varlist
             if "`v'"=="" geoframe get `v0', l(v)
             local TGT `TGT' `V'
             local ORG `ORG' `v'
@@ -760,8 +764,8 @@ program _layer
     qui replace LAYER = `layer' `in'
     // handle colorvar
     if `hasCOL' {
-        _colvar_categorize, n0(`n0') n1(`n1') `levels' `cuts' `discrete'
-            // returns levels clevels cuts hasmis
+        _colvar_categorize, hasid(`hasID') n0(`n0') n1(`n1') `levels' `cuts'/*
+            */ `discrete' // returns levels clevels cuts hasmis
         if "`discrete'"!="" {
             frame `frame': _colvar_clabels `colvar' `cuts' // returns clabels
         }
@@ -901,12 +905,18 @@ program _get_EID
 end
 
 program _colvar_categorize
-    syntax [, n0(str) n1(str) discrete LEVels(numlist int max=1 >0)/*
+    syntax [, hasid(str) n0(str) n1(str) discrete LEVels(str)/*
         */ cuts(numlist sort min=2) ]
+    capt n _colvar_parse_levels `levels'
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "error in level()"
+        exit _rc
+    }
     local cuts: list uniq cuts
     tempname CUTS
-    mata: _colvar_cuts("`CUTS'", `n0', `n1', "`discrete'"!="",/*
-        */ "`levels'", "`cuts'") // fills in CUTS, returns levels, cuts
+    mata: _colvar_cuts("`CUTS'", `hasid', `n0', `n1', "`discrete'"!="",/*
+        */ `levels', "`method'", "`cuts'") // fills in CUTS, returns levels, cuts
     tempname tmp
     qui gen byte `tmp' = . in `n0'/`n1'
     if "`discrete'"!="" {
@@ -934,6 +944,18 @@ program _colvar_categorize
     c_local levels `levels'
     c_local cuts `cuts'
     c_local hasmis `hasmis'
+end
+
+program _colvar_parse_levels
+    _parse comma n 0 : 0
+    if `"`n'"'!="" {
+        numlist `"`n'"', int min(0) max(1) range(>0)
+        local n "`r(numlist)'"
+    }
+    else local n .
+    syntax [, Quantiles ]
+    c_local levels `n'
+    c_local method `quantiles'
 end
 
 program _colvar_clabels
@@ -1006,12 +1028,13 @@ void _set_default_and_add_quotes(string scalar lname, string scalar def)
     else                     st_local(lname, s)
 }
 
-void _colvar_cuts(string scalar CUTS, real scalar n0, real scalar n1,
-    real scalar discrete, string scalar levels, string scalar cuts)
+void _colvar_cuts(string scalar CUTS, real scalar hasid, real scalar n0,
+    real scalar n1, real scalar discrete, real scalar c,
+    string scalar method, string scalar cuts)
 {
-    real scalar    c, h, hr, d, m, j
+    real scalar    h, hr, d, m, j
     real rowvector minmax, lb, ub
-    real colvector C
+    real colvector C, X
     
     if (cuts!="") {
         C = strtoreal(tokens(cuts)')
@@ -1029,15 +1052,15 @@ void _colvar_cuts(string scalar CUTS, real scalar n0, real scalar n1,
         st_local("levels", strofreal(length(C)))
         return
     }
-    minmax = minmax(st_data((n0,n1), "COLVAR"))
+    X = st_data((n0,n1), "COLVAR")
+    minmax = minmax(X)
     if (minmax==J(1,2,.)) { // no nonmissing data
         st_matrix(CUTS, J(1,0,.))
         st_local("cuts", "")
         st_local("levels", "0")
         return
     }
-    c = strtoreal(levels)
-    if (c==.) c = 5 // default number of levels
+    if (c>=.) c = 5 // default number of levels
     lb = minmax[1]; ub = minmax[2]
     if (lb==ub) { // no variance
         st_matrix(CUTS, minmax)
@@ -1045,28 +1068,20 @@ void _colvar_cuts(string scalar CUTS, real scalar n0, real scalar n1,
         st_local("levels", "1")
         return
     }
-    /*
-    // try to round the bandwidth and limits (min must be in first bin; max
-    // must be in last bin)
-    h = (ub-lb)/c
-    d = floor(log10(h))
-    for (j=0;j<=6;j++) {
-        m  = 10^(d-j)
-        lb = floor(round(minmax[1]/m,1e-12)) * m
-        hr = round(h, m)
-        if ((lb+hr*(c-1))<ub & ub<=(lb+hr*c)) {
-            ub = lb + hr*c
-            break
+    if (method=="quantiles") {
+        if (hasid) {
+            // assuming data is ordered by ID; assuming COLVAR is constant
+            // within ID
+            X = select(X, _mm_unique_tag(st_data((n0,n1), "ID")))
         }
+        X = select(X, X:<.) // mm_quantile() does not allow missings
+        C = mm_quantile(X, 1, rangen(0, 1, c+1))
+        C = _mm_unique(C)
     }
-    if (lb>minmax[1] | ub<minmax[1]) {
-        lb = minmax[1]; ub = minmax[2] // just in case
-    }
-    */
-    C = rangen(lb, ub, c+1)
+    else C = rangen(lb, ub, c+1) // equidistant
     st_matrix(CUTS, C')
     st_local("cuts", invtokens(strofreal(C)'))
-    st_local("levels", strofreal(c))
+    st_local("levels", strofreal(length(C)-1))
 }
 
 void _copy_mlabels_from_frame(real scalar n0, real scalar n1,

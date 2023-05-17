@@ -7,7 +7,7 @@ To install `geoplot` from GitHub, type
 
     . net install geoplot, replace from(https://raw.githubusercontent.com/benjann/geoplot/main/)
 
-Stata 18 is required.
+Stata 17 is required.
 
 The following packages are required:
 
