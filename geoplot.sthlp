@@ -68,7 +68,7 @@
     {p_end}
 {synopt :{helpb geoplot##colors:{ul:col}ors({it:palette})}}color palette to be used
     {p_end}
-{synopt :{helpb geoplot##levels:{ul:lev}els({it:#})}}use {it:#} equidistant levels
+{synopt :{helpb geoplot##levels:{ul:lev}els({it:#})}}use {it:#} levels
     {p_end}
 {synopt :{helpb geoplot##cuts:cuts({it:numlist})}}use levels defined by specified cuts
     {p_end}
@@ -104,7 +104,7 @@
     {p_end}
 
 {syntab :Data}
-{synopt :{helpb geoplot##frame:frame({it:spec})}}store plot data in new frame
+{synopt :{helpb geoplot##frame:frame({it:spec})}}store ploted data in new frame
     {p_end}
 {synoptline}
 
@@ -147,7 +147,7 @@
 
 {phang2}
     {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the shapes
-    as described below.
+    as described {help geoplot##colorvar:below}.
 
 {phang2}
     {cmdab:ec:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}
@@ -157,9 +157,10 @@
     covered by a corresponding exclave.
 
 {phang2}
-    {it:area_options} are options to affect the look of areas as described in
-    help {it:{help area_options}}. For example, use option {cmd:lcolor()} to set
-    the outline color.
+    {it:{help area_options}} are options to affect the look of areas as described in
+    {helpb twoway area}. For example, use option {cmd:lcolor()} to set
+    the outline color. Options {cmd:color()}, {cmd:fcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker line}{...}
 {dlgtab:shapes, line only}
@@ -176,12 +177,13 @@
 
 {phang2}
     {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the lines
-    as described below.
+    as described {help geoplot##colorvar:below}.
 
 {phang2}
-    {it:line_options} are options to affect the look of lines as described in
-    help {it:{help line_options}}. For example, use option {cmd:lwidth()} to set
-    the width of lines.
+    {it:{help line_options}} are options to affect the look of lines as described in
+    {helpb twoway line}. For example, use option {cmd:lwidth()} to set
+    the width of lines. Option {cmd:lcolor()} supports {it:colorspec} as
+    described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker scatter}{...}
 {dlgtab:single-coordinate points}
@@ -200,24 +202,16 @@
 
 {phang2}
     {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the markers
-    as described below.
+    as described {help geoplot##colorvar:below}.
 
 {phang2}
-    {it:marker_options} are options to affect the look of markers as described in
-    help {it:{help marker_options}}. For example, use option {cmd:msymbol()} to set
-    the marker symbol.
+    {it:{help marker_options}}, {it:{help marker_label_options}}, 
+    {it:{help connect_options}}, and {it:jitter_options} are options to affect
+    the look of markers as described in {helpb twoway scatter}. For example,
+    use option {cmd:msymbol()} to set the marker symbol. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
-{phang2}
-    {it:marker_label_options} are options to add marker labels as described in
-    help {it:{help marker_label_options}}.
-
-{phang2}
-    {it:connect_options} are options to connect markers as described in
-    help {it:{help connect_options}}.
-
-{phang2}
-    {it:jitter_options} are options to jitter marker positions using random noise
-    as described in {helpb scatter##jitter_options:twoway scatter}.
 
 {marker labels}{...}
 {dlgtab:single-coordinate labels}
@@ -235,7 +229,7 @@
 
 {phang2}
     {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the labels
-    as described below.
+    as described {help geoplot##colorvar:below}.
 
 {phang2}
     {opth pos:ition(clockposstyle)},
@@ -246,8 +240,8 @@
     {opth si:ze(textsizestyle)},
     {cmdab:c:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}, and
     {opth f:ormat(%fmt)} are marker label options equivalent to the corresponding options
-    described in help {it:{help marker_label_options}}. An exception is that
-    {cmd:color()} supports additional color specifications as described in
+    described in help {it:{help marker_label_options}}. Option
+    {cmd:color()} supports {it:colorspec} as described in
     {helpb colorpalette##colorlist:colorpalette}.
 
 {phang}
@@ -264,8 +258,10 @@
     where {it:frame} is the frame containing the coordinates of the spikes to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} (see below) as well as further options
-    to affect the rendering of the spike lines (see {helpb twoway pcspike}).
+    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    as well as further options to affect the rendering of the spike lines
+    as described in {helpb twoway pcspike}. Option {cmd:lcolor()} supports {it:colorspec} as
+    described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker pccapsym}{...}
 {dlgtab:paired-coordinate spikes capped with symbols}
@@ -278,8 +274,11 @@
     where {it:frame} is the frame containing the coordinates of the spikes to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} (see below) as well as further options
-    to affect the rendering of the spike lines and markers (see {helpb twoway pccapsym}).
+    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    as well as further options to affect the rendering of the spike lines and markers
+    as described in {helpb twoway pccapsym}. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker pcarrow}{...}
 {dlgtab:paired-coordinate arrows}
@@ -292,8 +291,11 @@
     where {it:frame} is the frame containing the coordinates of the arrows to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} (see below) as well as further options
-    to affect the rendering of the arrows (see {helpb twoway pcarrow}).
+    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    as well as further options to affect the rendering of the arrows
+    as described in {helpb twoway pcarrow}. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker pcbarrow}{...}
 {dlgtab:paired-coordinate arrows with two heads}
@@ -306,8 +308,11 @@
     where {it:frame} is the frame containing the coordinates of the arrows to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} (see below) as well as further options
-    to affect the rendering of the arrows (see {helpb twoway pcarrow}).
+    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    as well as further options to affect the rendering of the arrows
+    as described in {helpb twoway pcarrow}. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker pcscatter}{...}
 {dlgtab:plot paired-coordinate markers}
@@ -320,8 +325,11 @@
     where {it:frame} is the frame containing the coordinates of the arrows to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} (see below) as well as further options
-    to affect the rendering of the markers (see {helpb twoway pcscatter}).
+    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    as well as further options to affect the rendering of the markers
+    as described in {helpb twoway pcscatter}. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, and {cmd:mlabcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker scatteri}{...}
 {dlgtab:scatter with immediate arguments}
@@ -331,7 +339,9 @@
 
 {pstd}
     where {it:immediate_values} and {it:options} as described in
-    {helpb twoway scatteri}.
+    {helpb twoway scatteri}. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker pci}{...}
 {dlgtab:pcspike with immediate arguments}
@@ -341,7 +351,8 @@
 
 {pstd}
     where {it:immediate_values} and {it:options} as described in
-    {helpb twoway pci}.
+    {helpb twoway pci}. Option {cmd:lcolor()} supports {it:colorspec} as
+    described in {helpb colorpalette##colorlist:colorpalette}.
 
 {marker pcarrowi}{...}
 {dlgtab:pcarrow with immediate arguments}
@@ -351,7 +362,9 @@
 
 {pstd}
     where {it:immediate_values} and {it:options} as described in
-    {helpb twoway pcarrowi}.
+    {helpb twoway pcarrowi}. Options {cmd:mcolor()},
+    {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
+    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
 
 {title:Options}
@@ -519,7 +532,7 @@
 {phang2}
     {opt mis:sing(options)} determines details about the legend key for missing
     values. {it:options} are {opt l:abel(string)} to define a custom label
-    (default is {cmd:"missing"}), {opt first} to place the missing key
+    (default is {cmd:"no data"}), {opt first} to place the missing key
     at the top or leftmost (default is to place the missing key at the bottom
     or rightmost).
 
@@ -560,7 +573,7 @@
 
 {phang2}
     {opt mis:sing(string)} defines a custom label for the legend key for missing values. The
-    default is {cmd:missing("missing")}.
+    default is {cmd:missing("no data")}.
 
 {phang2}
     {opt nomis:sing} omits the legend key for missing values.
@@ -583,7 +596,7 @@
 {marker frame}{...}
 {phang}
     {cmd:frame(}{it:name}[{cmd:, replace}]{cmd:)} stores the compiled data of
-    the plot in a {helpb frame} named {it:name}. Option {cmd:replace} allows overwriting
+    the plot in a {helpb frame} called {it:name}. Option {cmd:replace} allows overwriting
     an existing frame. Applying the command in {cmd:r(graph)} to the frame
     will reproduce the map.
 

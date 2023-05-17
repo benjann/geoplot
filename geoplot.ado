@@ -1,7 +1,35 @@
-*! version 0.1.0  17may2023  Ben Jann
+*! version 0.1.1  17may2023  Ben Jann
+
+capt which colorpalette
+if _rc==1 exit _rc
+local rc_colorpalette = _rc
+
+capt findfile lcolrspace.mlib
+if _rc==1 exit _rc
+local rc_colrspace = _rc
+
+capt mata: assert(mm_version()>=200)
+if _rc==1 exit _rc
+local rc_moremata = _rc
+
+if `rc_colorpalette' | `rc_colrspace' | `rc_moremata' {
+    if `rc_colorpalette' {
+        di as err "{bf:colorpalette} is required; " _c
+        di as err "type {stata ssc install palettes, replace}"
+    }
+    if `rc_colrspace' {
+        di as err "{bf:colrspace} is required; " _c
+        di as err "type {stata ssc install colrspace, replace}"
+    }
+    if `rc_moremata' {
+        di as err "{bf:moremata} version 2.0.0 or newer is required; " _c
+        di as err "type {stata ssc install moremata, replace}"
+    }
+    exit 499
+}
 
 program geoplot, rclass
-    version 18
+    version 17
     _parse comma lhs 0 : 0
     syntax [, /*
         */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
@@ -9,6 +37,10 @@ program geoplot, rclass
         */ Margin(numlist max=4 >=0) tight /* margin: l r b t (will be recycled)
         */ ASPECTratio(str) YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
         */ frame(str) * ]
+    local legend = `"`legend'`legend2'"'!=""
+    local clegend = `"`clegend'`clegend2'"'!=""
+    if `clegend' _clegend_k, `clegend2'
+    else if !`legend' local legend 2
     _parse_aspectratio `aspectratio' // returns aspectratio, aspectratio_opts
     if "`margin'"=="" local margin 0
     _parse_frame `frame' // returns frame, replace
@@ -74,10 +106,6 @@ program geoplot, rclass
         }
         
     // compile legend
-        local legend = `"`legend'`legend2'"'!=""
-        local clegend = `"`clegend'`clegend2'"'!=""
-        if `clegend' _clegend_k, `clegend2'
-        else if !`legend' local legend 2
         if "`nolegend'"=="" {
             _legend `legend' `clegend_k', `legend2' // returns legend legend_k
         }
@@ -368,7 +396,7 @@ end
 program _legend_parse_missing
     syntax [, Label(str asis) first last nogap ]
     local label = strtrim(`"`label'"')
-    if `"`label'"'=="" local label `""missing""'
+    if `"`label'"'=="" local label `""no data""'
     else {
         gettoken tmp : label, qed(hasquote)
         if !`hasquote' {
@@ -381,6 +409,10 @@ program _legend_parse_missing
 end
 
 program  _clegend_k
+    if c(stata_version)<18 {
+        di as err "{bf:clegend()} requires Stata 18"
+        exit 9
+    }
     syntax [, Layer(numlist int max=1 >0) * ]
     c_local clegend_k `layer'
 end
@@ -389,7 +421,7 @@ program _clegend
     syntax [anything(name=lk)] [, Layer(numlist int max=1 >0) noLABel/*
         */ NOMISsing MISsing(str asis) * ]
     if `"`options'"'!="" local options clegend(`options')
-    mata: _set_default_and_add_quotes("missing", "missing")
+    mata: _set_default_and_add_quotes("missing", "no data")
     local k `layer'
     local clayers: char LAYER[Layers_colvar]
     if "`k'"=="" {
@@ -954,7 +986,7 @@ program _post_chars
     char LAYER[Colors_`i'] `"`colors'"'
 end
 
-version 18
+version 17
 mata:
 mata set matastrict on
 

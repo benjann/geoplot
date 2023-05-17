@@ -1,7 +1,7 @@
-*! version 0.1.0  17may2023  Ben Jann
+*! version 0.1.1  17may2023  Ben Jann
 
 program geoframe
-    version 18
+    version 17
     gettoken subcmd 0 : 0, parse(" ,")
     _parse_subcmd `subcmd'
     _geoframe_`subcmd' `0'
@@ -145,7 +145,15 @@ program _geoframe_get
 end
 
 program _geoframe_attach
+    if c(stata_version)<18 {
+        di as err "{bf:geoframe attach} requires Stata 18"
+        exit 9
+    }
     gettoken frame 0 : 0, parse(" ,")
+    if `"`frame'"'==`"`c(frame)'"' {
+        di as err "{it:frame2} must be different from current frame"
+        exit 498
+    }
     frame `frame' {
         syntax [varlist(default=none)] [, /*
             */ ID0(str) keep(varlist) drop(varlist) ]
@@ -157,12 +165,25 @@ program _geoframe_attach
         }
         local keep: list keep - drop
         local keep: list keep - id
+        local keep: list keep - frame
+        local keep: list uniq keep
     }
     local 0 `"`id0'"'
     syntax [varlist(default=none)]
     local id0 `varlist'
     if `"`id0'"'=="" geoframe get ID, l(id0)
     local keep: list keep - id0
+    qui ds
+    local vlist `"`r(varlist)'"'
+    local vlist: list vlist - id0
+    local vlist: list keep & vlist
+    local k: list sizeof vlist
+    if `k' {
+        local keep: list keep - vlist
+        if `k'>1 local msg "already exist"
+        else     local msg "already exists"
+        di as txt "(`vlist' `msg')"
+    }
     if `: list sizeof keep'==0 {
         di as txt "(no variables to attach)"
         exit
@@ -172,7 +193,15 @@ program _geoframe_attach
 end
 
 program _geoframe_detach
+    if c(stata_version)<18 {
+        di as err "{bf:geoframe detach} requires Stata 18"
+        exit 9
+    }
     syntax name(name=frame)
+    if `"`frame'"'==`"`c(frame)'"' {
+        di as err "{it:frame2} must be different from current frame"
+        exit 498
+    }
     qui frlink dir
     local frlink `"`r(vars)'"'
     local frlink: list frlink & frame
@@ -191,6 +220,47 @@ program _geoframe_detach
         }
     }
     drop `droplist' `frame'
+end
+
+program _geoframe_copy
+    gettoken frame 0 : 0, parse(" ,")
+    if `"`frame'"'==`"`c(frame)'"' {
+        di as err "{it:frame2} must be different from current frame"
+        exit 498
+    }
+    frame `frame' {
+        syntax [varlist(default=none)], keep(varlist) [ /*
+            */ ID0(str) drop(varlist) ]
+        local id `varlist'
+        if `"`id'"'=="" geoframe get ID, l(id)
+        local keep: list keep - drop
+        local keep: list keep - id
+        local keep: list keep - frame
+        local keep: list uniq keep
+    }
+    local 0 `"`id0'"'
+    syntax [varlist(default=none)]
+    local id0 `varlist'
+    if `"`id0'"'=="" geoframe get ID, l(id0)
+    local keep: list keep - id0
+    qui ds
+    local vlist `"`r(varlist)'"'
+    local vlist: list vlist - id0
+    local vlist: list keep & vlist
+    local k: list sizeof vlist
+    if `k' {
+        local keep: list keep - vlist
+        if `k'>1 local msg "already exist"
+        else     local msg "already exists"
+        di as txt "(`vlist' `msg')"
+    }
+    if `: list sizeof keep'==0 {
+        di as txt "(no variables to copy)"
+        exit
+    }
+    frlink m:1 `id0', frame(`frame' `id')
+    frget `keep', from(`frame')
+    drop `frame' // remove link variable
 end
 
 program _geoframe_generate
@@ -233,11 +303,6 @@ program _geoframe_append
     gettoken frame 0 : 0, parse(" ,")
     frame `frame' {
         syntax [varlist] [if] [in] [, TARget(namelist) touse(varname numeric) ]
-        // local dups: list dups varlist
-        // if `"`dups'"'!="" {
-        //     di as err "duplicates not allowed in {it:varlist}"
-        //     exit 198
-        // }
         if "`touse'"!="" {
             if `"`if'`in'"'!="" {
                 di as err "touse() not allowed with if or in"
@@ -269,12 +334,14 @@ program _geoframe_append
             continue
         }
         local TARGET `TARGET' `V'
-        if `: isalias `V'' {
-            di as err "`V' is an alias; may not append to alias variables"
-            exit 498
+        if c(stata_version)>=18 {
+            if `: isalias `V'' {
+                di as err "`V' is an alias; may not append to alias variables"
+                exit 498
+            }
         }
         local TYPE: type `V'
-        capt n _check_types `type' `TYPE'
+        capt n _check_types `type' `TYPE' // may update type
         if _rc==1   exit _rc
         if _rc==109 exit _rc // type mismatch
         if _rc {
@@ -332,16 +399,16 @@ program _check_types
     if "`TYPE'"=="float" {
         if "`type'"=="double" exit 499 // => recast
         if "`type'"=="long" {
-            di as err "type mismatch; may not combine long and float"
-            exit 109
+            c_local type "double" // long + float => recast to double
+            exit 499
         }
         exit
     }
     if "`TYPE'"=="long" {
         if "`type'"=="double" exit 499 // => recast
         if "`type'"=="float" {
-            di as err "type mismatch; may not combine long and float"
-            exit 109
+            c_local type "double" // long + float => recast to double
+            exit 499
         }
         exit
     }
@@ -367,7 +434,7 @@ program _geoframe_varinit
     }
 end
 
-version 18
+version 17
 mata:
 mata set matastrict on
 
