@@ -1,7 +1,7 @@
 # geoplot
 Stata module to draw maps
 
-**This is a beta version that will likely have various issues. Also documentation is still incomplete.**
+**This is a beta version that will likely have various issues.**
 
 To install `geoplot` from GitHub, type
 
@@ -18,6 +18,36 @@ The following packages are required:
 ---
 
 Main changes:
+
+    21may2023 (version 0.1.3)
+    geoframe:
+    - large parts rewritten
+    - -geoframe create- can now read attribute files and shape files together; a
+      link is established between the files so that one can work with the frame
+      containing the attribute file in geoplot without having to bother about the
+      frame containing the shapes; geoplot will grab the shapes automatically
+    - -geoframe create- now makes the created frame the current (working) frame
+    - -goeframe create- can now be applied to data that is already in memory
+    - -geoframe set- and -geoframe get- now operate on given set of keywords;
+      defaults have been revised to be in line with how spshape2dta defines files
+    - -geoframe create- now has options corresponding to the keyword of
+      -geoframe set-
+    - new command -geoframe describe- to describe a frame created by -geoframe-;
+      -geoframe describe- is called by can -geoframe create- after the frame has
+      been created
+    - new commands -geoframe link- and -geoframe unlink-; these commands support
+      the linking of frames; -geoframe link- is called by -geoframe create- when
+      reading an attribute file together with a shape file
+    - the syntax of -geoframe attach- and -geoframe copy- has been simplified; it
+      is no longer possible to specify custom ID variables; the ID variables are
+      assumed to have been set by -geoframe create- or -geoframe set-
+    geoplot
+    - support for linked frames from geoframe added
+    - level() can now generate color intervals based on quantiles (suboption
+      -quantile-) or on kmeans clustering (suboption -kmeans-)
+    - clegend() no longer include missing by default; specify suboption -missing-
+      to include missing
+    - clegend() now has a format() and a nolabel suboption
 
     17may2023 (version 0.1.1)
     - geoplot and geoframe can now also be used in Stata 17, not only in Stata 18;

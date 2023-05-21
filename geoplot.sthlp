@@ -1,7 +1,7 @@
 {smcl}
-{* 17may2023}{...}
+{* 21may2023}{...}
 {hi:help geoplot}{...}
-{right:{browse "http://github.com/benjann/geoplot/"}}
+{right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
 
 {title:Title}
@@ -21,12 +21,17 @@
     where {it:layer} is
 
 {p 8 15 2}
-    {help geoplot##plottypes:{it:plottype}} {it:frame} [{it:...}] [{cmd:,}
+    {help geoplot##plottypes:{it:plottype}} [{it:frame}] [{it:...}] [{cmd:,}
     {help geoplot##colvar:{it:colvar_options}}
     {it:other_options} ]
 
 {pstd}
-    and {it:frame} is the name of a frame containing data prepared by {helpb geoframe}.
+    and {it:frame} is the name of a frame containing data prepared by
+    {helpb geoframe}. {it:frame} may be omitted if
+    there are no subsequent arguments (apart from {it:{help if}},
+    {it:{help in}}, {it:{help weight}}, or options); in this case, the
+    current (working) frame will be used. To use the current (working) frame
+    you may also type {it:frame} as {cmd:.} (missing).
 
 
 {synoptset 20 tabbed}{...}
@@ -36,10 +41,11 @@
     {p_end}
 {synopt :{helpb geoplot##line:line}}plot shapes, line only
     {p_end}
-{synopt :{helpb geoplot##scatter:{ul:sc}atter}}plot single-coordinate points
+{synopt :{helpb geoplot##point:point}}plot single-coordinate markers
     {p_end}
 {synopt :{helpb geoplot##labels:{ul:lab}els}}plot single-coordinate labels
     {p_end}
+
 {synopt :{helpb geoplot##pcspike:pcspike}}plot paired-coordinate spikes
     {p_end}
 {synopt :{helpb geoplot##pccapsym:pccapsym}}plot paired-coordinate spikes capped with symbols
@@ -48,9 +54,10 @@
     {p_end}
 {synopt :{helpb geoplot##pcbarrow:pcbarrow}}plot paired-coordinate arrows with two heads
     {p_end}
-{synopt :{helpb geoplot##pcscatter:pcscatter}}plot paired-coordinate markers
+{synopt :{helpb geoplot##pcpoint:pcpoint}}plot paired-coordinate markers
     {p_end}
-{p2coldent:* {helpb geoplot##scatteri:scatteri}}{cmd:scatter} with immediate arguments
+
+{p2coldent:* {helpb geoplot##pointi:pointi}}{cmd:point} with immediate arguments
     {p_end}
 {p2coldent:* {helpb geoplot##pci:pci}}{cmd:pcspike} with immediate arguments
     {p_end}
@@ -68,7 +75,7 @@
     {p_end}
 {synopt :{helpb geoplot##colors:{ul:col}ors({it:palette})}}color palette to be used
     {p_end}
-{synopt :{helpb geoplot##levels:{ul:lev}els({it:#})}}use {it:#} levels
+{synopt :{helpb geoplot##levels:{ul:lev}els({it:spec})}}number of levels and method to determine cuts
     {p_end}
 {synopt :{helpb geoplot##cuts:cuts({it:numlist})}}use levels defined by specified cuts
     {p_end}
@@ -136,7 +143,7 @@
 {dlgtab:shapes, potentially filled}
 
 {p 8 15 2}
-    {cmd:area} {it:frame} [{it:colorvar}] {ifin}
+    {cmd:area} [{it:frame} [{it:colorvar}]] {ifin}
     [{cmd:,}
     {it:options} ]
 
@@ -166,7 +173,7 @@
 {dlgtab:shapes, line only}
 
 {p 8 15 2}
-    {cmd:line} {it:frame} [{it:colorvar}] {ifin}
+    {cmd:line} [{it:frame} [{it:colorvar}]] {ifin}
     [{cmd:,}
     {it:options} ]
 
@@ -185,39 +192,38 @@
     the width of lines. Option {cmd:lcolor()} supports {it:colorspec} as
     described in {helpb colorpalette##colorlist:colorpalette}.
 
-{marker scatter}{...}
-{dlgtab:single-coordinate points}
+{marker point}{...}
+{dlgtab:single-coordinate markers}
 
 {p 8 15 2}
-    {cmd:scatter} {it:frame} [{it:Y} {it:X}] {ifin} {weight}
+    {cmd:point} [{it:frame} [{it:Y} {it:X}]] {ifin} {weight}
     [{cmd:,}
     {it:options} ]
 
 {pstd}
     where {it:frame} is the frame containing the coordinates of the points to be
     plotted (see {helpb geoframe}), {it:Y} and {it:X} are custom variables names
-    for the coordinates, {it:weight} scales the size of the markers (see
-    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}),
-    and {it:options} are as follows.
+    for the coordinates, and {it:weight} scales the size of the markers (see
+    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}). {cmdab:sc:atter}
+    may be used as a synonym for {cmd:point}. {it:options} are as follows.
 
 {phang2}
     {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the markers
     as described {help geoplot##colorvar:below}.
 
 {phang2}
-    {it:{help marker_options}}, {it:{help marker_label_options}}, 
+    {it:{help marker_options}}, {it:{help marker_label_options}},
     {it:{help connect_options}}, and {it:jitter_options} are options to affect
     the look of markers as described in {helpb twoway scatter}. For example,
     use option {cmd:msymbol()} to set the marker symbol. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
     support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
-
 {marker labels}{...}
 {dlgtab:single-coordinate labels}
 
 {p 8 15 2}
-    {cmd:labels} {it:frame} {it:labelvar} [{it:Y} {it:X}] {ifin}
+    {cmd:labels} [{it:frame} {it:labelvar} [{it:Y} {it:X}]] {ifin}
     [{cmd:,}
     {it:options} ]
 
@@ -245,13 +251,13 @@
     {helpb colorpalette##colorlist:colorpalette}.
 
 {phang}
-    Plot type {cmd:labels} is implemented as a wrapper for plot type {cmd:scatter}.
+    Plot type {cmd:labels} is implemented as a wrapper for plot type {cmd:point}.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes}
 
 {p 8 15 2}
-    {cmd:pcspike} {it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}] {ifin}
+    {cmd:pcspike} [{it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}]] {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
@@ -267,7 +273,7 @@
 {dlgtab:paired-coordinate spikes capped with symbols}
 
 {p 8 15 2}
-    {cmd:pccapsym} {it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}] {ifin}
+    {cmd:pccapsym} [{it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}]] {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
@@ -284,7 +290,7 @@
 {dlgtab:paired-coordinate arrows}
 
 {p 8 15 2}
-    {cmd:pcarrow} {it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}] {ifin}
+    {cmd:pcarrow} [{it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}]] {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
@@ -301,7 +307,7 @@
 {dlgtab:paired-coordinate arrows with two heads}
 
 {p 8 15 2}
-    {cmd:pbcarrow} {it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}] {ifin}
+    {cmd:pbcarrow} [{it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}]] {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
@@ -314,11 +320,11 @@
     {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
     support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
-{marker pcscatter}{...}
+{marker pcpoint}{...}
 {dlgtab:plot paired-coordinate markers}
 
 {p 8 15 2}
-    {cmd:pcscatter} {it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}] {ifin}
+    {cmd:pcpoint} [{it:frame} [{it:Y1} {it:X1} {it:Y2} {it:X2}]] {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
@@ -329,19 +335,23 @@
     as well as further options to affect the rendering of the markers
     as described in {helpb twoway pcscatter}. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, and {cmd:mlabcolor()}
-    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
+    support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}. {cmd:pcscatter} may be used as a
+    synonym for {cmd:pcpoint}.
 
-{marker scatteri}{...}
-{dlgtab:scatter with immediate arguments}
+{marker pointi}{...}
+{dlgtab:point with immediate arguments}
 
 {p 8 15 2}
-    {cmd:scatteri} {it:immediate_values} [{cmd:,} {it:options} ]
+    {cmd:pointi} {it:immediate_values} [{cmd:,} {it:options} ]
 
 {pstd}
     where {it:immediate_values} and {it:options} as described in
     {helpb twoway scatteri}. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
-    support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
+    support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}. {cmd:scatteri} may be used as a
+    synonym for {cmd:pointi}.
 
 {marker pci}{...}
 {dlgtab:pcspike with immediate arguments}
@@ -398,10 +408,15 @@
 
 {marker levels}{...}
 {phang}
-    {opt levels(#)} specifies the number of levels to be formed by {it:colorvar}. A regular grid
-    of {it:#} intervals from the observed minimum to the observed maximum of
-    {it:colorvar} will be used (first interval closed, remaining intervals
-    left-open). The default is {cmd:levels(5)}. Option
+    {cmd:levels(}[{it:#}][{cmd:,} {it:method} {opt w:eight(varname)}]{cmd:)} specifies the number of
+    levels to be formed by {it:colorvar}. By default, a regular grid
+    (equidistant cuts) of 5 intervals from the observed minimum to the observed
+    maximum of {it:colorvar} will be used (first interval closed, remaining intervals
+    left-open). Specify {opt levels(#)} to use {it:#} levels. Specify {it:method}
+    to use a non-regular grid. {it:method} can be {cmdab:q:uantile} (use quantiles as
+    cuts) or {cmdab:k:means} (use cut points determined by kmeans clustering). In case
+    of {cmdab:quantile}, weights to be taken into account when computing the 
+    quantiles can be specified in {cmd:weight()}. Option
     {cmd:levels()} has no effect if {cmd:discrete} is specified.
 
 {marker cuts}{...}
@@ -520,7 +535,7 @@
     ascending order.
 
 {phang2}
-    {opth format(%fmt)} select the display format to be applied to the values
+    {opth f:ormat(%fmt)} select the display format to be applied to the values
     in the legend labels. The default is to use the display format of
     {help geoplpot##colvar:{it:colorvar}}.
 
@@ -555,7 +570,7 @@
     {opt nolegend} suppresses the legend that is printed by default if at least one
     layer contains a color gradient.
 
-{marker celegend}{...}
+{marker clegend}{...}
 {phang}
     {opt clegend(suboptions)} prints a {help clegend_option:contour} plot legend
     of the colors used in one of the layers that include a
@@ -572,11 +587,19 @@
     for layer 4.
 
 {phang2}
-    {opt mis:sing(string)} defines a custom label for the legend key for missing values. The
-    default is {cmd:missing("no data")}.
+    {opth f:ormat(%fmt)} select the display format to be applied to the values
+    in the legend labels. The default is to use the display format of
+    {help geoplpot##colvar:{it:colorvar}}.
 
 {phang2}
-    {opt nomis:sing} omits the legend key for missing values.
+    {opt nolab:el} omits the use value labels in case of a
+    {help geoplpot##colvar:{it:colorvar}} declared as
+    {helpb geoplpot##discrete:discrete}.
+
+{phang2}
+    {opt mis:sing}[{cmd:(}{it:string}{cmd:)} requests that missing value is
+    included in the legend and, optionally, specifies a custom label. The
+    default label is {cmd:"no data"}.
 
 {phang2}
     Further {it:suboptions} to affect the rendering of the
@@ -606,42 +629,68 @@
 {pstd}
     Load data
 
-        {stata "local url http://fmwww.bc.edu/repec/bocode/i/"}
-        {stata geoframe create country  `url'Italy-OutlineCoordinates.dta}
-        {stata geoframe create regions  `url'Italy-RegionsCoordinates.dta}
-        {stata geoframe create Regions  `url'Italy-RegionsData.dta, set(ID=id Y=ycoord X=ycoord)}
-        {stata geoframe create lakes    `url'Italy-Lakes.dta, set(type=water)}
-        {stata geoframe create rivers   `url'Italy-Rivers.dta, set(type=water)}
-        {stata geoframe create Capitals `url'Italy-Capitals.dta, set(Y=ycoord X=xcoord)}
-        {stata "frame regions: geoframe attach Regions"}
+{p 8 12 2}
+    {stata "local url http://fmwww.bc.edu/repec/bocode/i/"}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) shpfile(`url'Italy-RegionsCoordinates.dta)}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create country `url'Italy-OutlineCoordinates.dta}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create capitals `url'Italy-Capitals.dta, coord(xcoord ycoord)}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create lakes `url'Italy-Lakes.dta, feature(water)}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create rivers `url'Italy-Rivers.dta, feature(water)}
+    {p_end}
 
 {pstd}
     Basic map of Italian regions
 
-        {stata geoplot (area regions) (line country, lwidth(medthick)), tight}
+{p 8 12 2}
+    {stata geoplot (area regions) (line country, lwidth(medthick)), tight}
+    {p_end}
 
 {pstd}
     Basic map with lakes and rivers
 
-        {stata geoplot (area regions) (line country, lwidth(medthick)) (area lakes) (line rivers), tight}
+{p 8 12 2}
+    {stata geoplot (area regions) (area lakes) (line rivers), tight}
+    {p_end}
 
 {pstd}
     Regions colored by number of fortune tellers (per million population)
 
-        {stata geoplot (area regions fortell) (area regions), tight legend(bplace(ne))}
+{p 8 12 2}
+    {stata geoplot (area regions fortell) (area regions), tight legend(bplace(ne))}
+    {p_end}
 
 {pstd}
-    Similar graph with more colors and alternative type of legend
+    Similar graph with more colors and alternative type of legend (requires Stata 18)
 
-        {stata geoplot (area regions fortell, levels(50) lcolor(gray)), tight clegend(height(40) bplace(ne)) zlabel(4(3)28)}
+{p 8 12 2}
+    {stata geoplot (area regions fortell, levels(50) lcolor(gray)), tight clegend(bplace(ne)) zlabel(4(3)28)}
+    {p_end}
 
 {pstd}
     Map with provincial capitals
 
-        {stata local layer1 (area regions)}
-        {stata local layer2 (scatter Capitals [aw=pop98], colvar(size) discrete colors(Set1, opacity(50)) mlcolor(%0))}
-        {stata local layer3 (labels Capitals city if pop98>250000, color(back))}
-        {stata geoplot `layer1' `layer2' `layer3', tight legend(bplace(sw))}
+{p 8 12 2}
+    {stata local layer1 (area regions)}
+    {p_end}
+{p 8 12 2}
+    {stata local layer2 (point capitals [aw=pop98], colvar(size) discrete colors(Set1, opacity(50)) mlcolor(%0))}
+    {p_end}
+{p 8 12 2}
+    {stata local layer3 (labels capitals city if pop98>250000, color(black))}
+    {p_end}
+{p 8 12 2}
+    {stata geoplot `layer1' `layer2' `layer3', tight legend(bplace(sw))}
+    {p_end}
 
 
 {title:Returned results}
@@ -661,11 +710,11 @@
 
 {pmore}
     Jann, B. (2023). geoplot: Stata module to draw maps. Available from
-    {browse "http://ideas.repec.org/c/boc/bocode/s?.html"}.
+    {browse "https://github.com/benjann/geoplot/"}.
 
 
 {title:Also see}
 
 {psee}
     Online:  help for
-    {helpb geoframe}, {helpb graph}, {helpb frames}
+    {helpb geoframe}, {helpb graph}, {helpb frames}, {helpb spshape2dta}

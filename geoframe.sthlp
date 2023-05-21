@@ -1,7 +1,7 @@
 {smcl}
-{* 17may2023}{...}
+{* 21may2023}{...}
 {hi:help geoframe}{...}
-{right:{browse "http://github.com/benjann/geoplot/"}}
+{right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
 
 {title:Title}
@@ -11,42 +11,46 @@
 
 {title:Syntax}
 
-{pstd}
-    Load data into frame
-
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:cr:eate} {it:frame} [{cmd:using}] {it:{help filename}}
-    [{cmd:,} {it:{help geoframe##create:options}} ]
+     [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {it:{help geoframe##subcmd:subcommand}} [{it:...}]
 
 
-{pstd}
-    Manipulate existing frame
+{synoptset 15 tabbed}{...}
+{marker subcmd}{synopthdr:subcommand}
+{synoptline}
+{syntab :Main}
+{synopt :{helpb geoframe##create:{ul:cr}eate}}load data into geoframe or declare
+    current frame as geoframe
+    {p_end}
+{synopt :{helpb geoframe##describe:{ul:d}escribe}}describe geoframe
+    {p_end}
 
-{p 8 15 2}
-     [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {it:{help geoframe##subcmb:subcommand}} {it:...}
+{syntab :Manipulation}
+{p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variable in current frame
+    {p_end}
 
-{p2colset 9 22 24 2}{...}
-{marker subcmb}{...}
-{p2col :{it:subcommand}}Description
+{syntab :Settings}
+{synopt :{helpb geoframe##set:set}}update geoframe setting of current frame
     {p_end}
-{p2line}
-{p2col :{helpb geoframe##set:set}}adjust settings of current frame
+{synopt :{helpb geoframe##get:get}}retrieve geoframe setting from current frame
     {p_end}
-{p2col :{helpb geoframe##get:get}}retrieve setting from current frame
+{p2col :{helpb geoframe##link:{ul:l}ink}}link shape frame to current frame
     {p_end}
-{p2col :{helpb geoframe##attach:{ul:at}tach}}attach other frame to current frame using aliases (Stata 18 required)
+{p2col :{helpb geoframe##unlink:{ul:unl}ink}}unlink shape frame from current frame
     {p_end}
-{p2col :{helpb geoframe##detach:{ul:det}ach}}detach other frame from current frame (Stata 18 required)
+
+{syntab :Utilities}
+{p2col :{helpb geoframe##attach:{ul:at}tach}}attach attribute frame to current frame using aliases (Stata 18 required)
     {p_end}
-{p2col :{helpb geoframe##copy:copy}}copy variables from other frame to current frame
+{p2col :{helpb geoframe##detach:{ul:det}ach}}detach attribute frame from current frame (Stata 18 required)
+    {p_end}
+{p2col :{helpb geoframe##copy:copy}}copy variables from attribute frame to current frame
     {p_end}
 {p2col :{helpb geoframe##append:{ul:ap}pend}}append observations from other frame to current frame
     {p_end}
-{p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variables in current frame
+{p2col :{helpb geoframe##varinit:varinit}}initialize variables in current frame
     {p_end}
-{p2col :{helpb geoframe##generate:varinit}}initialize variables in current frame
-    {p_end}
-{p2line}
+{synoptline}
 
 
 {title:Description}
@@ -61,145 +65,236 @@
 {dlgtab:geoframe create}
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:cr:eate} {it:frame} [{cmd:using}] {it:{help filename}}
-    [{cmd:,}
-    {opt replace} {opt set(settings)}
-    ]
+    {cmd:geoframe} {cmdab:cr:eate} [{it:frame}] [{cmd:using}] {it:{help filename}}
+    [{cmd:,} {it:options} ]
 
 {pstd}
-    loads the data from {it:{help filename}} into a new frame called
-    {it:name}, where {it:filename} is a valid Stata dataset. For example,
-    {it:filename} may contain coordinate data from shape files obtained by
-    {helpb spshape2dta}. Alternatively, 
-    {it:filename} may contain attribute data of the units (countries, regions, etc.)
-    represented in a shape file, that can then be linked to the frame containing
-    the coordinate data, or it could contain coordinates and related
-    attributes of other elements (e.g. coordinates and
-    population sizes of cities). Options are as follows.
+    loads the data from {it:filename} into a new frame called
+    {it:frame}, where {it:filename} is a valid Stata dataset, and declares the
+    created frame as a geoframe. If {it:frame} is omitted, the base name of {it:filename}
+    is used as the name of the created frame. Typically, {it:filename} is
+    an attribute file created by {helpb spshape2dta}. If a linked shape
+    file created by {helpb spshape2dta} is available in the same folder as
+    {it:filename}, the shape file will automatically be loaded into a second frame called
+    {it:frame}{cmd:_shp}, and the link will be registered in {it:frame}. Alternatively,
+    {it:filename} may also be a shape file or any other valid Stata dataset.
+
+{pstd}
+    You may also type
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:cr:eate}
+    [{cmd:,} {it:options} ]
+
+{pstd}
+    to declare the current frame as a geoframe.
+
+{pstd}
+    Options are as follows.
 
 {phang2}
-    {opt replace} allows replacing an existing frame.
+    {opt replace} allows replacing existing frames.
 
 {phang2}
-    {opt set(settings)} applies the specified settings to the created
-    frame. The syntax of {it:settings} is as explained in 
-    {helpb geoframe##set:geoframe set}.
+    {opt nodes:cribe} suppresses the description of the frame that is displayed
+    by default.
+
+{phang2}
+    {opt t:ype(type)} declares the type of data included in the
+    frame. {it:type} may be {opt unit} (attribute data), {opt pc}
+    (paired-coordinate data), or {opt shape} (shape data). If {cmd:type()} is omitted,
+    {cmd:geoframe create} infers the type from context.
+
+{phang2}
+    {opt feat:ure(string)} declares the type of features represented by the
+    units in the frame. For example, type {cmd:feature(water)} if the frame
+    contains data on lakes or rivers. {it:string} can be any text.
+
+{phang2}
+    {opt id(varname)} specifies the name of the unit ID. Default is {cmd:_ID}.
+
+{phang2}
+    {opt co:ordinates(X Y [X2 Y2])} specifies the names of the variables containing
+    the coordinates. The default depends on data type. It is {cmd:_X _Y} for data type {cmd:shape},
+    {cmd:_CX _CY} for data type {cmd:unit}, and {cmd:_X1 _Y1 _X2 _Y2} for data type {cmd:pc}.
+
+{phang2}
+    {opt sid(varname)} specifies the name of the within-unit sort ID. Default is
+    {cmd:shape_order}. This is only relevant for data of type {cmd:shape}
+
+{phang2}
+    {opt pid(varname)} specifies the name of the within-unit polygon ID. Default is
+    {cmd:_PID}. This is only relevant for data of type {cmd:shape}
+
+{phang2}
+    {opt pl:evel(varname)} specifies the name of the plot level ID (enclaves and exclaves). Default is
+    {cmd:_PLEVEL}. This is only relevant for data of type {cmd:shape}
+
+{phang2}
+    {opt noshp:file} deactivates automatic loading of the shape file. By default,
+    as described above, {cmd:geoframe create} loads the shape file linked to
+    {it:filename}, if {it:filename} is an attribute file generated by {helpb spshape2dta}. Specify
+    {cmd:noshpfile} to suppress this behavior. Data type {cmd:shape} implies {cmd:noshpfile}.
+
+{phang2}
+    {opt shp:file(spec)} specifies a custom shape file to be loaded along with the main
+    file. The syntax of {it:spec} is
+
+{p 16 19 2}
+    [[{it:shpframe}] [{cmd:using}] {it:shpfilename} ] [{cmd:,} {it:suboptions} ]
+
+{pmore2}
+    where {it:shpfilename} is the name (and path) of the shape file on disk and {it:shpframe}
+    provides a name for the shape frame. If {it:shpframe} is omitted, {it:frame}{cmd:_shp}
+    is used as the name for the shape frame. {it:suboptions} are {opt feat:ure()},
+    {cmd:id()}, {opt co:ordinates()}, {cmd:sid()}, {cmd:pid()}, and {opt pl:evel()}
+    as described above.
+
+{marker describe}{...}
+{dlgtab:geoframe describe}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:d:escribe}
+
+{pstd}
+    displays the geoframe settings of the current frame. You may also specify
+    {cmd:geoframe} {cmd:describe} {it:frame}.
+
+{marker generate}{...}
+{dlgtab:geoframe generate}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:g:enerate} {it:fnc} {it:...}
+
+{pstd}
+    provides functions to generate specific variables in the current frame.
+
+{pstd}
+    Currently, the only such function is
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:newname}] [{cmd:,} {opt replace} ]
+
+{pstd}
+    to generate a variable identifying the different polygons within each unit
+    represented in the frame. {cmd:_PID} is used as variable name if
+    {it:newname} is omitted. Option {cmd:replace} allows overwriting an existing
+    variable. The created variable will be registered using
+    {helpb geoframe##set:geoframe set pid}.
 
 {marker set}{...}
 {dlgtab:geoframe set}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:set} {it:settings} [{cmd:,} {opt relax} ]
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:set} {it:key} [{it:value}]
 
 {pstd}
     defines or adjust the settings of the current frame. The settings, for example, contain
     information on the names of the coordinate variables. Such information will be
-    retrieved by {cmd:geoframe} or {helpb geoplot} when processing a frame. The syntax for
-    {it:settings} is 
+    retrieved by {cmd:geoframe} or {helpb geoplot} when processing a frame. {it:key} can
+    be as follows.
 
-            {it:name} {cmd:=} {it:value} [ {it:name} {cmd:=} {it:value} ...]
-
-{pstd}
-    where {it:name} is the name of the setting and {it:value} is its definition. Enclose {it:value}
-    in quotes if it contains spaces. You are free to define any settings you wish, but note that
-    {helpb geoframe} has a number of standard settings with associated default values. These
-    settings are as follows:
-
-{p2colset 9 16 28 2}{...}
-{p2col :{it:name}}Default{space 3}Description
+{p2colset 9 22 24 2}{...}
+{p2col :{it:key}}Description
     {p_end}
-{p2col :{cmd:ID}}{cmd:_ID}{space 7}{it:varname} identifying the units represented in the frame
+{p2col :{cmdab:t:ype}}the type of data in the frame; {it:value} may be
+    {cmd:unit} (attribute file), {cmd:pc} (paired-coordinates file),
+    or {cmd:shape} (shape file)
     {p_end}
-{p2col :{cmd:PID}}{cmd:_PID}{space 6}{it:varname} identifying the different polygons within a unit
+{p2col :{cmdab:feat:ure}}the type of features represented by the units in the frame;
+    {it:value} can be any text
     {p_end}
-{p2col :{cmd:EID}}{cmd:_EID}{space 6}{it:varname} identifying polygons that are enclaves or exclaves
+{p2col :{cmd:id}}the name of the variable containing the unit ID; {it:value} is a single
+    variable name; default is {cmd:_ID}
     {p_end}
-{p2col :{cmd:Y}}{cmd:_Y}{space 8}{it:varname} of vertical coordinates (latitude)
+{p2col :{cmdab:co:ordinates}}the names of the variables containing the coordinates; {it:value} is a list of
+    two (for data types {cmd:unit} and {cmd:shape}) or four (for data type {cmd:pc}) variable names; default is
+    {cmd:_X _Y} for data type {cmd:shape}, {cmd:_CX _CY} for data type {cmd:unit},
+    and {cmd:_X1 _Y1 _X2 _Y2} for data type {cmd:pc}
     {p_end}
-{p2col :{cmd:X}}{cmd:_X}{space 8}{it:varname} of horizontal coordinates (longitude)
+{p2col :{cmd:sid}}the name of the variable containing the within-unit sort ID;
+    {it:value} is a single variable name; default is {cmd:shape_order}; the setting
+    is only relevant for data of type {cmd:shape}
     {p_end}
-{p2col :{cmd:Y1}}{cmd:_Y1}{space 7}{it:varname} of origin coordinates
-    (paired-coordinate data)
+{p2col :{cmd:pid}}the name of the variable containing the within-unit polygon ID;
+    {it:value} is a single variable name; default is {cmd:_PID}; the setting
+    is only relevant for data of type {cmd:shape}
     {p_end}
-{p2col :{cmd:X1}}{cmd:_X1}{space 7}{it:varname} of horizontal origin coordinates
-    (paired-coordinate data)
+{p2col :{cmdab:pl:evel}}the name of the variable containing the plot level ID (enclaves and exclaves);
+    {it:value} is a single variable name; default is {cmd:_PLEVEL}; the setting
+    is only relevant for data of type {cmd:shape}
     {p_end}
-{p2col :{cmd:Y2}}{cmd:_Y2}{space 7}{it:varname} of vertical destination coordinates
-    (paired-coordinate data)
-    {p_end}
-{p2col :{cmd:X2}}{cmd:_Y2}{space 7}{it:varname} of horizontal destination coordinates
-    (paired-coordinate data)
-    {p_end}
-{p2col :{cmd:TYPE}}(empty){space 3}the type of elements represented in the frame;
-    for example, set {cmd:TYPE = "water"} if the frame contains coordinates
-    of lakes or rivers
+{p2col :{cmdab:shp:frame}}the name of the linked shape frame; this is set
+    automatically by the {cmd:shapeframe()} option of {helpb geoframe##create:geoframe create} or by
+    {helpb geoframe##link:geoframe link}
     {p_end}
 
 {pstd}
-    Note that {it:name} is case insensitive; you may type {it:name} in uppercase
-    (as above) or in lowercase.
-
-{pstd}
-    For the above settings that provide information on a variables name, {cmd:geoframe set}
-    will return error if you modify such a setting and the specified variable
-    does not exist in the data. Type option {cmd:relax} to prevent this behavior (for example,
-    if you want to define a setting before the relevant variable has been created).
-
-{pstd}
-    {cmd:geoframe} settings are stored as characteristics; see {helpb char}.
+    {it:key} is case insensitive; you may type {it:key} in lowercase
+    (as above) or in uppercase.
 
 {marker get}{...}
 {dlgtab:geoframe get}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:get} {it:name} [{cmd:,} {opt l:ocal(lname)} {opt relax} {opt nodef:ault} ]
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:get} {it:key} [{cmd:,} {opt l:ocal(lname)} ]
 
 {pstd}
-    displays the value of the setting stored under {it:name}. {it:name} is case
-    insensitive; you may type {it:name} in uppercase or in lowercase. Options
-    are as follows:
+    retrieves the value of a geoframe setting, where {it:key} is the name of the
+    setting to be retrieved. Available keys are as listed
+    {help geoframe##set:above}.
 
-{phang2}
-    {opt local(lname)} stores the value of the setting in a local called {it:lname}
-    instead of displaying it.
+{pstd}
+    Option {opt local()} stores the value of the setting in a local called
+    {it:lname} instead of displaying it.
 
-{phang2}
-    {cmd:relax} prevents {cmd:geoframe get} from aborting with error if a standard setting
-    referring to a variable is retrieved and the variable does not exist in the data.
+{marker link}{...}
+{dlgtab:geoframe link}
 
-{phang2}
-    {cmd:nodefault} returns nothing if a standard setting is retrieved for
-    which no value has been defined by the user, even if the setting has a default
-    value.
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:link} {it:shpframe}
+
+{pstd}
+    registers a link between the current frame and {it:shpframe}. The current
+    frame must be an attribute frame (one row per unit) and
+    {it:shpframe} is typically a frame containing shape information on the units
+    represented in the current frame. For each frame only one link to a
+    {it:shpframe} can be registered; calling {cmd:geoframe link} will
+    unregisters any existing link to another shape frame. {cmd:geoframe link}
+    is an alternative to linking frames automatically when loading them
+    using {cmd:geoframe create}.
+
+{marker unlink}{...}
+{dlgtab:geoframe unlink}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:unlink}
+
+{pstd}
+    unregisters the link to a shape frame in the current frame.
 
 {marker attach}{...}
 {dlgtab:geoframe attach}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:at:tach} {it:frame2}
-    [{it:idvar2}]
-    [{cmd:,} {opt id(idvar)} {opth keep(varlist)} {opth drop(varlist)} ]
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:at:tach} {it:unitframe}
+    [{varlist}] [{cmd:,} {opth ex:clude(varlist)} ]
 
 {pstd}
-    attaches {it:frame2} to the current frame using an {cmd:m:1} merge. That is, a
-    link to {it:frame2} is established and all variables from {it:frame2}
+    attaches {it:unitframe} to the current frame using an {cmd:m:1} merge. That is, a
+    physical link to {it:unitframe} is established and all variables from {it:unitframe}
     that do not already exist in the current frame (except for the ID) are added
-    as aliases to the current frame. Typically the current frame will contain the shape
-    coordinates of countries, regions, or other units
-    and {it:frame2} will contain attribute data for each unit such as, e.g.,
-    population size. After attaching {it:frame2} to the current frame, the variables
-    from {it:frame2} will be available in the current frame like any other variables
+    as aliases to the current frame. {it:unitframe} must be an attribute frame
+    (one row per unit) and the current frame is typically a frame containing
+    shape information on the units represented in {it:unitframe}. After attaching
+    {it:unitframe} to the current frame, the variables
+    from {it:unitframe} will be available in the current frame like any other variables
     in the current frame.
 
 {pstd}
-    The IDs to merge the frames are obtained from {helpb geoframe##get:geoframe get}; alternatively,
-    specify a custom ID variable for {it:frame2} as argument {it:idvar2} or for the current frame using
-    option {cmd:id()}.
-
-{pstd}
-    By default, all relevant variables from {it:frame2} will be added as aliases
-    to the current frame. Use option {cmd:keep()} to select the variables
-    to be added; use option {cmd:drop()} to exclude variables from being added.
+    By default, all relevant variables from {it:unitframe} will be added as aliases
+    to the current frame. Specify {varlist} to select the variables
+    to be added; use option {cmd:exlcude()} to exclude variables from being added.
 
 {pstd}
     {cmd:geoframe attach} requires Stata 18.
@@ -208,11 +303,12 @@
 {dlgtab:geoframe detach}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:det:ach} {it:frame2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:det:ach} {it:unitframe}
 
 {pstd}
-    detaches {it:frame2} from the current frame. That is, all alias variables will be
-    removed and the link variable will be deleted.
+    detaches {it:unitframe} from the current frame. All alias variables related to
+    {it:unitframe} will be removed and the physical link to {it:unitframe}
+    will be deleted from the current frame.
 
 {pstd}
     {cmd:geoframe detach} requires Stata 18.
@@ -221,18 +317,22 @@
 {dlgtab:geoframe copy}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:copy} {it:frame2}
-    [{it:idvars2}]{cmd:,} {opth keep(varlist)} [ {opt id(idvars)} {opth drop(varlist)} ]
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:copy} {it:unitframe}
+    {varlist} [{cmd:,} {opth ex:clude(varlist)} ]
 
 {pstd}
-    copies variables from {it:frame2} into the current frame using an {cmd:m:1}
-    merge. Syntax is as for {helpb geoframe##attach:geoframe attach}, except that
-    {cmd:keep()} is required.
+    copies the specified variables from {it:unitframe} into the current
+    frame. {it:unitframe} must be an attribute frame (one row per unit) and
+    the current frame is typically a frame containing shape information on the
+    units represented in {it:unitframe}. Use option {cmd:exlcude()} to exclude
+    selected variables that have been specified in {varlist} from being added.
 
 {pstd}
-    {cmd:geoframe copy} is a Stata 17 substitute to {helpb geoframe##attach:geoframe attach}; users of
-    Stata 18 are advised to use {helpb geoframe##attach:geoframe attach}, which is more powerful and
-    more efficient.
+    Use option {cmd:target()} to specify alternative variable names to be used
+    in the current frame. {it:varlist} (after applying {cmd:exclude()}) and
+    {cmd:target()} will be matched one by one; if {cmd:target()} contains fewer
+    elements than {it:varlist}, the remaining elements will be taken
+    from {it:varlist}.
 
 {marker append}{...}
 {dlgtab:geoframe append}
@@ -258,29 +358,7 @@
 {pstd}
     Option {cmd:touse()} specifies a variable identifying the observations to be
     appended (i.e. observations for which the specified variable is unequal
-    zero). Use this option an alternative to {it:{help if}} and {it:{help in}}.
-
-{marker generate}{...}
-{dlgtab:geoframe generate}
-
-{p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:g:enerate} {it:fnc} {it:...}
-
-{pstd}
-    provides functions to generate specific variables in the current frame.
-
-{pstd}
-    Currently the only such function is
-
-{p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:newname}] [{cmd:,} {opt replace} ]
-
-{pstd}
-    to generate a variable identifying the different polygons with each unit
-    represented in the frame. {cmd:_PID} is used as variable name if
-    {it:newname} is omitted. Option {cmd:replace} allows overwriting an existing
-    variable. The crated variable will be registered under {it:name} {cmd:PID} using
-    {helpb geoframe##set:geoframe set}.
+    zero). Use this option as an alternative to {it:{help if}} and {it:{help in}}.
 
 {marker varinit}{...}
 {dlgtab:geoframe varinit}
@@ -296,7 +374,110 @@
 {title:Examples}
 
 {pstd}
-    See the examples in help {helpb geoframe}.
+    Load attribute data and associated shape file in one call:
+
+{p 8 12 2}
+    {stata "local url http://fmwww.bc.edu/repec/bocode/i/"}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) shpfile(`url'Italy-RegionsCoordinates.dta)}
+    {p_end}
+{p 8 12 2}
+    {stata geoplot (area regions fortell), tight legend(bplace(ne))}
+    {p_end}
+
+{pstd}
+    Options {cmd:id()} and {cmd:coord()} have been specified because
+    {cmd:Italy-RegionsData.dta} uses custom names for the unit ID and the
+    coordinate variables (the default variable names for an attribute file are {cmd:_ID},
+    {cmd:_CX} and {cmd:_CY}). No such options were specified for the shape file
+    because the variables in {cmd:Italy-RegionsCoordinates.dta} comply with the
+    default naming conventions for shape files ({cmd:_ID},
+    {cmd:_X} and {cmd:_Y}).
+
+{pstd}
+    Load attribute data and associated shape file in two steps and then link them
+    manually using {helpb geoframe##link:geoframe link}:
+
+{p 8 12 2}
+    {stata "local url http://fmwww.bc.edu/repec/bocode/i/"}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) replace}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions_shp `url'Italy-RegionsCoordinates.dta, replace}
+    {p_end}
+{p 8 12 2}
+    {stata "frame regions: geoframe link regions_shp"}
+    {p_end}
+{p 8 12 2}
+    {stata "frame regions: geoframe describe"}
+    {p_end}
+{p 8 12 2}
+    {stata geoplot (area regions fortell), tight legend(bplace(ne))}
+    {p_end}
+
+{pstd}
+    Option {cmd:replace} has been specified so that the existing frames from the
+    first examples can be overwritten.
+
+{pstd}
+    Load shape file and attribute data in two steps and then link them using
+    {helpb geoframe##attach:geoframe attach}: An alternative to the above linking
+    approach is to load the shape file and the
+    attribute file separately and then use {helpb geoframe##attach:geoframe attach}
+    to make the attribute data accessible directly from within the
+    shape frame (this requires Stata 18). Conceptually, the shape file is then
+    the main working frame and the attribute data is kept in an
+    auxiliary frame.
+
+{p 8 12 2}
+    {stata "local url http://fmwww.bc.edu/repec/bocode/i/"}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions `url'Italy-RegionsCoordinates.dta, replace}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions_data `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord)}
+    {p_end}
+{p 8 12 2}
+    {stata "frame regions: geoframe attach regions_data"}
+    {p_end}
+{p 8 12 2}
+    {stata "frame regions: describe"}
+    {p_end}
+{p 8 12 2}
+    {stata geoplot (area regions fortell), tight legend(bplace(ne))}
+    {p_end}
+
+{pstd}
+    An advantage of such a reversed approach is that multiple attribute frames
+    can be attached to the same shape frame.
+
+{pstd}
+    Yet another approach could be to load the shape file and the attribute data
+    separately and then use {helpb geoframe##copy:geoframe copy} to copy selected
+    variables from the attribute data into the shape frame.
+
+{pstd}
+    Use of option {cmd:feature()} for lakes and rivers:
+
+{p 8 12 2}
+    {stata "local url http://fmwww.bc.edu/repec/bocode/i/"}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create regions `url'Italy-RegionsCoordinates.dta, replace}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create lakes `url'Italy-Lakes.dta, feature(water)}
+    {p_end}
+{p 8 12 2}
+    {stata geoframe create rivers `url'Italy-Rivers.dta, feature(water)}
+    {p_end}
+{p 8 12 2}
+    {stata geoplot (area regions) (area lakes) (line rivers), tight legend(bplace(ne))}
+    {p_end}
 
 
 {title:Author}
@@ -308,8 +489,8 @@
     Thanks for citing this software as follows:
 
 {pmore}
-    Jann, B. (2023). geoplot: Stata module to draw maps.. Available from
-    {browse "http://ideas.repec.org/c/boc/bocode/s?.html"}.
+    Jann, B. (2023). geoplot: Stata module to draw maps. Available from
+    {browse "https://github.com/benjann/geoplot/"}.
 
 
 {title:Also see}
