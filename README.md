@@ -19,6 +19,10 @@ The following packages are required:
 
 Main changes:
 
+    22may2023 (version 0.1.5)
+    geoplot
+    - cvar() now also applies to lwidth(), not only color()
+
     22may2023 (version 0.1.4)
     geoplot
     - now displaying a note if a layer is empty

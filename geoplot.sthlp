@@ -71,9 +71,8 @@
 {synoptset 20 tabbed}{...}
 {marker cvaropts}{synopthdr:cvar_options}
 {synoptline}
-{synopt :{helpb geoplot##cvar:{ul:cv}ar({it:cvar})}}variable to control color
-    {p_end}
-{synopt :{helpb geoplot##color:{ul:col}or({it:palette})}}color palette to be used
+{syntab :Main}
+{synopt :{helpb geoplot##cvar:{ul:cv}ar({it:cvar})}}variable to control styling
     {p_end}
 {synopt :{helpb geoplot##levels:{ul:lev}els({it:spec})}}number of levels and method to determine cuts
     {p_end}
@@ -81,6 +80,14 @@
     {p_end}
 {synopt :{helpb geoplot##discrete:{ul:discr}ete}}treat {it:cvar} as discrete instead of continuous
     {p_end}
+
+{syntab :Elements}
+{synopt :{helpb geoplot##color:{ul:col}or({it:palette})}}color palette to be used
+    {p_end}
+{synopt :{helpb geoplot##lwidth:{ul:lw}idth({it:list})}}list of line widths to be used
+    {p_end}
+
+{syntab :Missing}
 {synopt :{helpb geoplot##missing:{ul:mis}sing({it:colorspec})}}color to be used for missing values
     {p_end}
 {synoptline}
@@ -128,7 +135,7 @@
 
 {pstd}
     Multiple layers of elements such as regions, borders, lakes, roads, labels, etc.,
-    can be freely combined. Elements can be colored based on values of variables.
+    can be freely combined. Elements can be styled based on values of variables.
 
 {pstd}
     {cmd:geoplot} requires {helpb colorpalette}, {helpb colrspace}, and {helpb moremata}. To
@@ -389,28 +396,16 @@
 
 {marker cvar}{...}
 {phang}
-    {opt cvar(cvar)} specifies that the colors of the areas, lines, or markers
+    {opt cvar(cvar)} specifies that the colors or other aspects of the areas, lines, or markers
     in a layer be determined by the values of (numeric) variable {help varname:{it:cvar}}. The
     range of values of {it:cvar} will be divided into levels and each
-    level will be represented by a different color. {opt colorvar()} may be
+    level will be represented by a different style. {opt colorvar()} may be
     used as a synonym for {opt cvar()}
 
 {pmore}
     Some {help geoplot##plottype:{it:plottypes}} allow {it:cvar} as an
     argument. In these cases option {cmd:cvar()} is not needed; if specified nonetheless,
     it takes precedence over {it:cvar} specified as an argument.
-
-{marker colors}{...}
-{phang}
-    {cmd:color(}[{it:{help colorpalette##palette:palette}}] [{cmd:,}
-    {it:{help colorpalette##opts:palette_options}}]{cmd:)}
-    selects the colors to be used for the levels. {it:palette} is any
-    palette allowed by {helpb colorpalette} (which can also be a simple list of colors, see
-    help {it:{help colorpalette##colorlist:colorlist}}) and {it:palette_options} are
-    corresponding options. The default is {cmd:colors(viridis)}. For example, to use a
-    red to blue HCL color scheme, you could type {cmd:colors(hcl bluered, reverse)}. An
-    appropriate number of colors will automatically retrieved from {it:palette}
-    (applying interpolation or recycling, if necessary, depending on type of palette).
 
 {marker levels}{...}
 {phang}
@@ -439,6 +434,24 @@
 {phang}
     {opt discr:ete} treats {it:cvar} as a discrete variable. Each unique value
     of {it:cvar} will form a separate level.
+
+{marker color}{...}
+{phang}
+    {cmd:color(}[{it:{help colorpalette##palette:palette}}] [{cmd:,}
+    {it:{help colorpalette##opts:palette_options}}]{cmd:)}
+    selects the colors to be used for the levels. {it:palette} is any
+    palette allowed by {helpb colorpalette} (which can also be a simple list of colors, see
+    help {it:{help colorpalette##colorlist:colorlist}}) and {it:palette_options} are
+    corresponding options. The default is {cmd:colors(viridis)}. For example, to use a
+    red to blue HCL color scheme, you could type {cmd:colors(hcl bluered, reverse)}. An
+    appropriate number of colors will automatically retrieved from {it:palette}
+    (applying interpolation or recycling, if necessary, depending on type of palette).
+
+{marker lwidth}{...}
+{phang}
+    {opt lwidth(list)} specified a list of levels to be used for the levels. {it:list} can
+    be a {it:{help numlist}} or a {it:{help linewidthstyle}list}. Elements will be recycled if there
+    are more levels than elements.
 
 {marker missing}{...}
 {phang}

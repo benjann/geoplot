@@ -1,4 +1,4 @@
-*! version 0.1.4  22may2023  Ben Jann
+*! version 0.1.5  22may2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -735,6 +735,10 @@ program _layer
     local PLVopts
     local WGT
     local MLABopts
+    local CVARopts cvar(varname numeric) COLORVar(varname numeric)/*
+        */ LEVels(str) cuts(numlist sort min=2) DISCRete /*
+        */ COLor(str asis) LWidth(str) /*
+        */ MISsing(str asis) 
     local YX Y X // coordinate variable names used in plot data
     if `"`plottype'"'=="area" {
         local TYPE   shape
@@ -771,9 +775,7 @@ program _layer
     frame `frame' {
         // syntax
         syntax `varlist' [if] [in] `WGT' [, `PLVopts' `MLABopts'/*
-            */ cvar(varname numeric) COLORVar(varname numeric)/*
-            */ LEVels(str) cuts(numlist sort min=2) DISCRete /*
-            */ COLor(str asis) MISsing(str asis) * ]
+            */ `CVARopts' * ]
         local cuts: list uniq cuts
         capt n _parse_levels `levels' // => levels, method, l_wvar
         if _rc==1 exit _rc
@@ -868,7 +870,10 @@ program _layer
                 local TGT `TGT' `L_WVAR'
            }
         }
-        else if `"`color'"'!="" local options color(`color') `options'
+        else {
+            if `"`color'"'!=""  local options color(`color') `options'
+            if `"`lwidth'"'!="" local options lwidth(`lwidth') `options'
+        }
         // handle marker labels
         local hasMLAB = `"`mlabel'"'!=""
         if `hasMLAB' {
@@ -942,7 +947,8 @@ program _layer
         }
         if `levels' {
             _cvar_color `levels' `color' // => color
-        }
+            _cvar_recycle lwidth `levels' "thin" `"`lwidth'"'
+         }
         if "`hasmis'"!="" {
             if `"`missing'"'=="" local missing gs14 // default
             mata: _get_color("missing")
@@ -963,28 +969,34 @@ program _layer
     if `"`plottype'"'=="area" {
         if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
         local opts `opts' cmissing(n) nodropbase lalign(center)/*
-            */ lpattern(solid) lwidth(thin)
+            */ lpattern(solid) 
         if `hasCVAR' {
-            local opts `opts' lcolor(%0) finten(100)
-        }
-        else if `"`FEATURE'"'=="water" {
-            local opts `opts' color("135 206 235") finten(50) // "SkyBlue"
+            local opts `opts' lwidth(thin) lcolor(%0) finten(100)
         }
         else {
-            local opts `opts' lcolor(gray)
-            if `"`fcolor'"'=="" local opts `opts' fcolor(none)
+            local opts `opts' lwidth(thin) 
+            if `"`FEATURE'"'=="water" {
+                local opts `opts' color("135 206 235") finten(50) // "SkyBlue"
+            }
+            else {
+                local opts `opts' lcolor(gray)
+                if `"`fcolor'"'=="" local opts `opts' fcolor(none)
+            }
         }
     }
     else if "`plottype'"'=="line" {
-        local opts `opts' cmissing(n) lpattern(solid) lwidth(thin)
+        local opts `opts' cmissing(n) lpattern(solid) 
         if `hasCVAR' {
             local opts `opts'
         }
-        else if `"`FEATURE'"'=="water" {
-            local opts `opts' color("135 206 235") // "SkyBlue"
-        }
         else {
-            local opts `opts' lcolor(gray)
+            local opts `opts' lwidth(thin) 
+            if `"`FEATURE'"'=="water" {
+                local opts `opts' color("135 206 235") // "SkyBlue"
+            }
+            else {
+                local opts `opts' lcolor(gray)
+            }
         }
     }
     if `hasMLAB' {
@@ -1004,7 +1016,10 @@ program _layer
             local enclave = mod(`pl',2)
         }
         else local enclave 0
-        if `hasCVAR' local COLOR: copy local color
+        if `hasCVAR' {
+            local COLOR: copy local color
+            local LWIDTH: copy local lwidth
+        }
         foreach i of local clevels {
             if `enclave' {
                 local IFF `iff'
@@ -1021,10 +1036,14 @@ program _layer
                 local ++p
                 continue, break
             }
+            local OPTS `opts'
             local IFF `iff'
             if `hasCVAR' {
-                gettoken colr COLOR : COLOR, quotes
-                local colr color(`colr')
+                foreach opt in color lwidth {
+                    local OPT = strupper("`opt'")
+                    gettoken tmp `OPT' : `OPT', quotes
+                    local OPTS `OPTS' `opt'(`tmp')
+                }
                 if `"`IFF'"'!="" local IFF `IFF' & CVAR==`i'
                 else             local IFF CVAR==`i'
                 if `pl'!=`pl0' {
@@ -1033,8 +1052,6 @@ program _layer
                     if r(N)==0 continue
                 }
             }
-            else local colr
-            local colr `colr' `fcolor'
             if `hasWGT' {
                 if `"`IFF'"'!=""  local IFF if (`IFF' & `in'
                 else              local IFF if (`in'
@@ -1042,8 +1059,7 @@ program _layer
             else if `"`IFF'"'!="" local IFF if `IFF' `in'
             else                  local IFF `in'
             local IFF `IFF' `wgt'
-            local OPTS `opts'
-            local OPTS `OPTS' `colr'
+            local OPTS `OPTS' `fcolor'
             local OPTS `OPTS' `options'
             if `"`OPTS'"'!="" {
                 local IFF `IFF', `OPTS'
@@ -1170,6 +1186,22 @@ program _cvar_color
     c_local color `"`color'"'
 end
 
+program _cvar_recycle
+    args nm k def opt
+    if `"`opt'"'=="" local opt `"`def'"'
+    else {
+        // try numlist
+        capt numlist `"`opt'"'
+        if _rc==1 _rc
+        if _rc==0 {
+            local opt `"`r(numlist)'"'
+        }
+    }
+    // expand
+    mata: st_local("opt", invtokens(_vecrecycle(`k', tokens(st_local("opt")))))
+    c_local `nm' `"`opt'"'
+end
+
 program _post_chars
     args i p0 p1 hasCVAR discrete hasmis fmt values labels color
     numlist "`p0'/`p1'"
@@ -1222,6 +1254,15 @@ void _drop_empty_shapes(real scalar n0, real scalar n1, string scalar ID,
     p = select(p, rowmissing(yx[p,]):==cols(yx))
     // remove single-obs units for which all coordinate variables are missing
     if (length(p)) st_dropobsin((n0-1):+p) // remove empty obs
+}
+
+transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
+{   // x must have at least one element
+    real scalar r, c
+    
+    r = rows(x); c = cols(x)
+    if (r>c) return(J(ceil(k/c), 1, x)[|1\k|]) // => rowvector if x is 1x1
+    return(J(1, ceil(k/c), x)[|1\k|])
 }
 
 void _cvar_cuts(string scalar CUTS, real rowvector range)
