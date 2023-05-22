@@ -1,5 +1,5 @@
 {smcl}
-{* 21may2023}{...}
+{* 22may2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -22,7 +22,7 @@
 
 {p 8 15 2}
     {help geoplot##plottypes:{it:plottype}} [{it:frame}] [{it:...}] [{cmd:,}
-    {help geoplot##colvar:{it:colvar_options}}
+    {help geoplot##cvaropts:{it:cvar_options}}
     {it:other_options} ]
 
 {pstd}
@@ -65,21 +65,21 @@
     {p_end}
 {synoptline}
 {p 4 6 2}
-    * {help geoplot##colvar:{it:colvar_options}} not supported.
+    * {help geoplot##cvaropts:{it:cvar_options}} not supported.
 
 
 {synoptset 20 tabbed}{...}
-{marker colvar}{synopthdr:colvar_options}
+{marker cvaropts}{synopthdr:cvar_options}
 {synoptline}
-{synopt :{helpb geoplot##colorvar:{ul:colv}ar({it:colorvar})}}variable to control color
+{synopt :{helpb geoplot##cvar:{ul:cv}ar({it:cvar})}}variable to control color
     {p_end}
-{synopt :{helpb geoplot##colors:{ul:col}ors({it:palette})}}color palette to be used
+{synopt :{helpb geoplot##color:{ul:col}or({it:palette})}}color palette to be used
     {p_end}
 {synopt :{helpb geoplot##levels:{ul:lev}els({it:spec})}}number of levels and method to determine cuts
     {p_end}
 {synopt :{helpb geoplot##cuts:cuts({it:numlist})}}use levels defined by specified cuts
     {p_end}
-{synopt :{helpb geoplot##discrete:{ul:discr}ete}}treat {it:colorvar} as discrete instead of continuous
+{synopt :{helpb geoplot##discrete:{ul:discr}ete}}treat {it:cvar} as discrete instead of continuous
     {p_end}
 {synopt :{helpb geoplot##missing:{ul:mis}sing({it:colorspec})}}color to be used for missing values
     {p_end}
@@ -90,6 +90,8 @@
 {marker opt}{synopthdr:global_options}
 {synoptline}
 {syntab :Main}
+{synopt :{helpb geoplot##wmax:wmax({it:#})}}custom upper bound of weights
+    {p_end}
 {synopt :{helpb geoplot##tight:tight}}adjust graph size to dimension of map
     {p_end}
 {synopt :{helpb geoplot##margin:{ul:m}argin({it:spec})}}specify (minimum) margin
@@ -143,18 +145,18 @@
 {dlgtab:shapes, potentially filled}
 
 {p 8 15 2}
-    {cmd:area} [{it:frame} [{it:colorvar}]] {ifin}
+    {cmd:area} [{it:frame} [{it:cvar}]] {ifin}
     [{cmd:,}
     {it:options} ]
 
 {pstd}
     where {it:frame} is the frame containing the coordinates of the shapes to be
-    plotted (see {helpb geoframe}), {it:colorvar} is an optional variable to determine colors,
+    plotted (see {helpb geoframe}), {it:cvar} is an optional variable to determine colors,
     and {it:options} are as follows.
 
 {phang2}
-    {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the shapes
-    as described {help geoplot##colorvar:below}.
+    {it:{help geoplot##cvaropts:cvar_options}} are options determining the coloring of the shapes
+    as described {help geoplot##cvar_options:below}.
 
 {phang2}
     {cmdab:ec:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}
@@ -173,18 +175,18 @@
 {dlgtab:shapes, line only}
 
 {p 8 15 2}
-    {cmd:line} [{it:frame} [{it:colorvar}]] {ifin}
+    {cmd:line} [{it:frame} [{it:cvar}]] {ifin}
     [{cmd:,}
     {it:options} ]
 
 {pstd}
     where {it:frame} is the frame containing the coordinates of the shapes to be
-    plotted (see {helpb geoframe}), {it:colorvar} is an optional variable to determine colors,
+    plotted (see {helpb geoframe}), {it:cvar} is an optional variable to determine colors,
     and {it:options} are as follows.
 
 {phang2}
-    {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the lines
-    as described {help geoplot##colorvar:below}.
+    {it:{help geoplot##cvaropts:cvar_options}} are options determining the coloring of the lines
+    as described {help geoplot##cvar_options:below}.
 
 {phang2}
     {it:{help line_options}} are options to affect the look of lines as described in
@@ -204,12 +206,15 @@
     where {it:frame} is the frame containing the coordinates of the points to be
     plotted (see {helpb geoframe}), {it:Y} and {it:X} are custom variables names
     for the coordinates, and {it:weight} scales the size of the markers (see
-    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}). {cmdab:sc:atter}
-    may be used as a synonym for {cmd:point}. {it:options} are as follows.
+    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}. The weights
+    will be normalized to make marker sizes comparable across layers; also see
+    option {helpb geoplot##wmax:wmax()} for normalization across different
+    graphs. {cmdab:sc:atter} may be used as a synonym for {cmd:point}. {it:options}
+    are as follows.
 
 {phang2}
-    {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the markers
-    as described {help geoplot##colorvar:below}.
+    {it:{help geoplot##cvaropts:cvar_options}} are options determining the coloring of the markers
+    as described {help geoplot##cvar_options:below}.
 
 {phang2}
     {it:{help marker_options}}, {it:{help marker_label_options}},
@@ -234,8 +239,8 @@
     for the coordinates, and {it:options} are as follows.
 
 {phang2}
-    {it:{help geoplot##colvar:colvar_options}} are options determining the coloring of the labels
-    as described {help geoplot##colorvar:below}.
+    {it:{help geoplot##cvaropts:cvar_options}} are options determining the coloring of the labels
+    as described {help geoplot##cvar_options:below}.
 
 {phang2}
     {opth pos:ition(clockposstyle)},
@@ -244,7 +249,7 @@
     {opth ang:le(anglestyle)},
     {opth tsty:le(textstyle)},
     {opth si:ze(textsizestyle)},
-    {cmdab:c:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}, and
+    {cmdab:col:or(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}, and
     {opth f:ormat(%fmt)} are marker label options equivalent to the corresponding options
     described in help {it:{help marker_label_options}}. Option
     {cmd:color()} supports {it:colorspec} as described in
@@ -264,7 +269,7 @@
     where {it:frame} is the frame containing the coordinates of the spikes to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    {it:{help geoplot##cvaropts:cvar_options}} as described {help geoplot##cvar_options:below},
     as well as further options to affect the rendering of the spike lines
     as described in {helpb twoway pcspike}. Option {cmd:lcolor()} supports {it:colorspec} as
     described in {helpb colorpalette##colorlist:colorpalette}.
@@ -280,7 +285,7 @@
     where {it:frame} is the frame containing the coordinates of the spikes to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    {it:{help geoplot##cvaropts:cvar_options}} as described {help geoplot##cvar_options:below},
     as well as further options to affect the rendering of the spike lines and markers
     as described in {helpb twoway pccapsym}. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
@@ -297,7 +302,7 @@
     where {it:frame} is the frame containing the coordinates of the arrows to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    {it:{help geoplot##cvaropts:cvar_options}} as described {help geoplot##cvar_options:below},
     as well as further options to affect the rendering of the arrows
     as described in {helpb twoway pcarrow}. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
@@ -314,7 +319,7 @@
     where {it:frame} is the frame containing the coordinates of the arrows to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    {it:{help geoplot##cvaropts:cvar_options}} as described {help geoplot##cvar_options:below},
     as well as further options to affect the rendering of the arrows
     as described in {helpb twoway pcarrow}. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, {cmd:mlabcolor()}, and {cmd:lcolor()}
@@ -331,7 +336,7 @@
     where {it:frame} is the frame containing the coordinates of the arrows to be
     plotted (see {helpb geoframe}), {it:Y1}, {it:X1}, {it:Y2}, and {it:X3} are custom
     variables names for the coordinates, and {it:options} are
-    {it:{help geoplot##colvar:colvar_options}} as described {help geoplot##colorvar:below},
+    {it:{help geoplot##cvaropts:cvar_options}} as described {help geoplot##cvar_options:below},
     as well as further options to affect the rendering of the markers
     as described in {helpb twoway pcscatter}. Options {cmd:mcolor()},
     {cmd:mfcolor()}, {cmd:mlcolor()}, and {cmd:mlabcolor()}
@@ -379,24 +384,25 @@
 
 {title:Options}
 
-{dlgtab:Colorvar options}
+{marker cvar_options}{...}
+{dlgtab:Cvar options}
 
-{marker colorvar}{...}
+{marker cvar}{...}
 {phang}
-    {opt colvar(colvar)} specifies that the colors of the areas, lines, or markers
-    in a layer be determined by the values of (numeric) variable {help varname:{it:colorvar}}. The
-    range of values of {it:colorvar} will be divided into levels and each
+    {opt cvar(cvar)} specifies that the colors of the areas, lines, or markers
+    in a layer be determined by the values of (numeric) variable {help varname:{it:cvar}}. The
+    range of values of {it:cvar} will be divided into levels and each
     level will be represented by a different color. {opt colorvar()} may be
-    used as a synonym for {opt colvar()}
+    used as a synonym for {opt cvar()}
 
 {pmore}
-    Some {help geoplot##plottype:{it:plottypes}} allow {it:colorvar} as an
-    argument. In these cases option {cmd:colvar()} is not needed; if specified nonetheless,
-    it takes precedence over {it:colvar} specified as an argument.
+    Some {help geoplot##plottype:{it:plottypes}} allow {it:cvar} as an
+    argument. In these cases option {cmd:cvar()} is not needed; if specified nonetheless,
+    it takes precedence over {it:cvar} specified as an argument.
 
 {marker colors}{...}
 {phang}
-    {cmd:colors(}[{it:{help colorpalette##palette:palette}}] [{cmd:,}
+    {cmd:color(}[{it:{help colorpalette##palette:palette}}] [{cmd:,}
     {it:{help colorpalette##opts:palette_options}}]{cmd:)}
     selects the colors to be used for the levels. {it:palette} is any
     palette allowed by {helpb colorpalette} (which can also be a simple list of colors, see
@@ -409,9 +415,9 @@
 {marker levels}{...}
 {phang}
     {cmd:levels(}[{it:#}][{cmd:,} {it:method} {opt w:eight(varname)}]{cmd:)} specifies the number of
-    levels to be formed by {it:colorvar}. By default, a regular grid
+    levels to be formed by {it:cvar}. By default, a regular grid
     (equidistant cuts) of 5 intervals from the observed minimum to the observed
-    maximum of {it:colorvar} will be used (first interval closed, remaining intervals
+    maximum of {it:cvar} will be used (first interval closed, remaining intervals
     left-open). Specify {opt levels(#)} to use {it:#} levels. Specify {it:method}
     to use a non-regular grid. {it:method} can be {cmdab:q:uantile} (use quantiles as
     cuts) or {cmdab:k:means} (use cut points determined by kmeans clustering). In case
@@ -422,17 +428,17 @@
 {marker cuts}{...}
 {phang}
     {opth cuts(numlist)} is an alternative to {cmd:levels()} and
-    specifies the breaks for the levels to be formed by {it:colvar}. Specify
+    specifies the breaks for the levels to be formed by {it:cvar}. Specify
     {it:#}+1 breaks to form {it:#} intervals (first interval closed, remaining
     intervals left-open). Values below the first break or above the last break
     will be ignored. If {cmd:discrete}
     is specified, {it:numlist} is interpreted as the distinct values of
-    {it:colvar} to be selected.
+    {it:cvar} to be selected.
 
 {marker discrete}{...}
 {phang}
-    {opt discr:ete} treats {it:colorvar} as a discrete variable. Each unique value
-    of {it:colorvar} will form a separate level.
+    {opt discr:ete} treats {it:cvar} as a discrete variable. Each unique value
+    of {it:cvar} will form a separate level.
 
 {marker missing}{...}
 {phang}
@@ -442,6 +448,14 @@
     is {cmd:missing(gs14)}.
 
 {dlgtab:Global options}
+
+{marker wmax}{...}
+{phang}
+    {cmd:wmax(#)} specifies the maximum weight used to normalize the weights
+    when determining marker sizes. This is only relevant for plottype 
+    {helpb geoplot##point:point}. Use this option to make marker sizes
+    comparable across graphs (given the graphs have the same size). Typically,
+    {it:#} should not be smaller than the observed maximum weight.
 
 {marker tight}{...}
 {phang}
@@ -512,7 +526,7 @@
 {marker legend}{...}
 {phang}
     {opt legend(suboptions)} prints a standard legend of the colors used in
-    one of the layers that include a {help geoplpot##colvar:{it:colorvar}}. At
+    one of the layers that include a {help geoplpot##cvar:{it:cvar}}. At
     most one such legend can be included in the graph (but you may
     use {cmd:clegend()} to create a second legend). {it:suboptions} are as follows:
 
@@ -521,7 +535,7 @@
     is to use the first layer containing a color gradient (unless already
     covered by {cmd:clegend()}). For example, if your
     graph contains, say, five layers, and layers 3 and 4 have a
-    {help geoplpot##colvar:{it:colorvar}}, type {cmd:layer(4)} to create a legend
+    {help geoplpot##cvar:{it:cvar}}, type {cmd:layer(4)} to create a legend
     for layer 4.
 
 {phang2}
@@ -531,17 +545,17 @@
 
 {phang2}
     {opt desc:ending} arranges the legend keys in descending order of the
-    values of {help geoplpot##colvar:{it:colorvar}}. The default is to use
+    values of {help geoplpot##cvar:{it:cvar}}. The default is to use
     ascending order.
 
 {phang2}
     {opth f:ormat(%fmt)} select the display format to be applied to the values
     in the legend labels. The default is to use the display format of
-    {help geoplpot##colvar:{it:colorvar}}.
+    {help geoplpot##cvar:{it:cvar}}.
 
 {phang2}
     {opt nolab:el} omits the use value labels in case of a
-    {help geoplpot##colvar:{it:colorvar}} declared as
+    {help geoplpot##cvar:{it:cvar}} declared as
     {helpb geoplpot##discrete:discrete}.
 
 {phang2}
@@ -574,7 +588,7 @@
 {phang}
     {opt clegend(suboptions)} prints a {help clegend_option:contour} plot legend
     of the colors used in one of the layers that include a
-    {help geoplpot##colvar:{it:colorvar}}. At most one such legend can be included
+    {help geoplpot##cvar:{it:cvar}}. At most one such legend can be included
     in the graph (but you may use {cmd:legend()} to create a second
     legend). {it:suboptions} are as follows:
 
@@ -583,17 +597,17 @@
     is to use the first layer containing a color gradient (unless already
     covered by {cmd:legend()}). For example, if your
     graph contains, say, five layers, and layers 3 and 4 have a
-    {help geoplpot##colvar:{it:colorvar}}, type {cmd:layer(4)} to create a legend
+    {help geoplpot##cvar:{it:cvar}}, type {cmd:layer(4)} to create a legend
     for layer 4.
 
 {phang2}
     {opth f:ormat(%fmt)} select the display format to be applied to the values
     in the legend labels. The default is to use the display format of
-    {help geoplpot##colvar:{it:colorvar}}.
+    {help geoplpot##cvar:{it:cvar}}.
 
 {phang2}
     {opt nolab:el} omits the use value labels in case of a
-    {help geoplpot##colvar:{it:colorvar}} declared as
+    {help geoplpot##cvar:{it:cvar}} declared as
     {helpb geoplpot##discrete:discrete}.
 
 {phang2}
@@ -683,7 +697,7 @@
     {stata local layer1 (area regions)}
     {p_end}
 {p 8 12 2}
-    {stata local layer2 (point capitals [aw=pop98], colvar(size) discrete colors(Set1, opacity(50)) mlcolor(%0))}
+    {stata local layer2 (point capitals [aw=pop98], cvar(size) discrete color(Set1, opacity(50)) mlcolor(%0))}
     {p_end}
 {p 8 12 2}
     {stata local layer3 (labels capitals city if pop98>250000, color(black))}

@@ -19,6 +19,28 @@ The following packages are required:
 
 Main changes:
 
+    22may2023 (version 0.1.4)
+    geoplot
+    - now displaying a note if a layer is empty
+    - option frame() now makes the created frame the current frame
+    - observations with missing weight are now excluded in plottype point/scatter if
+      weights are specified 
+    - units with empty shape data (i.e. units for which there is only a single
+      observation in the shape frame and for which the coordinate variables in that
+      observation are all missing) will now be excluded from plotting in plottypes
+      area and line
+    - units that do not exist in an attribute frame but for which shape data is
+      available in the linked shape frame are now excluded in plottypes area and
+      line if the attribute frame is specified as the source frame
+    - option colvar() is now called cvar(); the idea is that the option will
+      eventually also be used for other aspects such as line widths or marker
+      symbols; processing of cvar is now done in a different place or the process
+    - color options were passed through ColrSpace only in case of immediate plots; 
+      this is fixed
+    - weights in point/scatter are now normalized across all layers and subplots
+      so that weighted markers sizes are comparable within the graph; global option
+      wmax() can be used to make marker sizes comparable across graphs
+
     21may2023 (version 0.1.3)
     geoframe:
     - large parts rewritten
