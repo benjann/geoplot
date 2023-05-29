@@ -19,6 +19,21 @@ The following packages are required:
 
 Main changes:
 
+    29may2023 (version 0.1.6)
+    geoplot
+    - option size() added to plotypes area and line
+    - plotypes area and line now support weights to rescale the sizes of the shapes
+    - cvar() renamed to zvar()
+    - zvar() no also supports fintensity(), lpattern(), msymbol(), msize(), 
+      msangle(), mlabcolor(), mlwidth(), mlabsize(), mlabangle(); color() takes
+      precedence over mlabcolor() if both are specified
+    geoframe
+    - geoframe attach and geoframe copy now also alias/copy variables that start
+      with "_"
+    - geframe create has new options centroids() and area(); geoframe set/get now
+      support centroids and area
+    - -geoframe generate area- added
+
     22may2023 (version 0.1.5)
     geoplot
     - cvar() now also applies to lwidth(), not only color()

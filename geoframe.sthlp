@@ -1,5 +1,5 @@
 {smcl}
-{* 22may2023}{...}
+{* 29may2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -47,8 +47,6 @@
 {p2col :{helpb geoframe##copy:copy}}copy variables from attribute frame to current frame
     {p_end}
 {p2col :{helpb geoframe##append:{ul:ap}pend}}append observations from other frame to current frame
-    {p_end}
-{p2col :{helpb geoframe##varinit:varinit}}initialize variables in current frame
     {p_end}
 {synoptline}
 
@@ -106,7 +104,7 @@
     {cmd:geoframe create} infers the type from context.
 
 {phang2}
-    {opt feat:ure(string)} declares the type of features represented by the
+    {opt feat:ure(string)} declares the type of feature represented by the
     units in the frame. For example, type {cmd:feature(water)} if the frame
     contains data on lakes or rivers. {it:string} can be any text.
 
@@ -117,6 +115,16 @@
     {opt co:ordinates(X Y [X2 Y2])} specifies the names of the variables containing
     the coordinates. The default depends on data type. It is {cmd:_X _Y} for data type {cmd:shape},
     {cmd:_CX _CY} for data type {cmd:unit}, and {cmd:_X1 _Y1 _X2 _Y2} for data type {cmd:pc}.
+
+{phang2}
+    {opt cen:troids(CX CY)} specifies the names of the variables containing
+    the centroids of the units. The default is {cmd:_CX _CY}
+    for data types {cmd:shape} and {cmd:pc}; for data type {cmd:unit}, {cmd:centroids()}
+    is a synonym for {cmd:coordinates()}.
+
+{phang2}
+    {opt area(AREA)} specifies the name of the variable containing the sizes
+    of the units (i.e. areas of the shapes). The default is {cmd:_AREA}.
 
 {phang2}
     {opt sid(varname)} specifies the name of the within-unit sort ID. Default is
@@ -167,18 +175,27 @@
     [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:g:enerate} {it:fnc} {it:...}
 
 {pstd}
-    provides functions to generate specific variables in the current frame.
-
-{pstd}
-    Currently, the only such function is
+    provides functions to generate specific variables in the current frame. Available
+    functions are as follows.
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:newname}] [{cmd:,} {opt replace} ]
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt replace} ]
+
+{pstd}
+    to generate a variable containing the size of the area enclosed in each
+    shape. {it:AREA} specifies a name for the generated variable; {cmd:_AREA}
+    is used as default variable name. Option {cmd:replace} allows overwriting
+    an existing variable. The created variable will be registered using
+    {helpb geoframe##set:geoframe set area}.
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} ]
 
 {pstd}
     to generate a variable identifying the different polygons within each unit
-    represented in the frame. {cmd:_PID} is used as variable name if
-    {it:newname} is omitted. Option {cmd:replace} allows overwriting an existing
+    represented in the frame (only relevant for data of type {cmd:shape}). {it:PID}
+    specifies a name for the generated variable; {cmd:_PID} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
     variable. The created variable will be registered using
     {helpb geoframe##set:geoframe set pid}.
 
@@ -211,6 +228,13 @@
     two (for data types {cmd:unit} and {cmd:shape}) or four (for data type {cmd:pc}) variable names; default is
     {cmd:_X _Y} for data type {cmd:shape}, {cmd:_CX _CY} for data type {cmd:unit},
     and {cmd:_X1 _Y1 _X2 _Y2} for data type {cmd:pc}
+    {p_end}
+{p2col :{cmdab:cen:troids}}the names of the variables containing the centroids; {it:value} is a list of
+    two variable names; default is {cmd:_CX _CY} for data types {cmd:shape} and {cmd:pc}; for data type
+    {cmd:unit}, {cmd:centroids} is a synonym for {cmd:coordinates}
+    {p_end}
+{p2col :{cmd:area}}the name of the variable containing the shape sizes;
+    {it:value} is a single variable name; default is {cmd:_AREA}
     {p_end}
 {p2col :{cmd:sid}}the name of the variable containing the within-unit sort ID;
     {it:value} is a single variable name; default is {cmd:shape_order}; the setting
@@ -318,7 +342,7 @@
 
 {p 8 15 2}
     [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:copy} {it:unitframe}
-    {varlist} [{cmd:,} {opth ex:clude(varlist)} ]
+    {varlist} [{cmd:,} {opth ex:clude(varlist)} {opt tar:get(namelist)} ]
 
 {pstd}
     copies the specified variables from {it:unitframe} into the current
@@ -329,8 +353,8 @@
 
 {pstd}
     Use option {cmd:target()} to specify alternative variable names to be used
-    in the current frame. {it:varlist} (after applying {cmd:exclude()}) and
-    {cmd:target()} will be matched one by one; if {cmd:target()} contains fewer
+    in the current frame. {it:varlist} and {cmd:target()}, after applying {cmd:exclude()},
+    will be matched one by one; if {cmd:target()} contains fewer
     elements than {it:varlist}, the remaining elements will be taken
     from {it:varlist}.
 
@@ -360,16 +384,6 @@
     appended (i.e. observations for which the specified variable is unequal
     zero). Use this option as an alternative to {it:{help if}} and {it:{help in}}.
 
-{marker varinit}{...}
-{dlgtab:geoframe varinit}
-
-{p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:varinit} {it:{help datatypes:type}} {it:namelist}
-
-{pstd}
-    initialize new variables of a given {help datatypes:storage type} in the current frame (unless the variables already
-    exist).
-
 
 {title:Examples}
 
@@ -383,7 +397,7 @@
     {stata geoframe create regions `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) shpfile(`url'Italy-RegionsCoordinates.dta)}
     {p_end}
 {p 8 12 2}
-    {stata geoplot (area regions fortell), tight legend(bplace(ne))}
+    {stata geoplot (area regions fortell, color), tight legend(bplace(ne))}
     {p_end}
 
 {pstd}
@@ -415,7 +429,7 @@
     {stata "frame regions: geoframe describe"}
     {p_end}
 {p 8 12 2}
-    {stata geoplot (area regions fortell), tight legend(bplace(ne))}
+    {stata geoplot (area regions fortell, color), tight legend(bplace(ne))}
     {p_end}
 
 {pstd}
@@ -448,7 +462,7 @@
     {stata "frame regions: describe"}
     {p_end}
 {p 8 12 2}
-    {stata geoplot (area regions fortell), tight legend(bplace(ne))}
+    {stata geoplot (area regions fortell, color), tight legend(bplace(ne))}
     {p_end}
 
 {pstd}

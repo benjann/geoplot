@@ -1,4 +1,4 @@
-*! version 0.1.4  22may2023  Ben Jann
+*! version 0.1.6  29may2023  Ben Jann
 
 program geoframe
     version 17
@@ -45,7 +45,7 @@ program _geoframe_create
     }
     syntax [name(id="framename" name=frame)] [using/] [, replace/*
         */ type(str) id(name) sid(name) pid(name) PLevel(name)/*
-        */ COordinates(namelist)/*
+        */ COordinates(namelist) CENtroids(namelist) area(name)/*
         */ FEATure(str asis)/*
         */ noSHPfile SHPfile2(str asis)/*
         */ noDEScribe _checkfrlink(str) ]
@@ -111,6 +111,8 @@ program _geoframe_create
                 _geoframe_set pid `pid'
                 _geoframe_set plevel `plevel'
                 _geoframe_set coordinates `coordinates'
+                if "`centroids'"!="" _geoframe_set centroids `centroids'
+                _geoframe_set area `area'
                 _geoframe_set feature `feature'
                 // read shapefile and establish linkage
                 if `hasSHP' {
@@ -224,19 +226,24 @@ end
 program _geoframe_describe
     syntax [name(id="frame" name=frame)] 
     if "`frame'"=="" local frame `"`c(frame)'"'
+    // collect chars
     frame `frame' {
-        geoframe get type, local(type)
-        if `"`type'"'=="shape"     local chars feat id sid pid plevel
-        else if `"`type'"'=="unit" local chars feat id shpf
-        else if `"`type'"'=="pc"   local chars feat id shpf
-        else                       local chars feat id sid pid plevel shpf
-        foreach char of local chars {
+        local allchars type feat id coord centr area sid pid plevel shpf
+        foreach char of local allchars {
             geoframe get `char', local(`char')
         }
-        geoframe get coord, local(coord) `type'
     }
-    local chars type `chars' coord
-    foreach char in type feat id coord sid pid plevel shpf {
+    // chars to print even if empty
+    local chars type feat id coord
+    if `"`type'"'=="shape"   local chars `chars' sid pid plevel
+    else if `"`type'"'=="unit" {
+                             local chars `chars' area shpf
+                             local centr
+    }
+    else if `"`type'"'=="pc" local chars `chars' shpf
+    else                     local chars `allchars'
+    // process chars
+    foreach char of local allchars {
         if "`char'"=="shpf" {
             if `"`shpf'"'=="" {
                 if !`:list char in chars' continue
@@ -251,12 +258,15 @@ program _geoframe_describe
         }
         else local `char' `"{bf:``char''}"'
     }
+    // display
     di
     __geoframe_describe_di "Frame name"             `"{bf:`frame'}"'
     __geoframe_describe_di "Frame type"             `"`type'"'
     __geoframe_describe_di "Feature type"           `"`feat'"'
     __geoframe_describe_di "Unit ID"                `"`id'"'
     __geoframe_describe_di "Coordinates"            `"`coord'"'
+    __geoframe_describe_di "Centroids"              `"`centr'"'
+    __geoframe_describe_di "Area"                   `"`area'"'
     __geoframe_describe_di "Within-unit sort ID"    `"`sid'"'
     __geoframe_describe_di "Within-unit polygon ID" `"`pid'"'
     __geoframe_describe_di "Plot level ID"          `"`plevel'"'
@@ -280,14 +290,55 @@ program _geoframe_generate
     _geoframe_generate_`fcn' `0'
 end
 
+program _geoframe_generate_area
+    syntax [name] [, replace ]
+    if "`namelist'"=="" local namelist _AREA
+    if "`replace'"=="" {
+        confirm new variable `namelist'
+    }
+    geoframe get type, l(type)
+    local cframe `"`c(frame)'"'
+    if "`type'"=="shape" local shpframe `"`cframe'"'
+    else geoframe get shpframe, local(shpframe) strict
+    geoframe get id, l(ID0) strict
+    frame `shpframe' {
+        tempvar AREA
+        if "`shpframe'"=="`cframe'" local ID `ID0'
+        else geoframe get id, l(ID) strict
+        qui __geoframe_generate_area `ID' `AREA'
+        if "`shpframe'"!="`cframe'" {
+            mata: _copy_by_ID("`cframe'", "`ID0'", "`ID'", "`AREA'")
+        }
+    }
+    capt confirm new variable `namelist'
+    if _rc==1 exit _rc
+    if _rc drop `namelist'
+    rename `AREA' `namelist'
+    _geoframe_set area `namelist'
+    di as txt "(variable {bf:`namelist'} generated)"
+end
+
+program __geoframe_generate_area, sortpreserve
+    args ID AREA
+    geoframe get coordinates, l(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    geoframe get plevel, l(PLV)
+    if `"`PLV'"'!="" local PLV * (1-2*mod(`PLV',2))
+    sort `ID' `_sortindex'
+    by `ID': gen double `AREA' = ((`X' * `Y'[_n+1]) - (`X'[_n+1] * `Y')) `PLV'
+    by `ID': replace `AREA' = sum(`AREA')
+    by `ID': replace `AREA' =  abs(`AREA'[_N] / 2)
+end
+
 program _geoframe_generate_pid
     syntax [name] [, replace ]
     if "`namelist'"=="" local namelist _PID
     if "`replace'"=="" {
         confirm new variable `namelist'
     }
-    geoframe get id, l(ID)
-    geoframe get coordinates, l(X)
+    geoframe get id, l(ID) strict
+    geoframe get coordinates, l(X) strict
     gettoken X : X
     tempvar tmp
     if (`X'[1]>=.) {
@@ -314,6 +365,7 @@ program _geoframe_set
     if      "`char'"=="type"        __geoframe_set_type `0'
     else if "`char'"=="var"         __geoframe_set_var `arg' `0'
     else if "`char'"=="coordinates" __geoframe_set_coordinates `0'
+    else if "`char'"=="centroids"   __geoframe_set_centroids `0'
     else if "`char'"=="shpframe"    __geoframe_set_shpframe `0'
     else if "`char'"=="type"        __geoframe_set_type `0'
     else                            char _dta[GEOFRAME_`char'] `0'
@@ -334,8 +386,10 @@ program __geoframe_set_char
     else if `"`0'"'=="id"                                 local 0 var id
     else if `"`0'"'=="sid"                                local 0 var sid
     else if `"`0'"'=="pid"                                local 0 var pid
+    else if `"`0'"'=="area"                               local 0 var area
     else if `"`0'"'==substr("plevel", 1, max(2,`l'))      local 0 var plevel
     else if `"`0'"'==substr("coordinates", 1, max(2,`l')) local 0 coordinates
+    else if `"`0'"'==substr("centroids", 1, max(3,`l'))   local 0 centroids
     else if `"`0'"'==substr("feature", 1, max(4,`l'))     local 0 feature
     else if `"`0'"'==substr("shpframe", 1, max(3,`l'))    local 0 shpframe
     else {
@@ -370,7 +424,7 @@ program __geoframe_set_var
     gettoken var arg : 0
     local arg = strtrim(`"`arg'"')
     if `"`arg'"'=="" {
-        if "`var'"=="oid" local VAR shape_order
+        if "`var'"=="sid" local VAR shape_order
         else              local VAR _`=strupper("`var'")'
         capt confirm numeric variable `VAR', exact
         if _rc==1 exit _rc
@@ -431,14 +485,53 @@ program __geoframe_set_coordinates
     char _dta[GEOFRAME_coordinates] `arg'
 end
 
+program __geoframe_set_centroids
+    local type: char _dta[GEOFRAME_type]
+    if `"`type'"'=="unit" {
+        __geoframe_set_coordinates `0'
+        exit
+    }
+    local arg: copy local 0
+    if `"`arg '"'!="" {
+        capt unab arg: `arg', min(2) max(2)
+        if _rc==1 exit _rc
+        if _rc {
+            confirm variable `arg'
+            if `:list sizeof arg'!=2 {
+                di as err "wrong number of variables specified; "/*
+                    */ "must specify 2 variables"
+                exit 198
+            }
+        }
+        confirm numeric variable `arg', exact
+    }
+    else {
+        local VARS _CX _CY
+        capt confirm numeric variable `VARS', exact
+        if _rc==1 exit _rc
+        if _rc==0 {
+            local arg `VARS'
+        }
+    }
+    char _dta[GEOFRAME_centroids] `arg'
+end
+
 program _geoframe_get
     _parse comma char 0 : 0
     __geoframe_set_char `char' // => char
     gettoken char arg : char
-    syntax [, Local(str) * ]
+    syntax [, Local(str) strict * ]
     if      "`char'"=="var"         __geoframe_get_var `arg', `options'
     else if "`char'"=="coordinates" __geoframe_get_coordinates, `options'
+    else if "`char'"=="centroids"   __geoframe_get_centroids, `options'
     else                            local exp: char _dta[GEOFRAME_`char']
+    if "`strict'"!="" {
+        if `"`exp'"'=="" {
+            if `"`arg'"'!="" local char `"`arg'"'
+            di as err `"{bf:`char'} not found"'
+            exit 111
+        }
+    }
     if "`local'"!="" {
         c_local local `local'
         c_local value `"`exp'"'
@@ -480,6 +573,30 @@ program __geoframe_get_coordinates
         if `"`type'"'=="unit"    local VARS _CX _CY
         else if `"`type'"'=="pc" local VARS _X1 _Y1 _X2 _Y2
         else                     local VARS _X _Y
+        capt confirm numeric variable `VARS', exact
+        if _rc==1 exit _rc
+        if _rc==0 {
+            local exp `VARS'
+        }
+    }
+    if "`flip'"!="" {
+        mata: st_local("exp",  _strreverse(st_local("exp")))
+    }
+    c_local exp `exp'
+end
+
+program __geoframe_get_centroids
+    local type: char _dta[GEOFRAME_type]
+    if `"`type'"'=="unit" {
+        __geoframe_get_coordinates `0'
+        c_local exp `exp'
+        exit
+    }
+    syntax [, flip ]
+    local exp: char _dta[GEOFRAME_centroids]
+    if `"`exp'"'=="" {
+        // try default names
+        local VARS _CX _CY
         capt confirm numeric variable `VARS', exact
         if _rc==1 exit _rc
         if _rc==0 {
@@ -595,8 +712,12 @@ program _geoframe_attach
         di as txt "(no variables to attach)"
         exit
     }
+    foreach var of local keep {
+        // use matched list so that variables staring with "_" are aliased
+        local vlist `vlist' `var' = `var'
+    }
     frlink m:1 `id0', frame(`frame' `id')
-    fralias add `keep', from(`frame')
+    fralias add `vlist', from(`frame')
 end
 
 program _geoframe_detach
@@ -655,17 +776,15 @@ program _geoframe_copy
         di as txt "(no variables to copy)"
         exit
     }
-    if `"`target'"'!="" {
-        foreach var of local varlist {
-            gettoken TGT target : target
-            if "`TGT'"=="" local TGT `var'
-            local vlist `vlist' `TGT' = `var'
-        }
-        local varlist `vlist'
+    foreach var of local varlist {
+        // use matched list so that variables staring with "_" are copied
+        gettoken TGT target : target
+        if "`TGT'"=="" local TGT `var'
+        local vlist `vlist' `TGT' = `var'
     }
     tempvar lnkvar
     frlink m:1 `id0', frame(`frame' `id') generate(`lnkvar')
-    frget `varlist', from(`lnkvar')
+    frget `vlist', from(`lnkvar')
 end
 
 program _geoframe_append
@@ -729,7 +848,7 @@ program _geoframe_append
     while (`"`addvars'"'!="") {
         gettoken type addvars : addvars
         gettoken V    addvars : addvars
-        _geoframe_varinit `type' `V'
+        mata: st_addvar("`type'", "`V'")
     }
     while (`"`recast'"'!="") {
         gettoken type recast : recast
@@ -793,19 +912,6 @@ program _check_types
     exit 499 // TYPE is bite => recast
 end
 
-program _geoframe_varinit
-    gettoken type 0 : 0
-    local isstr = substr("`type'",1,3)=="str"
-    foreach v of local 0 {
-        capt confirm variable `v', exact
-        if _rc {
-            if `isstr' local exp `""""'
-            else       local exp .
-            qui gen `type' `v' = `exp'
-        }
-    }
-end
-
 version 17
 mata:
 mata set matastrict on
@@ -827,6 +933,34 @@ string scalar _strreverse(string scalar s)
     n = length(S)
     if (!n) return(s)
     return(invtokens(S[n..1]))
+}
+
+void _copy_by_ID(string scalar frame, string scalar ID0,
+    string scalar ID, string scalar X)
+{
+    real scalar    i
+    real colvector id, x, p
+    transmorphic   A
+    string scalar  cframe
+
+    // get data (assuming sorted by ID; X constant within ID)
+    id = st_data(., ID)
+    p  = selectindex(_mm_unique_tag(id, 1))
+    id = id[p]
+    x  = st_data(., X)[p]
+    // post data into asarray
+    A = asarray_create("real")
+    asarray_notfound(A, .)
+    for (i=length(id); i; i--) asarray(A, id[i], x[i])
+    // change frame and copy data from asarray
+    cframe = st_framecurrent()
+    st_framecurrent(frame)
+    id = st_data(., ID0)
+    i  = length(id)
+    x  = J(i,1,.)
+    for (i=length(id); i; i--) x[i] = asarray(A, id[i])
+    st_store(., st_addvar("double", X), x)
+    st_framecurrent(cframe)
 }
 
 void _geoframe_append(string scalar frame, string scalar touse,

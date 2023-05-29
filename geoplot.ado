@@ -1,4 +1,4 @@
-*! version 0.1.5  22may2023  Ben Jann
+*! version 0.1.6  29may2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -33,7 +33,7 @@ program geoplot, rclass
     _parse comma lhs 0 : 0
     syntax [, /*
         */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
-        */ wmax(numlist max=1 >0) /*
+        */ wmax(numlist max=1 >0) dmax(numlist max=1 >0) /*
         */ rotate(real 0) /* rotate whole map around midpoint by angle
         */ Margin(numlist max=4 >=0) tight /* margin: l r b t (will be recycled)
         */ ASPECTratio(str) YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
@@ -68,13 +68,33 @@ program geoplot, rclass
     tempname main
     frame create `main'
     frame `main' {
-    
-    // process layers
+        /* default variables:
+            LAYER:   layer ID
+            ID:      unit ID
+            Y:       Y coordinate
+            X:       X coordinate
+            W:       weight
+          further variables possibly generated along the way:
+            PLV      plot level for enclaves and exclaves
+            Z:       categorized zvar()
+            Y2:      secondary Y coordinate (pc)
+            X2:      secondary X coordinate (pc)
+            MLAB:    marker labels
+            MLABPOS: marker label positions
+          helper variables that will be dropped at the end
+            wY wX:   centroids used in connection with weights (area/line)
+            SIZE CY CY AREA: variables related to size() option
+            dY dX:   relative coordinates or non-rotating objects
+        */
         gen byte LAYER = .
         char LAYER[Layers] `layer_n'
         gen byte ID = .
+        gen double Y = .
+        gen double X = .
         qui set obs 2
         gen double W = _n - 1 // 0 and 1
+        
+    // process layers
         local p 0
         local plots
         nobreak {
@@ -117,18 +137,53 @@ program geoplot, rclass
             exit
         }
         
+    // process size()
+        capt confirm variable SIZE
+        if _rc==1 exit _rc
+        if _rc==0 {
+            qui replace SIZE = SIZE / AREA // => density
+            tempname DMAX
+            su SIZE, meanonly
+            scalar `DMAX' = r(max)
+            di as txt "(observed maximum density is " as res `DMAX' _c
+            if "`dmax'"=="" local dmax = `DMAX'
+            else if `dmax'<`DMAX' {
+                di as txt "; this is larger than {bf:dmax()}" _c
+            }
+            di as txt ")"
+            qui replace SIZE = SIZE / `dmax'
+            qui replace Y = CY + (Y-CY) * sqrt(SIZE) if SIZE<.
+            qui replace X = CX + (X-CX) * sqrt(SIZE) if SIZE<.
+            drop SIZE CY CX AREA
+        }
+        
     // normalize weights
         su W in 3/l, meanonly
         if r(N) {
-            if "`wmax'"=="" qui replace W = W / r(max) in 3/l
-            else {
-                if `wmax'<r(max) {
-                    local rmax `: di %18.0g r(max)'
-                    di as txt "(maximum weight = {bf:`rmax'};" /*
-                        */ " this is larger than {bf:wmax()})"
+            tempname WMAX
+            scalar `WMAX' = r(max)
+            di as txt "(observed maximum weight is " as res `WMAX' _c
+            if "`wmax'"=="" {
+                if r(max)<1 {
+                    di as txt "; setting {bf:wmax()} to {bf:1}" _c
+                    local wmax = 1
                 }
-                qui replace W = W / `wmax' in 3/l
+                else local wmax = r(max)
             }
+            else if `wmax'<r(max) {
+                di as txt "; this is larger than {bf:wmax()}" _c
+            }
+            di as txt ")"
+            qui replace W = W / `wmax' in 3/l
+        }
+        
+    // apply weights to shapes
+        capt confirm variable wY
+        if _rc==1 exit _rc
+        if _rc==0 {
+            qui replace Y = wY + (Y-wY) * sqrt(W) if W<. & wY<. & wX<.
+            qui replace X = wX + (X-wX) * sqrt(W) if W<. & wY<. & wX<.
+            drop wY wX
         }
         
     // rotate and process relative (non-rotating) coordinates
@@ -158,7 +213,7 @@ program geoplot, rclass
             local plots `plots' `plot'
         }
         else local clegend
-    
+        
     // draw graph
          local graph /*
             */ graph twoway `plots',/*
@@ -168,7 +223,15 @@ program geoplot, rclass
             */ bgcolor(white) `scheme'/*
             */ `yrange' `xrange' `aspectratio' `ysize' `xsize' `options'
         `graph'
-        return local graph `graph'
+    }
+    
+    // returns
+    return local graph `graph'
+    if "`WMAX'"!="" {
+        return scalar wmax = `WMAX'
+    }
+    if "`DMAX'"!="" {
+        return scalar dmax = `DMAX'
     }
     
     if "`frame'"!="" {
@@ -336,19 +399,19 @@ program _legend
     gettoken ck    anything : anything
     // get legend info
     local k `layer'
-    local clayers: char LAYER[Layers_cvar]
+    local zlayers: char LAYER[Layers_Z]
     if "`k'"=="" & `force' {
-        // get first unused cvar layer
-        local k: list clayers - ck
+        // get first unused layer that has Z
+        local k: list zlayers - ck
         gettoken k : k
     }
-    if !cond("`k'"=="", 0 ,`:list k in clayers') {
+    if !cond("`k'"=="", 0 ,`:list k in zlayers') {
         if "`k'"!="" {
-            di as txt "(legend omitted; layer `k' does not contain cvar)"
+            di as txt "(legend omitted; layer `k' does not contain {it:Z})"
         }
         else if `force'==1 {
-            if "`ck'"=="" di as txt "(legend omitted; no cvar layer found)"
-            else di as txt "(legend omitted; no unused cvar layer found)"
+            if "`ck'"=="" di as txt "(legend omitted; no layer containing {it:Z} found)"
+            else di as txt "(legend omitted; no unused layer containing {it:Z} found)"
         }
         c_local legend_k
         c_local legend legend(off)
@@ -384,7 +447,7 @@ program _legend
     if `"`hasmis'"'!=""    gettoken mis_key keys : keys
     if `"`nomissing'"'!="" local mis_key
     if !`: list sizeof keys' & "`mis_key'"=="" {
-        di as txt "(legend omitted; layer `k' contains no non-missing color keys)"
+        di as txt "(legend omitted; layer `k' contains no non-missing keys)"
         c_local legend_k `k'
         c_local legend legend(off)
         exit
@@ -472,19 +535,19 @@ program _clegend
     if `"`missing2'"'!="" local missing missing
     mata: _set_default_and_add_quotes("missing2", "no data")
     local k `layer'
-    local clayers: char LAYER[Layers_cvar]
+    local clayers: char LAYER[Layers_C]
     if "`k'"=="" {
-        // ket first unused cvar layer
+        // get first unused layer that has colors
         local k: list clayers - lk
         gettoken k : k
     }
     if !cond("`k'"=="", 0 ,`:list k in clayers') {
         if "`k'"!="" {
-            di as txt "(clegend omitted; layer `k' does not contain cvar)"
+            di as txt "(clegend omitted; layer `k' does not contain color scale)"
         }
         else {
-            if "`lk'"=="" di as txt "(clegend omitted; no cvar layer found)"
-            else di as txt "(clegend omitted; no unused cvar layer found)"
+            if "`lk'"=="" di as txt "(clegend omitted; no layer containing color scale found)"
+            else di as txt "(clegend omitted; no unused layer containing color scale found)"
         }
         c_local clegend_k
         c_local clegend
@@ -494,12 +557,12 @@ program _clegend
     local values:   char LAYER[Values_`k']
     local colors:   char LAYER[Colors_`k']
     local hasmis:   char LAYER[Hasmis_`k']
+    local cmis:     char LAYER[Colmis_`k']
     local discrete: char LAYER[Discrete_`k']
     local hasmis   = `"`hasmis'"'!=""
     local discrete = `"`discrete'"'!=""
     if `hasmis' {
         if `"`missing'"'=="" {
-            gettoken cmis colors : colors, quotes
             if !`: list sizeof colors' {
                 di as txt "(clegend omitted: "/*
                     */ "layer `k' contains no non-missing color keys)"
@@ -510,6 +573,9 @@ program _clegend
             }
             local hasmis 0
         }
+    }
+    if `hasmis' {
+        local colors `"`cmis' `colors'"'
     }
     if `discrete' {
         if "`label'"=="" local LABELS: char LAYER[Labels_`k']
@@ -588,6 +654,7 @@ program _clegend
 end
 
 program _process_coloropts // pass standard color options through ColrSpace
+    _parse comma nm 0 : 0
     local opts COLor FColor LColor MColor MFColor MLColor MLABColor
     foreach o of local opts {
         local OPTS `OPTS' `o'(str asis)
@@ -597,11 +664,11 @@ program _process_coloropts // pass standard color options through ColrSpace
     local OPTS
     foreach o of local opts {
         if `"``o''"'!="" {
-            mata: _get_color("`o'")
+            mata: _get_colors("`o'")
             local OPTS `OPTS' `o'(``o'')
         }
     }
-    c_local options `OPTS' `options'
+    c_local `nm' `OPTS' `options'
 end
 
 program _geoplot_area
@@ -719,7 +786,7 @@ program _layeri
     gettoken layer 0 : 0
     gettoken p 0 : 0
     _parse comma lhs 0 : 0
-    _process_coloropts `0' // returns options
+    _process_coloropts options `0' // returns options
     local ++p
     char LAYER[Keys_`layer'] `p'
     c_local p `p'
@@ -731,28 +798,36 @@ program _layer
     gettoken plottype 0 : 0
     local hasSHP 0
     local TYPE
+    local SIZEopt
     local hasPLV 0
     local PLVopts
     local WGT
     local MLABopts
-    local CVARopts cvar(varname numeric) COLORVar(varname numeric)/*
-        */ LEVels(str) cuts(numlist sort min=2) DISCRete /*
-        */ COLor(str asis) LWidth(str) /*
-        */ MISsing(str asis) 
+    local Zopts Zvar(varname numeric) COLORVar(varname numeric)/*
+        */ LEVels(str) cuts(numlist sort min=2) DISCRete MISsing(str asis) /*
+        */ COLor COLor2(passthru) LWidth(passthru) LPattern(passthru)
+    local Zel color lwidth lpattern
+    local zvlist 1
     local YX Y X // coordinate variable names used in plot data
     if `"`plottype'"'=="area" {
         local TYPE   shape
         local hasSHP 1
+        local SIZEopt size(str asis)
         local hasPLV 1
         local PLVopts FColor(str asis) EColor(str asis)
         local varlist [varlist(default=none numeric max=1)]
-        local colvlist 1
+        local WGT [iw/]
+        local Zopts `Zopts' FIntensity(passthru)
+        local Zel `Zel' fintensity
+        local zvlist 1
     } 
     else if `"`plottype'"'=="line" {
         local TYPE   shape
         local hasSHP 1
+        local SIZEopt size(str)
         local varlist [varlist(default=none numeric max=1)]
-        local colvlist 1
+        local WGT [iw/]
+        local zvlist 1
     }
     else {
         if substr(`"`plottype'"',1,2)=="pc" { // paired coordinate plot
@@ -763,35 +838,39 @@ program _layer
         else {  // scatter assumed
             local TYPE unit
             local varlist [varlist(default=none max=2 numeric)]
-            local WGT [aw iw fw pw/]
+            local WGT [iw/]
+            local wgt "[aw=W]"
         }
-        local colvlist 0
         local MLABopts MLabel(varname) MLABVposition(varname numeric) /*
             */ MLABFormat(str)
+        local Zopts `Zopts' Msymbol(passthru) MSIZe(passthru) /*
+            */ MSAngle(passthru) MLWidth(passthru) MLABSize(passthru) /*
+            */ MLABANGle(passthru) MLABColor(passthru)
+        local Zel `Zel' msymbol msize msangle mlwidth mlabsize mlabangle/*
+            */ mlabcolor
     }
     gettoken layer 0 : 0
     gettoken p 0 : 0
     gettoken frame 0 : 0
     frame `frame' {
         // syntax
-        syntax `varlist' [if] [in] `WGT' [, `PLVopts' `MLABopts'/*
-            */ `CVARopts' * ]
+        qui syntax `varlist' [if] [in] `WGT' [, `Zopts' `SIZEopt' `PLVopts'/*
+            */ `MLABopts'  * ]
         local cuts: list uniq cuts
-        capt n _parse_levels `levels' // => levels, method, l_wvar
-        if _rc==1 exit _rc
-        if _rc {
-            di as err "(error in option {bf:levels()}"
-            exit _rc
-        }
+        _parse_levels `levels' // => levels, method, l_wvar
+        if `"`fcolor'"'!="" mata: _get_colors("fcolor")
         marksample touse, novarlist
         geoframe get feature, l(FEATURE)
-        // check cvar
-        if "`cvar'"=="" local cvar `colorvar'
-        if `colvlist' {
-            if "`cvar'"=="" local cvar `varlist'
+        // check Z
+        if `"`colorvar'"'!="" {
+            local color color
+            if "`zvar'"=="" local zvar `colorvar'
+        }
+        if `zvlist' {
+            if "`zvar'"=="" local zvar `varlist'
             local varlist
         }
-        local hasCVAR = `"`cvar'"'!=""
+        local hasZ = `"`zvar'"'!=""
         // check shpframe
         if `hasSHP' {
             geoframe get shpframe, local(shpframe)
@@ -817,7 +896,7 @@ program _layer
             }
             local ORG `yx'
             local TGT `YX'
-            _get_PLV `hasPLV' `hasCVAR' `"`fcolor'"' `"`FEATURE'"' // => PLV
+            _get_PLV `hasPLV' `hasZ' `"`fcolor'"' `"`FEATURE'"' // => PLV
             if `hasPLV' {
                 local ORG `ORG' `PLV'
                 local TGT `TGT' PLV
@@ -831,12 +910,8 @@ program _layer
         // handle weights
         local hasWGT = "`weight'"!=""
         if `hasWGT' {
-            capt confirm variable `exp'
-            if _rc {
-                tempname wvar
-                qui gen double `wvar' = `exp' if `touse'
-            }
-            else local wvar `exp'
+            tempname wvar
+            qui gen double `wvar' = abs(`exp') if `touse'
             markout `touse' `wvar' // exclude obs with missing weight
             if `hasSHP' {
                 tempname WVAR
@@ -846,19 +921,37 @@ program _layer
             else local WVAR `wvar'
             local ORG `ORG' `WVAR'
             local TGT `TGT' W
-            local wgt "[aw=W]"
-        }
-        // handle cvar
-        if `hasCVAR' {
-            local cvarfmt: format `cvar'
-            if `hasSHP' {
-                tempname CVAR
-                local org `org' `cvar'
-                local tgt `tgt' `CVAR'
+            if "`TYPE'"=="shape" {
+                geoframe get centroids, flip local(wYX)
+                if `: list sizeof wYX'!=2 {
+                    di as err "centroids not found; cannot apply weights"
+                    exit 498
+                }
+                if `hasSHP' {
+                    tempname wY wX
+                    local org `org' `wYX'
+                    local tgt `tgt' `wY' `wX'
+                }
+                else {
+                    gettoken wY wYX : wYX
+                    gettoken wX wYX : wYX
+                }
+                local ORG `ORG' `wY' `wX'
+                local TGT `TGT' wY wX
             }
-            else local CVAR `cvar'
-            local ORG `ORG' `CVAR'
-            local TGT `TGT' CVAR
+        }
+        else local wgt
+        // handle Z
+        if `hasZ' {
+            local zfmt: format `zvar'
+            if `hasSHP' {
+                tempname ZVAR
+                local org `org' `zvar'
+                local tgt `tgt' `ZVAR'
+            }
+            else local ZVAR `zvar'
+            local ORG `ORG' `ZVAR'
+            local TGT `TGT' Z
             if "`l_wvar'"!="" {
                 tempname L_WVAR
                 if `hasSHP' {
@@ -871,8 +964,43 @@ program _layer
            }
         }
         else {
-            if `"`color'"'!=""  local options color(`color') `options'
-            if `"`lwidth'"'!="" local options lwidth(`lwidth') `options'
+            local color `"`color2'"'
+            foreach el of local Zel {
+                if `"``el''"'=="" continue
+                local options ``el'' `options'
+                local `el'
+            }
+        }
+        // handle size
+        if `"`size'"'!="" {
+            geoframe get centroids, flip local(sizeYX)
+            if `: list sizeof sizeYX'!=2 {
+                di as err "centroids not found; cannot apply size()"
+                di as err "need to set centroids using {helpb geoframe}"
+                exit 498
+            }
+            geoframe get area, local(sizeAREA)
+            if `: list sizeof sizeAREA'!=1 {
+                di as err "area variable (original size) not found;"/*
+                    */ " cannot apply size()"
+                di as err "need to set area variable using {helpb geoframe}"
+                exit 498
+            }
+            tempname sizevar
+            qui gen double `sizevar' = abs(`size') if `touse'
+            if `hasSHP' {
+                tempname SIZE CY CX AREA
+                local org `org' `sizevar' `sizeYX' `sizeAREA'
+                local tgt `tgt' `SIZE' `CY' `CX' `AREA'
+            }
+            else {
+                local SIZE `sizevar'
+                gettoken CY sizeYX : sizeYX
+                gettoken CX sizeYX : sizeYX
+                local AREA `sizeAREA'
+            }
+            local ORG `ORG' `SIZE' `CY' `CX' `AREA'
+            local TGT `TGT' SIZE CY CX AREA
         }
         // handle marker labels
         local hasMLAB = `"`mlabel'"'!=""
@@ -893,15 +1021,18 @@ program _layer
             mata: _generate_mlabels("`MLAB'", "`mlabel'", "`mlabformat'",/*
                 */ "`touse'")
             if `hasSHP' {
-                tempname CVAR
+                tempname MLAB
                 local org `org' `MLAB'
                 local tgt `tgt' `MLAB'
             }
             local ORG `ORG' `MLAB'
-            // local TGT `TGT' MLAB (will be done later, because str)
+            local TGT `TGT' MLAB
         }
         // inject colors
-        _process_coloropts, `options'
+        _process_coloropts options, `options'
+        if `"`fcolor'"'!="" {
+            local options fcolor(`fcolor') `options'
+        }
     }
     // copy data
     if `hasSHP' {
@@ -910,11 +1041,6 @@ program _layer
         qui frame `shpframe': replace `touse' = 0 if `touse'>=. 
     }
     local n0 = _N + 1
-    geoframe varinit double `TGT'
-    if `hasMLAB' {
-        geoframe varinit strL MLAB
-        local TGT `TGT' MLAB
-    }
     qui geoframe append `shpframe' `ORG', target(`TGT') touse(`touse')
     local n1 = _N
     if "`TYPE'"=="shape" { // only if plottype area or line
@@ -936,67 +1062,108 @@ program _layer
     }
     local in in `n0'/`n1'
     qui replace LAYER = `layer' `in'
-    // handle cvar
-    if `hasCVAR' {
-        tempname CUTS
-        mata: _cvar_cuts("`CUTS'", (`n0', `n1')) // => CUTS, cuts, levels
-        _cvar_categorize `CUTS' `in', levels(`levels') `discrete'
-            // => clevels hasmis
-        if "`discrete'"!="" {
-            frame `frame': _cvar_clabels `cvar' `cuts' // => clabels
-        }
-        if `levels' {
-            _cvar_color `levels' `color' // => color
-            _cvar_recycle lwidth `levels' "thin" `"`lwidth'"'
-         }
-        if "`hasmis'"!="" {
-            if `"`missing'"'=="" local missing gs14 // default
-            mata: _get_color("missing")
-            local color `"`missing' `color'"'
-        }
-    }
-    else local clevels 0
-    // handle PLV
+    // prepare PLV
     if `hasPLV' {
         if `"`ecolor'"'=="" local ecolor white // default for enclaves
-        mata: _get_color("ecolor")
+        mata: _get_colors("ecolor")
+        qui replace PLV = 0 if PLV>=. `in' // treat missing as 0
         qui levelsof PLV `in'
         local plevels `r(levels)'
     }
     else local plevels .
-    // compile options
+    // handle Z elements and set default options
     local opts
-    if `"`plottype'"'=="area" {
-        if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
-        local opts `opts' cmissing(n) nodropbase lalign(center)/*
-            */ lpattern(solid) 
-        if `hasCVAR' {
-            local opts `opts' lwidth(thin) lcolor(%0) finten(100)
+    if `hasZ' {
+        // - categorize Z
+        tempname CUTS
+        mata: _z_cuts("`CUTS'", (`n0', `n1')) // => CUTS, cuts, levels
+        _z_categorize `CUTS' `in', levels(`levels') `discrete' // => zlevels hasmis
+        if "`discrete'"!="" {
+            frame `frame': _z_labels `zvar' `cuts' // => zlabels
         }
-        else {
-            local opts `opts' lwidth(thin) 
+        // - process options
+        if `levels' {
+            if `"`color2'"'!="" local color color
+            local ZEL
+            foreach el of local Zel {
+                if "`el'"=="mlabcolor" {
+                    if `hasMLAB' {
+                        if `"`COLOR'"'!="" {
+                            // color() takes precedence over mlabcolor()
+                            _process_coloropts mlabcolor, `mlabcolor'
+                            local opts mlabcolor(`mlabcolor')
+                            local mlabcolor `"`color'"'
+                        }
+                        else {
+                            if `"``el''"'=="" continue
+                            _z_colors `levels' mlabcolor `mlabcolor'
+                            local color `"`mlabcolor'"'
+                        }
+                    }
+                    else {
+                        local mlabcolor
+                        continue
+                    }
+                }
+                else {
+                    if `"``el''"'=="" continue
+                    if "`el'"=="color"/*
+                        */ _z_colors `levels' color `color2'
+                    else _z_recycle `levels' `el', ``el''
+                }
+                if `: list sizeof `el''==0 continue
+                local `=strupper("`el'")' `el'
+                local ZEL `ZEL' `el'
+            }
+        }
+        // - set defaults
+        if `"`plottype'"'=="area" {
+            local opts cmissing(n) nodropbase lalign(center) `opts'
             if `"`FEATURE'"'=="water" {
-                local opts `opts' color("135 206 235") finten(50) // "SkyBlue"
+                if "`COLOR'"=="" local opts color("135 206 235") `opts' // SkyBlue
+                if "`FINTENSITY'"=="" local opts finten(50) `opts'
+                if "`LWIDTH'"=="" local opts lwidth(thin) `opts'
             }
             else {
-                local opts `opts' lcolor(gray)
-                if `"`fcolor'"'=="" local opts `opts' fcolor(none)
+                if "`COLOR'"=="" {
+                    local opts lcolor(gray) `opts'
+                    if `"`fcolor'"'=="" local opts fcolor(none) `opts'
+                }
+                if "`FINTENSITY'"=="" local opts finten(100) `opts'
+                if "`LWIDTH'"=="" local opts lwidth(thin) lcolor(%0) `opts'
             }
+            if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
+        }
+        else if "`plottype'"'=="line" {
+            local opts `opts' cmissing(n)
+            if "`COLOR'"=="" {
+                if `"`FEATURE'"'=="water" local opts color("135 206 235") `opts' // SkyBlue
+                else local opts lcolor(gray) `opts'
+            }
+            if "`LWIDTH'"==""   local opts lwidth(thin) `opts'
+            if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
+        }
+        // - process hasmis
+        if "`hasmis'"!="" {
+            z_parse_missing `plottype', `missing' //=> missing missing_color
         }
     }
-    else if "`plottype'"'=="line" {
-        local opts `opts' cmissing(n) lpattern(solid) 
-        if `hasCVAR' {
-            local opts `opts'
-        }
-        else {
-            local opts `opts' lwidth(thin) 
-            if `"`FEATURE'"'=="water" {
-                local opts `opts' color("135 206 235") // "SkyBlue"
-            }
+    else {
+        local zlevels 0
+        if `"`plottype'"'=="area" {
+            local opts cmissing(n) nodropbase lalign(center) lwidth(thin)/*
+                */ lpattern(solid) `opts' 
+            if `"`FEATURE'"'=="water"/*
+                */ local opts color("135 206 235") finten(50) `opts' // SkyBlue
             else {
-                local opts `opts' lcolor(gray)
+                local opts lcolor(gray) `opts' 
+                if `"`fcolor'"'=="" local opts fcolor(none) `opts'
             }
+        }
+        else if "`plottype'"'=="line" {
+            local opts cmissing(n) lwidth(thin) lpattern(solid) `opts'
+            if `"`FEATURE'"'=="water" local opts color("135 206 235") `opts' // SkyBlue
+            else local opts lcolor(gray) `opts'
         }
     }
     if `hasMLAB' {
@@ -1016,42 +1183,34 @@ program _layer
             local enclave = mod(`pl',2)
         }
         else local enclave 0
-        if `hasCVAR' {
-            local COLOR: copy local color
-            local LWIDTH: copy local lwidth
-        }
-        foreach i of local clevels {
-            if `enclave' {
-                local IFF `iff'
-                if `hasWGT' {
-                    if `"`IFF'"'!=""  local IFF if (`IFF' & `in'
-                    else              local IFF if (`in'
-                }
-                else if `"`IFF'"'!="" local IFF if `IFF' `in'
-                else                  local IFF `in'
-                local IFF `IFF' `wgt'
-                local IFF `IFF', fcolor(`ecolor')
-                local IFF `IFF' `options'
-                local plot `plot' (`plottype' `YX' `IFF')
-                local ++p
-                continue, break
+        if `hasZ' {
+            foreach el of local ZEL {
+                local EL = strupper("`el'")
+                local `EL': copy local `el'
             }
-            local OPTS `opts'
+        }
+        foreach i of local zlevels {
             local IFF `iff'
-            if `hasCVAR' {
-                foreach opt in color lwidth {
-                    local OPT = strupper("`opt'")
-                    gettoken tmp `OPT' : `OPT', quotes
-                    local OPTS `OPTS' `opt'(`tmp')
+            if `hasZ' {
+                if `i'==0 local OPTS `missing' // missing
+                else {
+                    local OPTS
+                    foreach el of local ZEL {
+                        local EL = strupper("`el'")
+                        gettoken tmp `EL' : `EL', quotes
+                        local OPTS `OPTS' `el'(`tmp')
+                    }
+                    local OPTS `opts' `OPTS'
                 }
-                if `"`IFF'"'!="" local IFF `IFF' & CVAR==`i'
-                else             local IFF CVAR==`i'
+                if `"`IFF'"'!="" local IFF `IFF' & Z==`i'
+                else             local IFF Z==`i'
                 if `pl'!=`pl0' {
                     // skip empty plots in additional layers
                     qui count `IFF' `in'
                     if r(N)==0 continue
                 }
             }
+            else local OPTS `opts'
             if `hasWGT' {
                 if `"`IFF'"'!=""  local IFF if (`IFF' & `in'
                 else              local IFF if (`in'
@@ -1059,7 +1218,7 @@ program _layer
             else if `"`IFF'"'!="" local IFF if `IFF' `in'
             else                  local IFF `in'
             local IFF `IFF' `wgt'
-            local OPTS `OPTS' `fcolor'
+            if `enclave' local OPTS `OPTS' fcolor(`ecolor')
             local OPTS `OPTS' `options'
             if `"`OPTS'"'!="" {
                 local IFF `IFF', `OPTS'
@@ -1070,31 +1229,26 @@ program _layer
         if `pl'==`pl0' local p1 `p'
     }
     // return results
-    _post_chars `layer' `p0' `p1' `hasCVAR' "`discrete'" "`hasmis'" "`cvarfmt'"/*
-            */ `"`cuts'"' `"`clabels'"' `"`color'"'
+    _post_chars `layer' `p0' `p1' `hasZ' "`discrete'" "`hasmis'" "`zfmt'"/*
+            */ `"`cuts'"' `"`zlabels'"' `"`color'"' `"`missing_color'"'
     c_local plot `plot'
     c_local p `p'
 end
 
-program _get_PLV
-    args hasPLV hasCVAR fcolor FEATURE
-    if !`hasPLV' exit
-    if `hasCVAR' {
-        if strtrim(`"`fcolor'"')=="none" local hasPLV 0
+program _parse_levels
+    if `"`0'"'=="" exit
+    capt n __parse_levels `levels'
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "(error in option levels())"
+        exit _rc
     }
-    else {
-        if `"`fcolor'"'=="" & `"`FEATURE'"'!="water" local hasPLV 0
-        else if strtrim(`"`fcolor'"')=="none"        local hasPLV 0
-    }
-    if `hasPLV' {
-        geoframe get plevel, l(PLV)
-        if "`PLV'"=="" local hasPLV 0
-    }
-    c_local hasPLV `hasPLV'
-    c_local PLV `PLV'
+    c_local levels `levels'
+    c_local method `method'
+    c_local l_wvar `l_wvar'
 end
 
-program _parse_levels
+program __parse_levels
     _parse comma n 0 : 0
     if `"`n'"'!="" {
         numlist `"`n'"', int min(0) max(1) range(>0)
@@ -1122,99 +1276,149 @@ program _parse_levels
     c_local l_wvar `weight'
 end
 
-program _cvar_categorize
+program _z_categorize
     syntax anything(name=CUTS) in, levels(str) [ discrete ]
     tempname tmp
     qui gen byte `tmp' = . `in'
     if "`discrete'"!="" {
         forv i=1/`levels' {
-            qui replace `tmp' = `i' if CVAR==`CUTS'[1,`i'] `in'
+            qui replace `tmp' = `i' if Z==`CUTS'[1,`i'] `in'
         }
     }
     else {
         forv i=1/`levels' {
-            if `i'==1 local iff inrange(CVAR, `CUTS'[1,`i'], `CUTS'[1,`i'+1])
-            else      local iff CVAR>`CUTS'[1,`i'] & CVAR<=`CUTS'[1,`i'+1]
+            if `i'==1 local iff inrange(Z, `CUTS'[1,`i'], `CUTS'[1,`i'+1])
+            else      local iff Z>`CUTS'[1,`i'] & Z<=`CUTS'[1,`i'+1]
             qui replace `tmp' = `i' if `iff' `in'
         }
     }
-    qui count if CVAR>=. `in'
+    qui count if Z>=. `in'
     if r(N) { // set missings to 0
-        qui replace `tmp' = 0 if CVAR>=. `in'
+        qui replace `tmp' = 0 if Z>=. `in'
         local hasmis hasmis
     }
-    qui replace CVAR = `tmp' `in'
+    qui replace Z = `tmp' `in'
     if "`hasmis'"!="" local a 0
     else              local a 1
     numlist "`a'/`levels'"
-    c_local clevels `r(numlist)'
+    c_local zlevels `r(numlist)'
     c_local hasmis `hasmis'
 end
 
-program _cvar_clabels
+program _get_PLV
+    args hasPLV hasZ fcolor FEATURE
+    if !`hasPLV' exit
+    if `hasZ' {
+        if strtrim(`"`fcolor'"')=="none" local hasPLV 0
+    }
+    else {
+        if `"`fcolor'"'=="" & `"`FEATURE'"'!="water" local hasPLV 0
+        else if strtrim(`"`fcolor'"')=="none"        local hasPLV 0
+    }
+    if `hasPLV' {
+        geoframe get plevel, l(PLV)
+        if "`PLV'"=="" local hasPLV 0
+    }
+    c_local hasPLV `hasPLV'
+    c_local PLV `PLV'
+end
+
+program _z_labels
     gettoken var 0 : 0
     local labname: value label `var'
     if `"`labname'"'=="" {
-        local clabels `0'
+        local labels `0'
     }
     else {
-        local clabels
+        local labels
         local space
         foreach val of local 0 {
             local lab: label `labname' `val'
-            local clabels `"`clabels'`space'`"`lab'"'"'
+            local labels `"`labels'`space'`"`lab'"'"'
             local space " "
         }
     }
-    c_local clabels `"`clabels'"'
+    c_local zlabels `"`labels'"'
 end
 
-program _cvar_color
+program _z_colors
     gettoken levels 0 : 0
-    _parse comma color 0 : 0
+    gettoken nm 0 : 0
+    if "`nm'"=="color" local optnm color2
+    else               local optnm `nm'
+    local 0 `", `0'"'
+    syntax [, `optnm'(str asis) ]
+    _parse comma color 0 : `optnm'
     if `"`color'"'=="" local color viridis
-    syntax [, n(passthru) IPolate(passthru) * ]
+    syntax [, NOEXPAND n(passthru) IPolate(passthru) * ]
+    if "`noexpand'"=="" local noexpand noexpand
     if `"`n'`ipolate'"'=="" local n n(`levels')
-    colorpalette `color', nograph `n' `ipolate' `options'
+    colorpalette `color', nograph `noexpand' `n' `ipolate' `options'
     local color `"`r(p)'"'
-    if `: list sizeof color'<`levels' {
+    if `:list sizeof color'<`levels' {
         // recycle or interpolate colors if too few colors have been obtained
-        local pclass `"`r(pclass)'"'
         colorpalette `color', nograph n(`levels') class(`pclass')
         local color `"`r(p)'"'
     }
-    c_local color `"`color'"'
+    c_local `nm' `"`color'"'
 end
 
-program _cvar_recycle
-    args nm k def opt
-    if `"`opt'"'=="" local opt `"`def'"'
-    else {
-        // try numlist
-        capt numlist `"`opt'"'
-        if _rc==1 _rc
-        if _rc==0 {
-            local opt `"`r(numlist)'"'
+program _z_recycle
+    _parse comma lhs 0 : 0
+    gettoken k  lhs : lhs
+    gettoken el lhs : lhs
+    syntax [, `el'(str asis) ]
+    loca opt: copy local `el'
+    // try numlist
+    capt numlist `"`opt'"'
+    if _rc==1 _rc
+    if _rc==0 {
+        local opt `"`r(numlist)'"'
+        if `: list sizeof opt'==2 {
+            // generate range
+            gettoken lb opt : opt
+            gettoken ub opt : opt
+            mata: st_local("opt", /*
+                */ invtokens(strofreal(rangen(`lb', `ub', `k')')))
         }
     }
     // expand
     mata: st_local("opt", invtokens(_vecrecycle(`k', tokens(st_local("opt")))))
-    c_local `nm' `"`opt'"'
+    c_local `el' `"`opt'"'
+end
+
+program z_parse_missing
+    _parse comma plottype 0 : 0
+    syntax [, COLor(str asis) * ]
+    _process_coloropts options, `options'
+    if `"`color'"'=="" local color gs14
+    local options color(`color') `options'
+    if `"`plottype'"'=="area" {
+        local options cmissing(n) nodropbase lalign(center) finten(100)/*
+            */ lwidth(thin) lpattern(solid) lcolor(%0) `options'
+    }
+    else if "`plottype'"'=="line" {
+        local options cmissing(n) lwidth(thin) lpattern(solid) `options'
+    }
+    c_local missing `options'
+    c_local missing_color `"`color'"'
 end
 
 program _post_chars
-    args i p0 p1 hasCVAR discrete hasmis fmt values labels color
+    args i p0 p1 hasZ discrete hasmis fmt values labels color colmis
     numlist "`p0'/`p1'"
     char LAYER[Keys_`i'] `r(numlist)'
-    if `hasCVAR'==0 exit
-    char LAYER[Layers_cvar] `:char LAYER[Layers_cvar]' `i'
-    char LAYER[Type_`i'] cvar
+    if `hasZ'==0 exit
+    char LAYER[Layers_Z] `:char LAYER[Layers_Z]' `i'
     char LAYER[Discrete_`i'] `discrete'
     char LAYER[Hasmis_`i'] `hasmis'
     char LAYER[Format_`i'] `fmt'
     char LAYER[Values_`i'] `values'
     char LAYER[Labels_`i'] `"`labels'"'
+    if `"`color'"'=="" exit
+    char LAYER[Layers_C] `:char LAYER[Layers_C]' `i'
     char LAYER[Colors_`i'] `"`color'"'
+    char LAYER[Colmis_`i'] `"`colmis'"'
 end
 
 version 17
@@ -1265,7 +1469,7 @@ transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
     return(J(1, ceil(k/c), x)[|1\k|])
 }
 
-void _cvar_cuts(string scalar CUTS, real rowvector range)
+void _z_cuts(string scalar CUTS, real rowvector range)
 {
     string scalar  cuts, method, wvar
     real scalar    discrete, k, lb, ub
@@ -1285,14 +1489,14 @@ void _cvar_cuts(string scalar CUTS, real rowvector range)
     }
     // tag first obs of each unit (if ID is available)
     if (st_local("ID")!="") {
-        // assuming data is ordered by ID; assuming CVAR is constant
+        // assuming data is ordered by ID; assuming Z is constant
         // within ID
         p = selectindex(_mm_unique_tag(st_data(range, "ID")))
     }
     else p = .
     // CASE 2: discrete
     if (discrete) { // discrete specified
-        C = mm_unique(st_data(range, "CVAR")[p])
+        C = mm_unique(st_data(range, "Z")[p])
         C = select(C, C:<.) // remove missing codes
         st_matrix(CUTS, C')
         st_local("cuts", invtokens(strofreal(C)'))
@@ -1300,7 +1504,7 @@ void _cvar_cuts(string scalar CUTS, real rowvector range)
         return
     }
     // get data
-    X = st_data(range, "CVAR")[p]
+    X = st_data(range, "Z")[p]
     minmax = minmax(X)
     // SPECIAL CASE 1: no nonmissing data
     if (minmax==J(1,2,.)) {
@@ -1346,7 +1550,7 @@ void _cvar_cuts(string scalar CUTS, real rowvector range)
     // CASE 5: kmeans
     else if (method=="kmeans") {
         X = select(X, X:<.) // remove missings
-        C = lb \ _cvar_cuts_kmeans(k, X)
+        C = lb \ _z_cuts_kmeans(k, X)
     }
     else exit(error(3499))
     // return results from CASE 4 or 5
@@ -1359,7 +1563,7 @@ void _cvar_cuts(string scalar CUTS, real rowvector range)
     st_local("levels", strofreal(k-1))
 }
 
-real colvector _cvar_cuts_kmeans(real scalar k, real colvector X)
+real colvector _z_cuts_kmeans(real scalar k, real colvector X)
 {
     real colvector C, p
     string scalar  frame, cframe
@@ -1410,7 +1614,7 @@ void _generate_mlabels(string scalar var, string scalar VAR, string scalar fmt,
     st_sstore(., var, touse, L)
 }
 
-void _get_color(string scalar lname, | string scalar lname2)
+void _get_colors(string scalar lname, | string scalar lname2)
 {   /* function assumes that global ColrSpace object "_GEOPLOT_ColrSpace_S"
        exists; maintaining a global is less work than initializing ColrSpace
        in each call */
