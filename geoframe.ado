@@ -1,4 +1,4 @@
-*! version 0.1.6  29may2023  Ben Jann
+*! version 0.1.7  30may2023  Ben Jann
 
 program geoframe
     version 17
@@ -290,8 +290,65 @@ program _geoframe_generate
     _geoframe_generate_`fcn' `0'
 end
 
+program _geoframe_generate_centroids
+    syntax [namelist(min=2 max=2)] [, replace noset ]
+    if "`namelist'"=="" local namelist _CX _CY
+    if "`replace'"=="" {
+        confirm new variable `namelist'
+    }
+    geoframe get type, l(type)
+    local cframe `"`c(frame)'"'
+    if "`type'"=="shape" local shpframe `"`cframe'"'
+    else geoframe get shpframe, local(shpframe) strict
+    geoframe get id, l(ID0) strict
+    frame `shpframe' {
+        if "`shpframe'"=="`cframe'" local ID `ID0'
+        else geoframe get id, l(ID) strict
+        tempvar CX CY
+        qui __geoframe_generate_centroids `ID' `CX' `CY'
+        if "`shpframe'"!="`cframe'" {
+            mata: _copy_by_ID("`cframe'", "`ID0'", "`ID'", "`CX' `CY'")
+        }
+    }
+    // post result
+    local TMP `CX' `CY'
+    foreach var of local namelist {
+        capt confirm new variable `var'
+        if _rc==1 exit _rc
+        if _rc drop `var'
+        gettoken tmp TMP : TMP
+        rename `tmp' `var'
+    }
+    if "`set'"=="" _geoframe_set centroids `namelist'
+    di as txt "(variables {bf:`namelist'} generated)"
+end
+
+program __geoframe_generate_centroids, sortpreserve
+    // https://en.wikipedia.org/wiki/Centroid
+    // assuming (1) that the polygons belonging to a shape are separated by
+    // a row or missing coordinates, (2) that the coordinates of each polygon
+    // are in order (clockwise or counter-clockwise), (3) that the polygons
+    // wrap around (first coordinate = last coordinate) 
+    args ID CX CY
+    geoframe get coordinates, l(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    geoframe get plevel, l(PLV)
+    if `"`PLV'"'!="" local PLV * (1-2*mod(`PLV',2))
+    sort `ID' `_sortindex'
+    tempvar DET
+    by `ID': gen double `DET' = (`X' * `Y'[_n+1] - `X'[_n+1] * `Y') `PLV'
+    by `ID': gen double `CX'  = (`X' + `X'[_n+1]) * `DET'
+    by `ID': gen double `CY'  = (`Y' + `Y'[_n+1]) * `DET'
+    by `ID': replace `DET'    = sum(`DET')
+    by `ID': replace `CX'     = sum(`CX')
+    by `ID': replace `CY'     = sum(`CY')
+    by `ID': replace `CX'     = `CX'[_N] / (3 * `DET'[_N])
+    by `ID': replace `CY'     = `CY'[_N] / (3 * `DET'[_N])
+end
+
 program _geoframe_generate_area
-    syntax [name] [, replace ]
+    syntax [name] [, replace noset ]
     if "`namelist'"=="" local namelist _AREA
     if "`replace'"=="" {
         confirm new variable `namelist'
@@ -302,9 +359,9 @@ program _geoframe_generate_area
     else geoframe get shpframe, local(shpframe) strict
     geoframe get id, l(ID0) strict
     frame `shpframe' {
-        tempvar AREA
         if "`shpframe'"=="`cframe'" local ID `ID0'
         else geoframe get id, l(ID) strict
+        tempvar AREA
         qui __geoframe_generate_area `ID' `AREA'
         if "`shpframe'"!="`cframe'" {
             mata: _copy_by_ID("`cframe'", "`ID0'", "`ID'", "`AREA'")
@@ -314,11 +371,16 @@ program _geoframe_generate_area
     if _rc==1 exit _rc
     if _rc drop `namelist'
     rename `AREA' `namelist'
-    _geoframe_set area `namelist'
+    if "`set'"=="" _geoframe_set area `namelist'
     di as txt "(variable {bf:`namelist'} generated)"
 end
 
 program __geoframe_generate_area, sortpreserve
+    // https://en.wikipedia.org/wiki/Shoelace_formula
+    // assuming (1) that the polygons belonging to a shape are separated by
+    // a row or missing coordinates, (2) that the coordinates of each polygon
+    // are in order (clockwise or counter-clockwise), (3) that the polygons
+    // wrap around (first coordinate = last coordinate) 
     args ID AREA
     geoframe get coordinates, l(XY) strict
     gettoken X XY : XY
@@ -326,13 +388,13 @@ program __geoframe_generate_area, sortpreserve
     geoframe get plevel, l(PLV)
     if `"`PLV'"'!="" local PLV * (1-2*mod(`PLV',2))
     sort `ID' `_sortindex'
-    by `ID': gen double `AREA' = ((`X' * `Y'[_n+1]) - (`X'[_n+1] * `Y')) `PLV'
+    by `ID': gen double `AREA' = (`X' * `Y'[_n+1] - `X'[_n+1] * `Y') `PLV'
     by `ID': replace `AREA' = sum(`AREA')
     by `ID': replace `AREA' =  abs(`AREA'[_N] / 2)
 end
 
 program _geoframe_generate_pid
-    syntax [name] [, replace ]
+    syntax [name] [, replace noset ]
     if "`namelist'"=="" local namelist _PID
     if "`replace'"=="" {
         confirm new variable `namelist'
@@ -354,7 +416,7 @@ program _geoframe_generate_pid
     if _rc==1 exit _rc
     if _rc drop `namelist'
     rename `tmp' `namelist'
-    _geoframe_set pid `namelist'
+    if "`set'"=="" _geoframe_set pid `namelist'
     di as txt "(variable {bf:`namelist'} generated)"
 end
 
@@ -423,16 +485,7 @@ end
 program __geoframe_set_var
     gettoken var arg : 0
     local arg = strtrim(`"`arg'"')
-    if `"`arg'"'=="" {
-        if "`var'"=="sid" local VAR shape_order
-        else              local VAR _`=strupper("`var'")'
-        capt confirm numeric variable `VAR', exact
-        if _rc==1 exit _rc
-        if _rc==0 {
-            local arg `VAR'
-        }
-    }
-    else {
+    if `"`arg'"'!="" {
         capt unab arg: `arg', max(1)
         if _rc==1 exit _rc
         if _rc {
@@ -455,14 +508,12 @@ program __geoframe_set_coordinates
         di as err "only one of {bf:unit}, {bf:shape}, and {bf:pc} allowed"
         exit 198
     }
-    if `"`type'"'=="" {
-        local type: char _dta[GEOFRAME_type]
-    }
-    if `"`type'"'=="unit"    local VARS _CX _CY
-    else if `"`type'"'=="pc" local VARS _X1 _Y1 _X2 _Y2
-    else                     local VARS _X _Y
-    local n: list sizeof VARS
     if `"`arg'"'!="" {
+        if `"`type'"'=="" {
+            local type: char _dta[GEOFRAME_type]
+        }
+        if `"`type'"'=="pc" local n 4
+        else                local n 2
         capt unab arg: `arg', min(`n') max(`n')
         if _rc==1 exit _rc
         if _rc {
@@ -474,13 +525,6 @@ program __geoframe_set_coordinates
             }
         }
         confirm numeric variable `arg', exact
-    }
-    else {
-        capt confirm numeric variable `VARS', exact
-        if _rc==1 exit _rc
-        if _rc==0 {
-            local arg `VARS'
-        }
     }
     char _dta[GEOFRAME_coordinates] `arg'
 end
@@ -505,14 +549,6 @@ program __geoframe_set_centroids
         }
         confirm numeric variable `arg', exact
     }
-    else {
-        local VARS _CX _CY
-        capt confirm numeric variable `VARS', exact
-        if _rc==1 exit _rc
-        if _rc==0 {
-            local arg `VARS'
-        }
-    }
     char _dta[GEOFRAME_centroids] `arg'
 end
 
@@ -527,8 +563,9 @@ program _geoframe_get
     else                            local exp: char _dta[GEOFRAME_`char']
     if "`strict'"!="" {
         if `"`exp'"'=="" {
-            if `"`arg'"'!="" local char `"`arg'"'
-            di as err `"{bf:`char'} not found"'
+            if "`arg'"!="" local char `arg'
+            di as err `"`char' not found; "' /*
+                */ `"declare `char' using {helpb geoframe}"'
             exit 111
         }
     }
@@ -546,8 +583,8 @@ program __geoframe_get_var
     local exp: char _dta[GEOFRAME_`namelist']
     if `"`exp'"'=="" {
         // try default name
-        if "`var'"=="sid" local VAR shape_order
-        else              local VAR _`=strupper("`var'")'
+        if "`namelist'"=="sid" local VAR shape_order
+        else                   local VAR _`=strupper("`namelist'")'
         capt confirm numeric variable `VAR', exact
         if _rc==1 exit _rc
         if _rc==0 {
@@ -937,29 +974,29 @@ string scalar _strreverse(string scalar s)
 
 void _copy_by_ID(string scalar frame, string scalar ID0,
     string scalar ID, string scalar X)
-{
+{   // X may contain multiple variables
+    // assumptions: current frame is ordered by ID and X is constant within ID
     real scalar    i
-    real colvector id, x, p
+    real colvector id, p
+    real matrix    x
     transmorphic   A
     string scalar  cframe
-
-    // get data (assuming sorted by ID; X constant within ID)
+    
+    // get data
     id = st_data(., ID)
     p  = selectindex(_mm_unique_tag(id, 1))
     id = id[p]
-    x  = st_data(., X)[p]
+    x  = st_data(., tokens(X))[p,]
     // post data into asarray
     A = asarray_create("real")
-    asarray_notfound(A, .)
-    for (i=length(id); i; i--) asarray(A, id[i], x[i])
+    asarray_notfound(A, J(1,cols(x),.))
+    for (i=rows(id); i; i--) asarray(A, id[i], x[i,])
     // change frame and copy data from asarray
     cframe = st_framecurrent()
     st_framecurrent(frame)
     id = st_data(., ID0)
-    i  = length(id)
-    x  = J(i,1,.)
-    for (i=length(id); i; i--) x[i] = asarray(A, id[i])
-    st_store(., st_addvar("double", X), x)
+    st_view(x, ., st_addvar("double", tokens(X)))
+    for (i=rows(id); i; i--) x[i,] = asarray(A, id[i])
     st_framecurrent(cframe)
 }
 

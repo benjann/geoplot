@@ -1,5 +1,5 @@
 {smcl}
-{* 29may2023}{...}
+{* 30may2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -197,18 +197,12 @@
 {phang2}
     {opth size(exp)} resizes the shapes such that their sizes are proportional
     to {it:exp} (typically, {it:exp} is a {varname}; the size of a shape is equal
-    to the area enclosed by the shape). Default normalization is such that the
+    to the area covered by the shape). Default normalization is such that the
     shape with the highest density, defined as abs({it:exp}) divided by the
     area of the shape, will keep its original size; also see option
     {helpb geoplot##dmax:dmax()}. Negative values in {it:exp} will be treated
     as positive; shapes for which {it:exp} is missing will keep their original
     size.
-
-{pmore2}
-    Option {cmd:size()} requires that information on centroids and areas
-    of the shapes is available in the plotted frame; see {helpb geoframe}. If
-    needed, {helpb geoframe##generate:geoframe generate area} can be used to
-    compute the areas.
 
 {phang2}
     {cmdab:ec:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}

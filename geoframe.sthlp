@@ -1,5 +1,5 @@
 {smcl}
-{* 29may2023}{...}
+{* 30may2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -179,17 +179,28 @@
     functions are as follows.
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt replace} ]
+    {cmd:geoframe} {cmdab:g:enerate} {cmdab:cen:troids} [{it:CX CY}] [{cmd:,} {opt replace} {opt noset} ]
+
+{pstd}
+    to generate variables containing the coordinates of the centroids
+    of the shapes. {it:CX} and {it:CY} specify the names of the generated
+    variables; {cmd:_CX} and {cmd:_CY} are used as default variable names. Option
+    {cmd:replace} allows overwriting existing variables. The created variables
+    will be registered using {helpb geoframe##set:geoframe set centroids}
+    unless option {cmd:noset} is specified.
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt replace} {opt noset} ]
 
 {pstd}
     to generate a variable containing the size of the area enclosed in each
     shape. {it:AREA} specifies a name for the generated variable; {cmd:_AREA}
     is used as default variable name. Option {cmd:replace} allows overwriting
     an existing variable. The created variable will be registered using
-    {helpb geoframe##set:geoframe set area}.
+    {helpb geoframe##set:geoframe set area} unless option {cmd:noset} is specified.
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} ]
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} {opt noset} ]
 
 {pstd}
     to generate a variable identifying the different polygons within each unit
@@ -197,7 +208,7 @@
     specifies a name for the generated variable; {cmd:_PID} is used as default
     variable name. Option {cmd:replace} allows overwriting an existing
     variable. The created variable will be registered using
-    {helpb geoframe##set:geoframe set pid}.
+    {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is specified.
 
 {marker set}{...}
 {dlgtab:geoframe set}

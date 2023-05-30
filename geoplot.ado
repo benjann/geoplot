@@ -1,4 +1,4 @@
-*! version 0.1.6  29may2023  Ben Jann
+*! version 0.1.7  30may2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -796,6 +796,9 @@ end
 program _layer
     // setup
     gettoken plottype 0 : 0
+    gettoken layer 0 : 0
+    gettoken p 0 : 0
+    gettoken frame 0 : 0
     local hasSHP 0
     local TYPE
     local SIZEopt
@@ -849,9 +852,6 @@ program _layer
         local Zel `Zel' msymbol msize msangle mlwidth mlabsize mlabangle/*
             */ mlabcolor
     }
-    gettoken layer 0 : 0
-    gettoken p 0 : 0
-    gettoken frame 0 : 0
     frame `frame' {
         // syntax
         qui syntax `varlist' [if] [in] `WGT' [, `Zopts' `SIZEopt' `PLVopts'/*
@@ -889,7 +889,7 @@ program _layer
                 if `"`typeSHP'"'=="" local typeSHP `TYPE'
             }
             if "`varlist'"!="" local yx `varlist'
-            else geoframe get coordinates, flip local(yx) `typeSHP'
+            else geoframe get coordinates, strict flip local(yx) `typeSHP'
             if `:list sizeof yx'!=`: list sizeof YX' {
                 di as err "wrong number of coordinate variables"
                 exit 498
@@ -923,9 +923,14 @@ program _layer
             local TGT `TGT' W
             if "`TYPE'"=="shape" {
                 geoframe get centroids, flip local(wYX)
-                if `: list sizeof wYX'!=2 {
-                    di as err "centroids not found; cannot apply weights"
-                    exit 498
+                if !`: list sizeof wYX' {
+                    di as txt "layer `layer': centroids not found;"/*
+                        */ " computing centroids on the fly"
+                    di as txt "generate/declare centroids using " /*
+                        */ "{helpb geoframe} to avoid such extra computations"
+                    tempvar tmp_CX tmp_CY
+                    qui geoframe gen centroids `tmp_CX' `tmp_CY', noset
+                    local wYX `tmp_CY' `tmp_CX'
                 }
                 if `hasSHP' {
                     tempname wY wX
@@ -974,17 +979,24 @@ program _layer
         // handle size
         if `"`size'"'!="" {
             geoframe get centroids, flip local(sizeYX)
-            if `: list sizeof sizeYX'!=2 {
-                di as err "centroids not found; cannot apply size()"
-                di as err "need to set centroids using {helpb geoframe}"
-                exit 498
+            if !`: list sizeof sizeYX' local sizeYX `wYX'
+            if !`: list sizeof sizeYX' {
+                di as txt "layer `layer': centroids not found;"/*
+                    */ " computing centroids on the fly"
+                di as txt "generate/declare centroids using " /*
+                    */ "{helpb geoframe} to avoid such extra computations"
+                tempvar tmp_CX tmp_CY
+                qui geoframe gen centroids `tmp_CX' `tmp_CY', noset
+                local sizeYX `tmp_CY' `tmp_CX'
             }
             geoframe get area, local(sizeAREA)
-            if `: list sizeof sizeAREA'!=1 {
-                di as err "area variable (original size) not found;"/*
-                    */ " cannot apply size()"
-                di as err "need to set area variable using {helpb geoframe}"
-                exit 498
+            if !`: list sizeof sizeAREA' {
+                di as txt "layer `layer': area variable (original size) not"/*
+                    */ " found; computing areas on the fly"
+                di as txt "generate/declare area variable using " /*
+                    */ "{helpb geoframe} to avoid such extra computations"
+                tempvar sizeAREA
+                qui geoframe gen area `sizeAREA', noset
             }
             tempname sizevar
             qui gen double `sizevar' = abs(`size') if `touse'

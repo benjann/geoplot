@@ -19,6 +19,15 @@ The following packages are required:
 
 Main changes:
 
+    30may2023 (version 0.1.7)
+    geoframe
+    - -geoframe generate centroids- added
+    - -geoframe set- no longer adds default variable names to char; defaults are
+       now implicit
+    geoplot
+    - centroids and areas are now computed on the fly if needed; a corresponding
+      message is displayed
+  
     29may2023 (version 0.1.6)
     geoplot
     - option size() added to plotypes area and line
