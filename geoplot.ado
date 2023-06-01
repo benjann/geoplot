@@ -1,4 +1,4 @@
-*! version 0.1.7  30may2023  Ben Jann
+*! version 0.1.8  01jun2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -38,13 +38,10 @@ program geoplot, rclass
         */ Margin(numlist max=4 >=0) tight /* margin: l r b t (will be recycled)
         */ ASPECTratio(str) YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
         */ frame(str) * ]
-    local legend = `"`legend'`legend2'"'!=""
+    local legend  = `"`legend'`legend2'"'!=""
     local clegend = `"`clegend'`clegend2'"'!=""
-    if `clegend' _clegend_k, `clegend2'
-    else if !`legend' local legend 2
-        // legend = 0: legend not specified, but clegend specified
-        // legend = 1: legend specified
-        // legend = 2: neither legend nor clegend specified
+    if !`legend' & !`clegend' local legend 1
+    if "`nolegend'"!="" local legend 0
     _parse_aspectratio `aspectratio' // returns aspectratio, aspectratio_opts
     if "`margin'"=="" local margin 0
     _parse_frame `frame' // returns frame, replace
@@ -204,12 +201,12 @@ program geoplot, rclass
         }
         
     // compile legend
-        if "`nolegend'"=="" {
-            _legend `legend' `clegend_k', `legend2' // returns legend legend_k
+        if `legend' {
+            _legend, `legend2' // returns legend
         }
         else local legend legend(off)
         if `clegend' {
-            _clegend `legend_k', `clegend2' // returns plot, clegend, clegend_k
+            _clegend, `clegend2' // returns plot, clegend
             local plots `plots' `plot'
         }
         else local clegend
@@ -389,167 +386,127 @@ end
 
 program _legend
     // syntax
-    syntax [anything] [, Layer(numlist int max=1 >0) /*
-        */ VERTical HORizontal ASCending DESCending/*
-        */ Format(str) noLABel/*
-        */ NOMISsing MISsing(str asis) * ]
+    syntax [, Layout(str asis) HORizontal * ]
     if `"`options'"'!="" local options legend(`options')
-    _legend_parse_missing, `missing' // returns mis_lab, mis_gap, mis_first
-    gettoken force anything : anything
-    gettoken ck    anything : anything
-    // get legend info
-    local k `layer'
+    // select layer if layer() is empty
     local zlayers: char LAYER[Layers_Z]
-    if "`k'"=="" & `force' {
-        // get first unused layer that has Z
-        local k: list zlayers - ck
-        gettoken k : k
-    }
-    if !cond("`k'"=="", 0 ,`:list k in zlayers') {
-        if "`k'"!="" {
-            di as txt "(legend omitted; layer `k' does not contain {it:Z})"
-        }
-        else if `force'==1 {
-            if "`ck'"=="" di as txt "(legend omitted; no layer containing {it:Z} found)"
-            else di as txt "(legend omitted; no unused layer containing {it:Z} found)"
-        }
-        c_local legend_k
-        c_local legend legend(off)
-        exit
-    }
-    local keys:     char LAYER[Keys_`k']
-    local values:   char LAYER[Values_`k']
-    local hasmis:   char LAYER[Hasmis_`k']
-    local discrete: char LAYER[Discrete_`k']
-    local labels `values'
-    if `"`discrete'"'!="" {
-        if "`label'"=="" {
-            local labels: char LAYER[Labels_`k']
+    if `"`layout'"'=="" {
+        gettoken layout : zlayers // first layer containing Z
+        if "`layout'"=="" {
+            c_local legend legend(off)
+            exit
         }
     }
-    if `"`format'"'!="" {
-        capt confirm numeric format `format'
-        if _rc local format
-    }
-    else local format: char LAYER[Format_`k']
-    if `"`format'"'=="" local format %7.0g
-    // orientation / layout
-    local layout size(vsmall) symysize(3) symxsize(3) keygap(1)
-    if "`horizontal'"!="" {
-        local layout rows(1) colgap(0) stack `layout'
-        local reverse = "`descending'"!=""
-    }
-    else {
-        local layout cols(1) rowgap(0) `layout'
-        local reverse = "`descending'"==""
-    }
-    // compile order()
-    if `"`hasmis'"'!=""    gettoken mis_key keys : keys
-    if `"`nomissing'"'!="" local mis_key
-    if !`: list sizeof keys' & "`mis_key'"=="" {
-        di as txt "(legend omitted; layer `k' contains no non-missing keys)"
-        c_local legend_k `k'
-        c_local legend legend(off)
-        exit
-    }
-    local order
-    if `"`discrete'"'!="" {
-        foreach key of local keys {
-            gettoken lbl labels : labels
-            capt confirm number `lbl'
-            if _rc==0 {
-                local lbl `: di `format' `lbl''
-            }
-            if `reverse' {
-                local order `key' `"`lbl'"' `order'
-            }
-            else {
-                local order `order' `key' `"`lbl'"'
-            }
+    // compile legend
+    local LAYOUT
+    local ncols 0
+    local kmax 0
+    local nkeys 0
+    // - first analyze layout
+    while (1) {
+        gettoken l layout : layout, parse(".|- ")
+        if `"`l'"'=="" continue, break
+        if `"`l'"'=="." {
+            local ++nkeys
+            local LAYOUT `LAYOUT' .
         }
-    }
-    else {
-        gettoken val0 values : values
-        local val0 `: di `format' `val0''
-        local lp "["
-        foreach key of local keys {
-            gettoken val values : values
-            local val `: di `format' `val''
-            if `reverse' {
-                local order `key' "`lp'`val0',`val']" `order'
-            }
-            else {
-                local order `order' `key' "`lp'`val0',`val']"
-            }
-            local val0 `val'
-            local lp "("
+        else if `"`l'"'=="|" {
+            if !`nkeys' continue // ignore empty columns
+            local ++ncols
+            local kmax = max(`kmax', `nkeys')
+            local nkeys 0
+            local LAYOUT `LAYOUT' |
         }
-    }
-    // add missing
-    if "`mis_key'"!="" {
-        local mis_key `mis_key' `mis_lab'
-        if `mis_first' {
-            if `mis_gap' local order - " " `order'
-            local order `mis_key' `order'
+        else if `"`l'"'=="-" {
+            gettoken l : layout, quotes qed(hasquotes)
+            local titl
+            local space
+            while (`hasquotes') {
+                gettoken l layout : layout, quotes
+                local titl `"`titl'`space'`l'"'
+                local space " "
+                gettoken l : layout, quotes qed(hasquotes)
+            }
+            local LAYOUT `LAYOUT' - `"`titl'"'
+            local ++nkeys
         }
         else {
-            if `mis_gap' local order `order' - " "
-            local order `order' `mis_key'
+            capt n numlist `"`l'"', int range(>0)
+            if _rc==1 exit 1
+            if _rc {
+                di as err "(error in legend(layer()))"
+                exit _rc
+            }
+            local L `r(numlist)'
+            foreach l of local L {
+                local lsize: char LAYER[Lsize_`l']
+                if `"`lsize'"'=="" continue
+                if !`lsize' continue
+                local nkeys = `nkeys' + `lsize'
+                local LAYOUT `LAYOUT' `l'
+            }
         }
     }
+    if `nkeys' { // close last column
+        local ++ncols
+        local kmax = max(`kmax', `nkeys')
+        local LAYOUT `LAYOUT' |
+    }
+    if !`kmax' { // legend is empty
+        c_local legend legend(off)
+        exit
+    }
+    local nkeys 0
+    while (1) {
+        gettoken l LAYOUT : LAYOUT
+        if `"`l'"'=="" continue, break
+        if `"`l'"'=="." {
+            local ++nkeys
+            local order `order' - " "
+        }
+        else if `"`l'"'=="|" {
+            while (`nkeys'<`kmax') {
+                local ++nkeys
+                local order `order' - " "
+            }
+            local nkeys 0
+        }
+        else if `"`l'"'=="-" {
+            gettoken l LAYOUT : LAYOUT
+            local ++nkeys
+            local order `order' - `l'
+        }
+        else {
+            local nkeys = `nkeys' + `: char LAYER[Lsize_`l']'
+            local order `order' `: char LAYER[Legend_`l']'
+        }
+    }
+    // orientation / layout
+    local layout size(vsmall) symysize(3) symxsize(3) keygap(1) colgap(2)
+    if "`horizontal'"!="" local layout rows(`ncols') nocolfirst `layout'
+    else                  local layout cols(`ncols') colfirst rowgap(0) `layout'
     // return legend option
-    c_local legend_k `k'
     c_local legend legend(order(`order') on all `layout'/*
         */ position(0) bplace(nw) bmargin(zero)/*
         */ region(style(none) margin(zero))) `options'
 end
 
-program _legend_parse_missing
-    syntax [, Label(str asis) first last nogap ]
-    local label = strtrim(`"`label'"')
-    if `"`label'"'=="" local label `""no data""'
-    else {
-        gettoken tmp : label, qed(hasquote)
-        if !`hasquote' {
-            local label `"`"`label'"'"'
-        }
-    }
-    c_local mis_lab   `"`label'"'
-    c_local mis_gap   = "`gap'"==""
-    c_local mis_first = `"`first'"'!=""
-end
-
-program  _clegend_k
+program _clegend
     if c(stata_version)<18 {
         di as err "{bf:clegend()} requires Stata 18"
         exit 9
     }
-    syntax [, Layer(numlist int max=1 >0) * ]
-    c_local clegend_k `layer'
-end
-
-program _clegend
-    syntax [anything(name=lk)] [, Layer(numlist int max=1 >0) noLABel/*
-        */ MISsing MISsing2(str asis) Format(str) * ]
-    if `"`options'"'!=""  local options clegend(`options')
-    if `"`missing2'"'!="" local missing missing
-    mata: _set_default_and_add_quotes("missing2", "no data")
+    syntax [, Layer(numlist int max=1 >0) noLABel MISsing Format(str) * ]
+    if `"`options'"'!="" local options clegend(`options')
     local k `layer'
     local clayers: char LAYER[Layers_C]
+    if "`k'"=="" gettoken k : clayers // first layer that has colors
+    else local k: list k & clayers
     if "`k'"=="" {
-        // get first unused layer that has colors
-        local k: list clayers - lk
-        gettoken k : k
-    }
-    if !cond("`k'"=="", 0 ,`:list k in clayers') {
-        if "`k'"!="" {
-            di as txt "(clegend omitted; layer `k' does not contain color scale)"
-        }
-        else {
-            if "`lk'"=="" di as txt "(clegend omitted; no layer containing color scale found)"
-            else di as txt "(clegend omitted; no unused layer containing color scale found)"
-        }
-        c_local clegend_k
+        if "`layer'"!="" di as txt /*
+            */"(clegend omitted; layer `layer' does not contain color gradient)"
+        else di as txt /*
+            */ "(clegend omitted; no layer containing color gradient found)"
         c_local clegend
         c_local plot
         exit
@@ -557,10 +514,7 @@ program _clegend
     local values:   char LAYER[Values_`k']
     local colors:   char LAYER[Colors_`k']
     local hasmis:   char LAYER[Hasmis_`k']
-    local cmis:     char LAYER[Colmis_`k']
     local discrete: char LAYER[Discrete_`k']
-    local hasmis   = `"`hasmis'"'!=""
-    local discrete = `"`discrete'"'!=""
     if `hasmis' {
         if `"`missing'"'=="" {
             if !`: list sizeof colors' {
@@ -575,7 +529,11 @@ program _clegend
         }
     }
     if `hasmis' {
-        local colors `"`cmis' `colors'"'
+        local labmis:   char LAYER[Labmis_`k']
+        if `: list sizeof labmis'>1 {
+            local labmis `"`"`labmis'"'"'
+        }
+        local colors `"`:char LAYER[Colmis_`k']' `colors'"'
     }
     if `discrete' {
         if "`label'"=="" local LABELS: char LAYER[Labels_`k']
@@ -613,7 +571,7 @@ program _clegend
             local ++i
             qui replace CLEG_Z = 0 in 1
             qui replace CLEG_Z = -.9999 in `i'
-            local labels -.5 `missing2' `labels'
+            local labels -.5 `labmis' `labels'
             local values -1 `values'
         }
         local height = min(100, (`N'-`hasmis')*3)
@@ -628,7 +586,7 @@ program _clegend
             local v: word `K' of `values'
             local v0 = `v0'- (`v'-`v0')/`K'
             local values `v0' `values'
-            local labels `v0' `missing2' `labels'
+            local labels `v0' `labmis' `labels'
         }
         gettoken v0 VALUES : values
         gettoken v         : VALUES
@@ -644,13 +602,10 @@ program _clegend
     }
     c_local plot (scatter CLEG_Y CLEG_X in 1/`i', colorvar(CLEG_Z) colorcuts(`values')/*
         */ colorlist(`colors') colorkeysrange)
-    if "`lk'"!="" local bplace bplace(ne)
-    else          local bplace bplace(nw)
     c_local clegend ztitle("") `zlabels' /*
-        */ clegend(position(0) `bplace' width(3) height(`height')/*
+        */ clegend(position(0) bplace(ne) width(3) height(`height')/*
         */ bmargin(l=0 r=0 b=1 t=1) region(margin(zero)))/*
         */ `options'
-    c_local clegend_k `k'
 end
 
 program _process_coloropts // pass standard color options through ColrSpace
@@ -786,9 +741,17 @@ program _layeri
     gettoken layer 0 : 0
     gettoken p 0 : 0
     _parse comma lhs 0 : 0
-    _process_coloropts options `0' // returns options
+    syntax [, LABel(str asis) * ]
+    _process_coloropts options, `options'
     local ++p
+    _parse_label `label'
+    _add_quotes label `label'
+    if `"`label'"'=="" local label `""""'
+    local legend `p' `label'
+    local lsize 1
     char LAYER[Keys_`layer'] `p'
+    char LAYER[Legend_`layer'] `legend'
+    char LAYER[Lsize_`layer'] `lsize'
     c_local p `p'
     c_local plot (`plottype' `lhs', `options')
 end
@@ -808,7 +771,7 @@ program _layer
     local MLABopts
     local Zopts Zvar(varname numeric) COLORVar(varname numeric)/*
         */ LEVels(str) cuts(numlist sort min=2) DISCRete MISsing(str asis) /*
-        */ COLor COLor2(passthru) LWidth(passthru) LPattern(passthru)
+        */ COLor COLor2(str asis) LWidth(passthru) LPattern(passthru)
     local Zel color lwidth lpattern
     local zvlist 1
     local YX Y X // coordinate variable names used in plot data
@@ -854,8 +817,8 @@ program _layer
     }
     frame `frame' {
         // syntax
-        qui syntax `varlist' [if] [in] `WGT' [, `Zopts' `SIZEopt' `PLVopts'/*
-            */ `MLABopts'  * ]
+        qui syntax `varlist' [if] [in] `WGT' [, LABel(str asis) `Zopts'/*
+            */ `SIZEopt' `PLVopts' `MLABopts' * ]
         local cuts: list uniq cuts
         _parse_levels `levels' // => levels, method, l_wvar
         if `"`fcolor'"'!="" mata: _get_colors("fcolor")
@@ -871,6 +834,9 @@ program _layer
             local varlist
         }
         local hasZ = `"`zvar'"'!=""
+        if `"`color2'"'!=""   local color color(`color2')
+        else if "`color'"!="" local color color()
+        local color2
         // check shpframe
         if `hasSHP' {
             geoframe get shpframe, local(shpframe)
@@ -969,10 +935,10 @@ program _layer
            }
         }
         else {
-            local color `"`color2'"'
             foreach el of local Zel {
                 if `"``el''"'=="" continue
                 local options ``el'' `options'
+                local `=strupper("`el'")' `el'
                 local `el'
             }
         }
@@ -1083,19 +1049,19 @@ program _layer
         local plevels `r(levels)'
     }
     else local plevels .
-    // handle Z elements and set default options
+    // handle Z elements
     local opts
     if `hasZ' {
         // - categorize Z
         tempname CUTS
         mata: _z_cuts("`CUTS'", (`n0', `n1')) // => CUTS, cuts, levels
-        _z_categorize `CUTS' `in', levels(`levels') `discrete' // => zlevels hasmis
-        if "`discrete'"!="" {
+        _z_categorize `CUTS' `in', levels(`levels') `discrete'
+            // => zlevels hasmis discrete
+        if `discrete' {
             frame `frame': _z_labels `zvar' `cuts' // => zlabels
         }
         // - process options
         if `levels' {
-            if `"`color2'"'!="" local color color
             local ZEL
             foreach el of local Zel {
                 if "`el'"=="mlabcolor" {
@@ -1120,7 +1086,7 @@ program _layer
                 else {
                     if `"``el''"'=="" continue
                     if "`el'"=="color"/*
-                        */ _z_colors `levels' color `color2'
+                        */ _z_colors `levels' color `color'
                     else _z_recycle `levels' `el', ``el''
                 }
                 if `: list sizeof `el''==0 continue
@@ -1128,55 +1094,41 @@ program _layer
                 local ZEL `ZEL' `el'
             }
         }
-        // - set defaults
-        if `"`plottype'"'=="area" {
-            local opts cmissing(n) nodropbase lalign(center) `opts'
-            if `"`FEATURE'"'=="water" {
-                if "`COLOR'"=="" local opts color("135 206 235") `opts' // SkyBlue
-                if "`FINTENSITY'"=="" local opts finten(50) `opts'
-                if "`LWIDTH'"=="" local opts lwidth(thin) `opts'
-            }
-            else {
-                if "`COLOR'"=="" {
-                    local opts lcolor(gray) `opts'
-                    if `"`fcolor'"'=="" local opts fcolor(none) `opts'
-                }
-                if "`FINTENSITY'"=="" local opts finten(100) `opts'
-                if "`LWIDTH'"=="" local opts lwidth(thin) lcolor(%0) `opts'
-            }
-            if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
-        }
-        else if "`plottype'"'=="line" {
-            local opts `opts' cmissing(n)
-            if "`COLOR'"=="" {
-                if `"`FEATURE'"'=="water" local opts color("135 206 235") `opts' // SkyBlue
-                else local opts lcolor(gray) `opts'
-            }
-            if "`LWIDTH'"==""   local opts lwidth(thin) `opts'
-            if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
-        }
         // - process hasmis
-        if "`hasmis'"!="" {
-            z_parse_missing `plottype', `missing' //=> missing missing_color
-        }
+        if `hasmis' z_parse_missing `plottype', `missing' /*
+            => missing missing_color missing_lab */
     }
-    else {
-        local zlevels 0
-        if `"`plottype'"'=="area" {
-            local opts cmissing(n) nodropbase lalign(center) lwidth(thin)/*
-                */ lpattern(solid) `opts' 
-            if `"`FEATURE'"'=="water"/*
-                */ local opts color("135 206 235") finten(50) `opts' // SkyBlue
-            else {
-                local opts lcolor(gray) `opts' 
+    else local zlevels 0
+    // Set default options
+    if `"`plottype'"'=="area" {
+        local opts cmissing(n) nodropbase lalign(center) `opts'
+        if `"`FEATURE'"'=="water" {
+            if "`COLOR'"=="" local opts color("135 206 235") `opts' // SkyBlue
+            if "`FINTENSITY'"=="" local opts finten(50) `opts'
+            if "`LWIDTH'"=="" local opts lwidth(thin) `opts'
+        }
+        else {
+            if "`COLOR'"=="" {
+                local opts lcolor(gray) `opts'
                 if `"`fcolor'"'=="" local opts fcolor(none) `opts'
             }
+            if "`FINTENSITY'"=="" local opts finten(100) `opts'
+            if "`LWIDTH'"=="" {
+                local opts lwidth(thin) `opts'
+                if `hasZ' local opts lcolor(%0) `opts'
+            }
         }
-        else if "`plottype'"'=="line" {
-            local opts cmissing(n) lwidth(thin) lpattern(solid) `opts'
-            if `"`FEATURE'"'=="water" local opts color("135 206 235") `opts' // SkyBlue
-            else local opts lcolor(gray) `opts'
+        if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
+    }
+    else if "`plottype'"'=="line" {
+        local opts `opts' cmissing(n)
+        if "`COLOR'"=="" {
+            if `"`FEATURE'"'=="water"/*
+                */ local opts color("135 206 235") `opts' // SkyBlue
+            else   local opts lcolor(gray) `opts'
         }
+        if "`LWIDTH'"==""   local opts lwidth(thin) `opts'
+        if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
     if `hasMLAB' {
         if "`mlabel'"!=""        local opts `opts' mlabel(MLAB)
@@ -1240,16 +1192,100 @@ program _layer
         }
         if `pl'==`pl0' local p1 `p'
     }
+    numlist "`p0'/`p1'"
+    local keys `r(numlist)'
+    // compile legend keys
+    _parse_label `label'
+    if `hasZ' {
+        local lkeys: copy local keys
+        if `"`format'"'=="" local format `zfmt'
+        if `hasmis'    gettoken mis_key lkeys : lkeys
+        if `nomissing' local mis_key
+        local legend
+        local lsize 0
+        if `discrete' {
+            _label_separate `label' // => lab_keys, lab_lbls
+            if "`nolabels'"!="" local lbls: copy local cuts
+            else                local lbls: copy local zlabels
+            local i 0
+            foreach key of local lkeys {
+                local ++i
+                gettoken lbl lbls : lbls
+                capt confirm number `lbl'
+                if _rc==0 {
+                    local lbl `: di `format' `lbl''
+                }
+                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `"`"`lbl'"'"')
+                if `reverse' local legend `legend' `key' `lbl'
+                else         local legend `key' `lbl' `legend'
+                local ++lsize
+            }
+        }
+        else {
+            if `"`label'"'=="" local label 1 "[@lb,@ub]"
+            _label_separate `label' // => lab_keys, lab_lbls
+            local CUTS: copy local cuts
+            gettoken lb CUTS : CUTS
+            local i 0
+            foreach key of local lkeys {
+                local ++i
+                gettoken ub CUTS : CUTS
+                local mid `: di `format' (`ub'+`lb')/2'
+                local lb  `: di `format' `lb''
+                local ub  `: di `format' `ub''
+                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `""(@lb,@ub]""')
+                local lbl: subinstr local lbl "@lb" "`lb'", all
+                local lbl: subinstr local lbl "@ub" "`ub'", all
+                local lbl: subinstr local lbl "@mid" "`mid'", all
+                if `reverse' local legend `legend' `key' `lbl'
+                else         local legend `key' `lbl' `legend'
+                local lb `ub'
+                local ++lsize
+            }
+        }
+        if "`mis_key'"!="" {
+            local mis_key `mis_key' `missing_lab'
+            if `gap' {
+                if `mfirst' local legend - " " `legend'
+                else        local legend `legend' - " "
+                local ++lsize
+            }
+            if `mfirst' local legend `mis_key' `legend'
+            else        local legend `legend' `mis_key'
+            local ++lsize
+        }
+    }
+    else {
+        _add_quotes label `label'
+        if `"`label'"'=="" local label `""`frame'""'
+        local legend `p1' `label'
+        local lsize 1
+    }
     // return results
-    _post_chars `layer' `p0' `p1' `hasZ' "`discrete'" "`hasmis'" "`zfmt'"/*
-            */ `"`cuts'"' `"`zlabels'"' `"`color'"' `"`missing_color'"'
+    char LAYER[Keys_`layer'] `keys'
+    char LAYER[Legend_`layer'] `legend'
+    char LAYER[Lsize_`layer'] `lsize'
+    if `hasZ' {
+        char LAYER[Layers_Z] `:char LAYER[Layers_Z]' `layer'
+        char LAYER[Discrete_`layer'] `discrete'
+        char LAYER[Hasmis_`layer'] `hasmis'
+        char LAYER[Format_`layer'] `zfmt'
+        char LAYER[Values_`layer'] `cuts'
+        char LAYER[Labels_`layer'] `"`zlabels'"'
+        char LAYER[Labmis_`layer'] `"`missing_lab'"'
+        if `"`color'"'!="" {
+            char LAYER[Layers_C] `:char LAYER[Layers_C]' `layer'
+            char LAYER[Colors_`layer'] `"`color'"'
+            char LAYER[Colmis_`layer'] `"`missing_color'"'
+        }
+    }
     c_local plot `plot'
     c_local p `p'
 end
 
 program _parse_levels
     if `"`0'"'=="" exit
-    capt n __parse_levels `levels'
+    capt n __parse_levels `0'
     if _rc==1 exit _rc
     if _rc {
         di as err "(error in option levels())"
@@ -1304,17 +1340,17 @@ program _z_categorize
             qui replace `tmp' = `i' if `iff' `in'
         }
     }
+    local hasmis 0
     qui count if Z>=. `in'
     if r(N) { // set missings to 0
         qui replace `tmp' = 0 if Z>=. `in'
-        local hasmis hasmis
+        local hasmis 1
     }
     qui replace Z = `tmp' `in'
-    if "`hasmis'"!="" local a 0
-    else              local a 1
-    numlist "`a'/`levels'"
+    numlist "`=1-`hasmis''/`levels'"
     c_local zlevels `r(numlist)'
     c_local hasmis `hasmis'
+    c_local discrete = "`discrete'"!=""
 end
 
 program _get_PLV
@@ -1356,11 +1392,9 @@ end
 program _z_colors
     gettoken levels 0 : 0
     gettoken nm 0 : 0
-    if "`nm'"=="color" local optnm color2
-    else               local optnm `nm'
     local 0 `", `0'"'
-    syntax [, `optnm'(str asis) ]
-    _parse comma color 0 : `optnm'
+    syntax [, `nm'(str asis) ]
+    _parse comma color 0 : `nm'
     if `"`color'"'=="" local color viridis
     syntax [, NOEXPAND n(passthru) IPolate(passthru) * ]
     if "`noexpand'"=="" local noexpand noexpand
@@ -1401,7 +1435,9 @@ end
 
 program z_parse_missing
     _parse comma plottype 0 : 0
-    syntax [, COLor(str asis) * ]
+    syntax [, LABel(str asis) COLor(str asis) * ]
+    _add_quotes label `label'
+    if `"`label'"'=="" local label `""no data""'
     _process_coloropts options, `options'
     if `"`color'"'=="" local color gs14
     local options color(`color') `options'
@@ -1414,44 +1450,82 @@ program z_parse_missing
     }
     c_local missing `options'
     c_local missing_color `"`color'"'
+    c_local missing_lab   `"`label'"'
 end
 
-program _post_chars
-    args i p0 p1 hasZ discrete hasmis fmt values labels color colmis
-    numlist "`p0'/`p1'"
-    char LAYER[Keys_`i'] `r(numlist)'
-    if `hasZ'==0 exit
-    char LAYER[Layers_Z] `:char LAYER[Layers_Z]' `i'
-    char LAYER[Discrete_`i'] `discrete'
-    char LAYER[Hasmis_`i'] `hasmis'
-    char LAYER[Format_`i'] `fmt'
-    char LAYER[Values_`i'] `values'
-    char LAYER[Labels_`i'] `"`labels'"'
-    if `"`color'"'=="" exit
-    char LAYER[Layers_C] `:char LAYER[Layers_C]' `i'
-    char LAYER[Colors_`i'] `"`color'"'
-    char LAYER[Colmis_`i'] `"`colmis'"'
+program _parse_label
+    _parse comma label 0 : 0
+    syntax [, NOLabel Format(str) Reverse NOMissing MFirst noGap ]
+    c_local label `"`label'"'
+    c_local nolabel `nolabel'
+    c_local format `format'
+    c_local reverse = "`reverse'"!=""
+    c_local nomissing = "`nomissing'"!=""
+    c_local mfirst = "`mfirst'"!=""
+    c_local gap = "`gap'"==""
 end
+
+program _label_separate
+    // add "* =" if needed
+    gettoken l : 0, quotes qed(hasquotes) parse("= ")
+    if `hasquotes' local 0 `"* = `0'"'
+    else {
+        // check whether 1st token is integer (possibly including wildcards)
+        local l: subinstr local l "*" "", all
+        local l: subinstr local l "?" "", all
+        if `"`l'"'=="" local l 0
+        capt confirm integer number `l'
+        if _rc==1 exit 1
+        if _rc local 0 `"* = `"`0'"'"'
+    }
+    // parse list
+    local keys
+    local lbls
+    while (1) {
+        gettoken key 0 : 0, parse("= ")
+        if `"`key'"'=="" continue, break
+        local keys `"`keys' `key'"'
+        local lbl
+        local space
+        gettoken eq : 0, parse("= ")
+        if `"`eq'"'=="=" {
+            gettoken eq 0 : 0, parse("= ")
+        }
+        gettoken l : 0, quotes qed(hasquotes)
+        while (`hasquotes') {
+            gettoken l 0 : 0, quotes
+            local lbl `"`lbl'`space'`l'"'
+            local space " "
+            gettoken l : 0, quotes qed(hasquotes)
+        }
+        local lbls `"`lbls' `"`lbl'"'"'
+    }
+    c_local lab_keys `"`keys'"'
+    c_local lab_lbls `"`lbls'"'
+end
+
+program _add_quotes
+    gettoken nm 0 : 0
+    __add_quotes `0'
+    c_local `nm' `"`0'"'
+end
+
+program __add_quotes
+    if `"`0'"'=="" {
+        c_local 0
+        exit
+    }
+    gettoken tmp : 0, qed(hasquote)
+    if !`hasquote' {
+        local 0 `"`"`0'"'"'
+    }
+    c_local 0 `"`0'"'
+end
+
 
 version 17
 mata:
 mata set matastrict on
-
-void _set_default_and_add_quotes(string scalar lname, string scalar def)
-{
-    string scalar s
-    
-    s = strtrim(st_local(lname))
-    if (s=="") s = def
-    if (substr(s,1,1)!=`"""') {
-        if (substr(s,1,2)!=("`"+`"""')) {
-            st_local(lname, "`" + `"""' + s + `"""' + "'")
-            return
-        }
-    }
-    if (length(tokens(s))>1) st_local(lname, "`" + `"""' + s + `"""' + "'")
-    else                     st_local(lname, s)
-}
 
 void _drop_empty_shapes(real scalar n0, real scalar n1, string scalar ID,
     string rowvector YX)
@@ -1650,6 +1724,21 @@ void _get_colors(string scalar lname, | string scalar lname2)
         C[i] = S->colors()
     }
     st_local(lname, invtokens(C))
+}
+
+void  _get_lbl(string scalar key, string scalar keys, string scalar lbls,
+    string scalar def)
+{
+    real scalar   i, n
+    string vector Keys
+    
+    Keys = tokens(st_local(keys))
+    n = length(Keys)
+    for (i=1;i<=n;i++) {
+        if (strmatch(key, Keys[i])) break
+    }
+    if (i>n) st_local("lbl", def)
+    else st_local("lbl", tokens(st_local(lbls))[i])
 }
 
 end

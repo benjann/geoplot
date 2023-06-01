@@ -1,5 +1,5 @@
 {smcl}
-{* 30may2023}{...}
+{* 01jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -103,6 +103,11 @@
 {synopt :{helpb geoplot##lwidth:{ul:mlabang}le({it:list})}}marker label angles
     {p_end}
 {synopt :{helpb geoplot##mlabcolor:{ul:mlabc}olor({it:list})}}marker label colors
+    {p_end}
+
+{syntab :Legend keys}
+{synopt :{helpb geoplot##label:{ul:lab}el({it:spec})}}labels of legend keys and related
+    settings
     {p_end}
 
 {syntab :Missing}
@@ -558,13 +563,94 @@
     color will not override {cmd:mlabcolor()} (and will also not set the
     color for marker labels).
 
+{marker label}{...}
+{phang}
+    {cmd:label(}[{it:labelinfo}] [{cmd:,} {it:options}]{cmd:)} determines how
+    the levels formed by {help geoplot##zvar:{it:Z}} will be labeled in the
+    legend. {it:labelinfo} is
+
+            [ {it:id} [{cmd:=}] ] {it:label} [ {it:id} [{cmd:=}] {it:label} {it:...} ]
+
+{pmore}
+    where {it:label} is
+
+            {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]
+
+{pmore}
+    (a multiline label will be created if {it:label} contains multiple
+    {cmd:"}{it:text}{cmd:"} elements) and {it:id} may be {it:#} to select a single level
+    ({cmd:1} for the 1st level, {cmd:2} for 2nd level, etc.) or a specification including
+    wildcard characters {cmd:*} and {cmd:?} to select multiple levels. For example, type
+    {cmd:?} to select levels 1-9, type {cmd:1?} to select
+    levels 10-19, type {cmd:*} to select all levels. In any
+    case, the label of the first matching specification will be used.
+
+{pmore}
+    For continuous {help geoplot##zvar:{it:Z}}, that is, if
+    {helpb geoplot##discrete:discrete} has not been specified, {it:text} may include
+    {cmd:@lb}, {cmd:@mid}, and {cmd:@ub}, which will be replaced by the lower bound,
+    the middle, and the upper bound of the level's interval. For example, the default
+    setting is equivalent to typing
+    {cmd:label(1 = "[@lb,@ub]" * = "(@lb,@ub]")}. Furthermore, to use the same
+    (type of) label for all levels, you may type {cmd:label(}{it:label}{cmd:)}
+    rather than {cmd:label(}{cmd:*} = {it:label}{cmd:)}. For example,
+    type {cmd:label("@lb-@ub")} to create labels formatted as "{it:lb}-{it:ub}",
+    where {it:lb} ({it:ub}) is the value of the lower (upper) bound of each
+    interval.
+
+{pmore}
+    If {helpb geoplot##discrete:discrete} had been specified, the default is to
+    use the value label (or the value) of a level as label in the legend. Use
+    {cmd:label()} to assign custom labels to selected levels in this case.
+
+{pmore}
+    {it:options} are as follows.
+
+{phang2}
+    {opt nol:abel} omits the use of value labels in case of
+    {helpb geoplot##discrete:discrete} {help geoplot##zvar:{it:Z}}.
+
+{phang2}
+    {opth f:ormat(%fmt)} selects the display format to be applied to {cmd:@lb}, 
+    {cmd:@mid}, and {cmd:@ub} in case of continuous
+    {help geoplot##zvar:{it:Z}}. The default is to use the display format of
+    {help geoplot##zvar:{it:Z}}.
+
+{phang2}
+    {opt r:everse} reverses the order of the legend keys.
+ 
+{phang2}
+    {opt nom:issing} omits the legend key for missing values. Alternatively, see option 
+    {helpb geoplot##missing:missing()} below on how to customize the label for missing.
+
+{phang2}
+    {opt mf:irst} places the missing key at the top (or leftmost) rather than at
+    the bottom (or rightmost).
+
+{phang2}
+    {opt nog:ap} omits the gap between the missing key and the other keys.
+
+{pmore}
+    If {help geoplot##zvar:{it:Z}} is omitted in a layer (such that, technically,
+    the layer only contains a single level), type {cmd:label(}{it:label}{cmd:)} to
+    set the label of the layer's legend key (the default is to use the name of
+    the plotted frame as label). {it:options} are ineffective in this case.
+
 {marker missing}{...}
 {phang}
     {opt missing(options)} specifies the styling of elements for which {it:Z}
-    is missing, where {it:options} are standard graph styling options such as 
-    {cmd:color()} or {cmd:lwidth()}. In case of plot type
-    {helpb geoplot##area:area}, the default is to use color {cmd:gs14}
-    for areas for which {it:Z} is missing.
+    is missing, where {it:options} are as follows.
+
+{phang2}
+    {cmdab:lab:el("}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]{cmd:)}
+    sets a label for missing in the legend. The default is
+    {cmd:"no data"}. Multiple lines are created if multiple 
+    {cmd:"}{it:text}{cmd:"} elements are specified.
+
+{phang2}
+    {cmd:color()}, {cmd:lwidth()}, {cmd:lpattern()}, etc. are standard graph
+    styling options depending on plot type. In case of {helpb geoplot##area:area},
+    the default is to use color {cmd:gs14} for areas for which {it:Z} is missing.
 
 {dlgtab:Global options}
 
@@ -636,101 +722,79 @@
 
 {marker legend}{...}
 {phang}
-    {opt legend(suboptions)} prints a standard legend of the colors used in
-    one of the layers that include a {help geoplpot##z:{it:Z}}. At
-    most one such legend can be included in the graph (but you may
-    use {cmd:clegend()} to create a second legend). {it:suboptions} are as follows:
+    {opt legend(options)} prints a composite legend of the objects from one
+    or several layers. {it:suboptions} are as follows:
 
 {phang2}
-    {opt l:ayer(#)} selects the layer for which the legend be created. The default
-    is to use the first layer containing a color gradient (unless already
-    covered by {cmd:clegend()}). For example, if your
-    graph contains, say, five layers, and layers 3 and 4 have a
-    {help geoplpot##z:{it:Z}}, type {cmd:layer(4)} to create a legend
-    for layer 4.
+    {opt l:ayout(layout)} selects and arranges the layers to be included in the
+    legend. {it:layout} is
+
+                {it:el} [ {it:el} ... ]
+
+{pmore2}
+    where {it:el} is one of
+
+{p2colset 17 26 28 2}{...}
+{p2col: {it:#}}include the legend keys of layer {it:#}
+    {p_end}
+{p2col: {cmd:.}}add a gap between layers
+    {p_end}
+{p2col: {cmd:|}}start a new column (or a new row)
+    {p_end}
+{p2col: {cmd:-} {it:title}}add a subtitle, where {it:title} is 
+    {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]
+    {p_end}
 
 {phang2}
-    {opt hor:izontal} arranges the legend horizontally (one row of legend
-    keys). The default is to arrange the legend vertically (one column of legend
-    keys).
-
-{phang2}
-    {opt desc:ending} arranges the legend keys in descending order of the
-    values of {help geoplpot##z:{it:Z}}. The default is to use
-    ascending order.
-
-{phang2}
-    {opth f:ormat(%fmt)} select the display format to be applied to the values
-    in the legend labels. The default is to use the display format of
-    {help geoplpot##z:{it:Z}}.
-
-{phang2}
-    {opt nolab:el} omits the use value labels in case of a
-    {help geoplpot##z:{it:Z}} declared as
-    {helpb geoplpot##discrete:discrete}.
-
-{phang2}
-    {opt mis:sing(options)} determines details about the legend key for missing
-    values. {it:options} are {opt l:abel(string)} to define a custom label
-    (default is {cmd:"no data"}), {opt first} to place the missing key
-    at the top or leftmost (default is to place the missing key at the bottom
-    or rightmost).
-
-{phang2}
-    {opt nomis:sing} omits the legend key for missing values.
-
-{phang2}
-    {opt nogap} omits the gap between the missing key and the other keys.
+    {opt hor:izontal} arranges the legend horizontally (i.e., in rows). The default is to
+    arrange the legend vertically (in columns).
 
 {phang2}
     {it:contents} and {it:location} options to affect the rendering of the
     legend as documented in {it:{help legend_option}}. For example, use option
     {opth bplace:ment(compassdirstyle)} to determine the placement of the
-    legend. Note that {cmd:geoplot} compiles an own {cmd:order()} option,
-    which will be overwritten if you specify {cmd:order()} manually; better do
+    legend. Note that {cmd:geoplot} compiles an own {cmd:order()} option
+    that will be overwritten if you specify {cmd:order()} manually; better do
     not specify {cmd:order()}.
 
 {marker nolegend}{...}
 {phang}
-    {opt nolegend} suppresses the legend that is printed by default if at least one
-    layer contains a color gradient.
+    {opt nolegend} suppresses the legend that is printed by default if 
+    {help geoplot##zvar:{it:Z}} has been specified in at least one layer.
 
 {marker clegend}{...}
 {phang}
-    {opt clegend(suboptions)} prints a {help clegend_option:contour} plot legend
-    of the colors used in one of the layers that include a
-    {help geoplpot##z:{it:Z}}. At most one such legend can be included
-    in the graph (but you may use {cmd:legend()} to create a second
-    legend). {it:suboptions} are as follows:
+    {opt clegend(options)} prints a {help clegend_option:contour} plot legend
+    of the colors used in one of the layers that include
+    {help geoplot##zvar:{it:Z}} with a {help geoplot##color:color gradient}. At
+    most one such legend can be included in the graph. {it:options} are as follows.
 
 {phang2}
     {opt l:ayer(#)} selects the layer for which the legend be created. The default
-    is to use the first layer containing a color gradient (unless already
-    covered by {cmd:legend()}). For example, if your
-    graph contains, say, five layers, and layers 3 and 4 have a
-    {help geoplpot##z:{it:Z}}, type {cmd:layer(4)} to create a legend
+    is to use the first layer containing a color gradient. For example, if layers
+    3 and 4 in your graph contain {help geoplot##zvar:{it:Z}} with a
+    {help geoplot##color:color gradient}, type {cmd:layer(4)} to create a legend
     for layer 4.
 
 {phang2}
     {opth f:ormat(%fmt)} select the display format to be applied to the values
     in the legend labels. The default is to use the display format of
-    {help geoplpot##z:{it:Z}}.
+    {help geoplot##zvar:{it:Z}}.
 
 {phang2}
-    {opt nolab:el} omits the use value labels in case of a
-    {help geoplpot##z:{it:Z}} declared as
-    {helpb geoplpot##discrete:discrete}.
+    {opt nolab:el} omits the use of value labels if {helpb geoplot##discrete:discrete}
+    has been specified.
 
 {phang2}
-    {opt mis:sing}[{cmd:(}{it:string}{cmd:)} requests that missing value is
-    included in the legend and, optionally, specifies a custom label. The
-    default label is {cmd:"no data"}.
+    {opt mis:sing} requests that missing value is
+    included in the legend. Use option {helpb geoplot##missing:missing()} to
+    set the label for missing.
 
 {phang2}
-    Further {it:suboptions} to affect the rendering of the
+    {it:clegend_suboption} are further options to affect the rendering of the
     legend as documented in {it:{help clegend_option}}. For example, use option
     {opth bplace:ment(compassdirstyle)} to determine the placement of the
-    legend, or use options {opth width(size)} and {opth height(size)}
+    legend or use options {opth width(size)} and {opth height(size)}
     to set the size of the legend.
 
 {pmore}
@@ -821,7 +885,7 @@
     Similar graph with more colors and alternative type of legend (requires Stata 18)
 
 {p 8 12 2}
-    {stata geoplot (area regions fortell, color levels(50) lcolor(gray)), tight clegend(bplace(ne)) zlabel(4(3)28)}
+    {stata geoplot (area regions fortell, color levels(50) lcolor(gray)), tight clegend zlabel(4(3)28)}
     {p_end}
 
 {pstd}
@@ -862,6 +926,14 @@
 {pmore}
     Jann, B. (2023). geoplot: Stata module to draw maps. Available from
     {browse "https://github.com/benjann/geoplot/"}.
+
+{pstd}
+    Various features of {cmd:geoplot} have been inspired by corresponding
+    features in {helpb spmap} by Maurizio Pisati.
+
+{pstd}
+    I am grateful to Asjad Naqvi for extensive testing and many valuable
+    suggestions.
 
 
 {title:Also see}

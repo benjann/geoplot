@@ -19,6 +19,19 @@ The following packages are required:
 
 Main changes:
 
+    01jun2023 (version 0.1.8)
+    - suboption layout() in legend() can now be used to compile a legend from
+      multiple layers; suboption layer() is discontinued; several suboptions that
+      were available in legend() are now controlled via label()
+    - option label() can now be used in layers to determine labels of legend
+      keys and other legend-related settings
+    - suboption label() in missing() now sets the label for missing in legend and
+      clegend; suboption missing() in clegend() discontinued
+    - legend(horizontal) no longer stacks keys and labels
+    - in area/line without zvar() the line color was set to gray and, for area, the
+      fill was omitted, even if color() was specified; this is changed
+    - parsing of levels() was broken; this is fixed
+
     30may2023 (version 0.1.7)
     geoframe
     - -geoframe generate centroids- added
