@@ -1,4 +1,4 @@
-*! version 0.1.9  02jun2023  Ben Jann
+*! version 0.2.0  02jun2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -77,7 +77,7 @@ program geoplot, rclass
             MLAB:    marker labels
             MLABPOS: marker label positions
           helper variables that will be dropped at the end
-            dY dX:   relative coordinates or non-rotating objects
+            cY cX:   centroids for non-rotating objects
         */
         gen byte LAYER = .
         char LAYER[Layers] `layer_n'
@@ -130,14 +130,9 @@ program geoplot, rclass
             exit
         }
         
-    // rotate and process relative (non-rotating) coordinates
+    // rotate map
         _rotate `rotate'
-        capt confirm variable dY, exact
-        if _rc==0 {
-            qui replace Y = Y + dY if dY<.
-            qui replace X = X + dX if dX<.
-            drop dY dX
-        }
+        capt drop cY cX
         
     // graph dimensions
         _grdim "`margin'" `aspectratio' // returns yrange, xrange, aratio
@@ -246,6 +241,14 @@ program _rotate
         tempname `v'mid
         scalar ``v'mid' = (`max'-`min') / 2
     }
+    capt confirm variable cY, exact
+    if _rc==0 { // lock non-rotating shapes
+        tempvar dY dX
+        qui gen double `dY' = Y - cY if cY<.
+        qui gen double `dX' = X - cX if cX<.
+        qui replace Y = cY if cY<.
+        qui replace X = cX if cX<.
+    }
     tempvar y x
     qui gen double `y' = Y - `Ymid'
     qui gen double `x' = X - `Xmid'
@@ -257,6 +260,10 @@ program _rotate
         qui replace `x' = X2 - `Xmid'
         qui replace Y2 = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid'
         qui replace X2 = (`x' * cos(`r') - `y' * sin(`r')) + `Xmid'
+    }
+    if "`dY'"!="" { // restore non-rotating shapes
+        qui replace Y = Y + `dY' if cY<.
+        qui replace X = X + `dX' if cX<.
     }
 end
 
@@ -749,7 +756,7 @@ program _layer
     gettoken frame 0 : 0
     local hasSHP 0
     local TYPE
-    local SIZEopt
+    local OPTS LABel(str asis)
     local hasPLV 0
     local PLVopts
     local WGT
@@ -763,7 +770,7 @@ program _layer
     if `"`plottype'"'=="area" {
         local TYPE   shape
         local hasSHP 1
-        local SIZEopt size(str asis)
+        local OPTS `OPTS' size(str asis) lock wmax(numlist max=1 >0)
         local hasPLV 1
         local PLVopts FColor(str asis) EColor(str asis)
         local varlist [varlist(default=none numeric max=1)]
@@ -775,10 +782,9 @@ program _layer
     else if `"`plottype'"'=="line" {
         local TYPE   shape
         local hasSHP 1
-        local SIZEopt size(str asis)
+        local OPTS `OPTS' size(str asis) lock wmax(numlist max=1 >0)
         local varlist [varlist(default=none numeric max=1)]
         local WGT [iw/]
-        local WGTopt wmax(numlist max=1 >0)
         local zvlist 1
     }
     else {
@@ -789,9 +795,9 @@ program _layer
         }
         else {  // scatter assumed
             local TYPE unit
+            local OPTS `OPTS' wmax(numlist max=1 >0)
             local varlist [varlist(default=none max=2 numeric)]
             local WGT [iw/]
-            local WGTopt wmax(numlist max=1 >0)
             local wgt "[aw=W]"
         }
         local MLABopts MLabel(varname) MLABVposition(varname numeric) /*
@@ -804,8 +810,8 @@ program _layer
     }
     frame `frame' {
         // syntax
-        qui syntax `varlist' [if] [in] `WGT' [, LABel(str asis) `Zopts'/*
-            */ `SIZEopt' `WGTopt' `PLVopts' `MLABopts' * ]
+        qui syntax `varlist' [if] [in] `WGT' [, `OPTS' `Zopts' `PLVopts'/*
+            */ `MLABopts' * ]
         local cuts: list uniq cuts
         _parse_size `size' // => size, s_max, s_scale
         local hasSIZE = `"`size'"'!=""
@@ -945,7 +951,7 @@ program _layer
             local TGT `TGT' `Svar' // tempvar only
         }
         // get centroids (used by weights and size() in area/line)
-        if (`hasWGT' & ("`TYPE'"=="shape")) | `hasSIZE' {
+        if (`hasWGT' & ("`TYPE'"=="shape")) | `hasSIZE' | "`lock'"!="" {
             geoframe get centroids, flip local(cYX)
             if !`: list sizeof cYX' {
                 di as txt "layer `layer': centroids not found;"/*
@@ -958,18 +964,26 @@ program _layer
             }
             if `hasSHP' {
                 tempname CY CX
-                local cY `CY'
-                local cX `CX'
                 local org `org' `cYX'
                 local tgt `tgt' `CY' `CX'
             }
             else {
                 gettoken CY cYX : cYX
                 gettoken CX cYX : cYX
+            }
+            if "`lock'"!="" {
+                local cY cY
+                local cX cX
+            }
+            else if `hasSHP' {
+                local cY `CY'
+                local cX `CX'
+            }
+            else {
                 tempname cY cX
             }
             local ORG `ORG' `CY' `CX'
-            local TGT `TGT' `cY' `cX' // tempvars only
+            local TGT `TGT' `cY' `cX'
         }
         // handle marker labels
         local hasMLAB = `"`mlabel'"'!=""

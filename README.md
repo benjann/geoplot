@@ -85,6 +85,11 @@ Map with composite legend.
 
 Main changes:
 
+    02jun2023 (version 0.2.0)
+    - option -lock- added to area/line to lock the orientation of shapes in case of
+      rotate(); this is undocumented
+    - wmax() was not allowed in area; this is fixed
+
     02jun2023 (version 0.1.9)
     - global dmax() and wmax() discontinued; weights and size() will now be
       normalized within layer; size() has now suboptions scale() and dmax(); wmax()
