@@ -43,7 +43,7 @@
     {p_end}
 {synopt :{helpb geoplot##point:point}}plot single-coordinate markers
     {p_end}
-{synopt :{helpb geoplot##labels:{ul:lab}els}}plot single-coordinate labels
+{synopt :{helpb geoplot##labels:{ul:lab}el}}plot single-coordinate labels
     {p_end}
 
 {synopt :{helpb geoplot##pcspike:pcspike}}plot paired-coordinate spikes
@@ -316,7 +316,7 @@
 {dlgtab:single-coordinate labels}
 
 {p 8 15 2}
-    {cmd:labels} [{it:frame} {it:labelvar} [{it:Y} {it:X}]] {ifin}
+    {cmd:label} [{it:frame} {it:labelvar} [{it:Y} {it:X}]] {ifin}
     [{cmd:,}
     {it:options} ]
 
@@ -351,7 +351,7 @@
     and {cmd:mlabangle()}.
 
 {phang}
-    Plot type {cmd:labels} is implemented as a wrapper for plot type {cmd:point}.
+    Plot type {cmd:label} is implemented as a wrapper for plot type {cmd:point}.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes}
@@ -935,7 +935,7 @@
     {stata local layer2 (point capitals [w=pop98], z(size) discrete color(Set1, opacity(50)) mlcolor(%0))}
     {p_end}
 {p 8 12 2}
-    {stata local layer3 (labels capitals city if pop98>250000, color(black))}
+    {stata local layer3 (label capitals city if pop98>250000, color(black))}
     {p_end}
 {p 8 12 2}
     {stata geoplot `layer1' `layer2' `layer3', tight legend(position(sw))}

@@ -43,13 +43,13 @@ Basic map with lakes and rivers.
 
 Regions colored by number of fortune tellers (per million population).
 
-    geoplot (area regions fortell, color) (area regions)
+    geoplot (area regions fortell, color) (line regions)
 
 ![example 3](/images/3.png)
 
 Different formatting of legend labels.
 
-    geoplot (area regions fortell, color label("@lb-@ub")) (area regions)
+    geoplot (area regions fortell, color label("@lb-@ub")) (line regions)
 
 ![example 4](/images/4.png)
 
@@ -66,7 +66,7 @@ Map with provincial capitals.
         (area regions) ///
         (point capitals [w=pop98], z(size) discrete color(Set1, opacity(50)) ///
             mlcolor(%0)) ///
-        (labels capitals city if pop98>250000, color(black)) ///
+        (label capitals city if pop98>250000, color(black)) ///
         , legend(position(sw))
 
 ![example 6](/images/6.png)
