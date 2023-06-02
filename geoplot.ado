@@ -1,4 +1,4 @@
-*! version 0.1.8  01jun2023  Ben Jann
+*! version 0.1.9  02jun2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -32,8 +32,7 @@ program geoplot, rclass
     version 17
     _parse comma lhs 0 : 0
     syntax [, /*
-        */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
-        */ wmax(numlist max=1 >0) dmax(numlist max=1 >0) /*
+        */ LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
         */ rotate(real 0) /* rotate whole map around midpoint by angle
         */ Margin(numlist max=4 >=0) tight /* margin: l r b t (will be recycled)
         */ ASPECTratio(str) YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
@@ -41,7 +40,6 @@ program geoplot, rclass
     local legend  = `"`legend'`legend2'"'!=""
     local clegend = `"`clegend'`clegend2'"'!=""
     if !`legend' & !`clegend' local legend 1
-    if "`nolegend'"!="" local legend 0
     _parse_aspectratio `aspectratio' // returns aspectratio, aspectratio_opts
     if "`margin'"=="" local margin 0
     _parse_frame `frame' // returns frame, replace
@@ -79,8 +77,6 @@ program geoplot, rclass
             MLAB:    marker labels
             MLABPOS: marker label positions
           helper variables that will be dropped at the end
-            wY wX:   centroids used in connection with weights (area/line)
-            SIZE CY CY AREA: variables related to size() option
             dY dX:   relative coordinates or non-rotating objects
         */
         gen byte LAYER = .
@@ -134,55 +130,6 @@ program geoplot, rclass
             exit
         }
         
-    // process size()
-        capt confirm variable SIZE
-        if _rc==1 exit _rc
-        if _rc==0 {
-            qui replace SIZE = SIZE / AREA // => density
-            tempname DMAX
-            su SIZE, meanonly
-            scalar `DMAX' = r(max)
-            di as txt "(observed maximum density is " as res `DMAX' _c
-            if "`dmax'"=="" local dmax = `DMAX'
-            else if `dmax'<`DMAX' {
-                di as txt "; this is larger than {bf:dmax()}" _c
-            }
-            di as txt ")"
-            qui replace SIZE = SIZE / `dmax'
-            qui replace Y = CY + (Y-CY) * sqrt(SIZE) if SIZE<.
-            qui replace X = CX + (X-CX) * sqrt(SIZE) if SIZE<.
-            drop SIZE CY CX AREA
-        }
-        
-    // normalize weights
-        su W in 3/l, meanonly
-        if r(N) {
-            tempname WMAX
-            scalar `WMAX' = r(max)
-            di as txt "(observed maximum weight is " as res `WMAX' _c
-            if "`wmax'"=="" {
-                if r(max)<1 {
-                    di as txt "; setting {bf:wmax()} to {bf:1}" _c
-                    local wmax = 1
-                }
-                else local wmax = r(max)
-            }
-            else if `wmax'<r(max) {
-                di as txt "; this is larger than {bf:wmax()}" _c
-            }
-            di as txt ")"
-            qui replace W = W / `wmax' in 3/l
-        }
-        
-    // apply weights to shapes
-        capt confirm variable wY
-        if _rc==1 exit _rc
-        if _rc==0 {
-            qui replace Y = wY + (Y-wY) * sqrt(W) if W<. & wY<. & wX<.
-            qui replace X = wX + (X-wX) * sqrt(W) if W<. & wY<. & wX<.
-            drop wY wX
-        }
-        
     // rotate and process relative (non-rotating) coordinates
         _rotate `rotate'
         capt confirm variable dY, exact
@@ -224,13 +171,6 @@ program geoplot, rclass
     
     // returns
     return local graph `graph'
-    if "`WMAX'"!="" {
-        return scalar wmax = `WMAX'
-    }
-    if "`DMAX'"!="" {
-        return scalar dmax = `DMAX'
-    }
-    
     if "`frame'"!="" {
         local cframe `"`c(frame)'"'
         qui _frame dir
@@ -386,8 +326,21 @@ end
 
 program _legend
     // syntax
-    syntax [, Layout(str asis) HORizontal * ]
-    if `"`options'"'!="" local options legend(`options')
+    syntax [, off Layout(str asis) HORizontal OUTside POSition(str)/*
+        */ SIze(passthru) SYMYsize(passthru) SYMXsize(passthru)/*
+        */ KEYGap(passthru) COLGap(passthru) ROWGap(passthru)/*
+        */ BMargin(passthru) REGion(passthru)/*
+        */ order(passthru) HOLes(passthru) Cols(passthru)/* will be ignored
+        */ Rows(passthru) BPLACEment(passthru)/* will be ignored
+        */ on all NOCOLFirst COLFirst/* will be ignored
+        */ * ]
+    if `"`off'"'!="" {
+        c_local legend legend(off)
+        exit
+    }
+    foreach opt in order holes cols rows bplacement on all nocolfirst colfirst {
+        local `opt'
+    }
     // select layer if layer() is empty
     local zlayers: char LAYER[Layers_Z]
     if `"`layout'"'=="" {
@@ -482,13 +435,27 @@ program _legend
         }
     }
     // orientation / layout
-    local layout size(vsmall) symysize(3) symxsize(3) keygap(1) colgap(2)
-    if "`horizontal'"!="" local layout rows(`ncols') nocolfirst `layout'
-    else                  local layout cols(`ncols') colfirst rowgap(0) `layout'
+    if `"`size'"'==""     local size size(vsmall)
+    if `"`symysize'"'=="" local symysize symysize(3)
+    if `"`symxsize'"'=="" local symxsize symxsize(3)
+    if `"`keygap'"'==""   local keygap keygap(1)
+    if `"`colgap'"'==""   local colgap colgap(2)
+    if "`horizontal'"!="" {
+        local opts rows(`ncols') nocolfirst
+    }
+    else {
+        local opts cols(`ncols') colfirst
+        if `"`rowgap'"'=="" local rowgap rowgap(0)
+    }
+    local opts `opts' `size' `symysize' `symxsize' `keygap' `colgap' `rowgap'
+    if `"`position'"'=="" local position 2
+    if "`outside'"!=""    local position position(`position')
+    else                  local position position(0) bplace(`position')
+    if `"`bmargin'"'==""  local bmargin bmargin(zero)
+    if `"`region'"'==""   local region region(style(none) margin(zero))
+    local opts `opts' `position' `bmargin' `region' `options'
     // return legend option
-    c_local legend legend(order(`order') on all `layout'/*
-        */ position(0) bplace(nw) bmargin(zero)/*
-        */ region(style(none) margin(zero))) `options'
+    c_local legend legend(order(`order') on all `opts')
 end
 
 program _clegend
@@ -496,8 +463,18 @@ program _clegend
         di as err "{bf:clegend()} requires Stata 18"
         exit 9
     }
-    syntax [, Layer(numlist int max=1 >0) noLABel MISsing Format(str) * ]
-    if `"`options'"'!="" local options clegend(`options')
+    // syntax
+    syntax [, off Layer(numlist int max=1 >0) noLABel MISsing Format(str)/*
+        */ OUTside POSition(str) width(passthru) height(passthru)/*
+        */ BMargin(passthru) REGion(passthru)/*
+        */ BPLACEment(passthru) * ]
+    if `"`off'"'!="" {
+        c_local clegend
+        c_local plot
+        exit
+    }
+    local bplacement
+    // select layer
     local k `layer'
     local clayers: char LAYER[Layers_C]
     if "`k'"=="" gettoken k : clayers // first layer that has colors
@@ -511,6 +488,7 @@ program _clegend
         c_local plot
         exit
     }
+    // collect info on levels, colors, and labels
     local values:   char LAYER[Values_`k']
     local colors:   char LAYER[Colors_`k']
     local hasmis:   char LAYER[Hasmis_`k']
@@ -520,7 +498,6 @@ program _clegend
             if !`: list sizeof colors' {
                 di as txt "(clegend omitted: "/*
                     */ "layer `k' contains no non-missing color keys)"
-                c_local clegend_k `k'
                 c_local clegend
                 c_local plot
                 exit
@@ -551,6 +528,7 @@ program _clegend
     else local format: char LAYER[Format_`k']
     if `"`format'"'=="" local format format(%7.0g)
     else                local format format(`format')
+    // append data for clegend plot
     qui gen byte CLEG_Y = .
     qui gen byte CLEG_X = .
     qui gen double CLEG_Z = .
@@ -574,7 +552,7 @@ program _clegend
             local labels -.5 `labmis' `labels'
             local values -1 `values'
         }
-        local height = min(100, (`N'-`hasmis')*3)
+        local hght = min(100, (`N'-`hasmis')*3)
         local zlabels zlabel(`labels', `format' labsize(vsmall) notick labgap(1))/*
             */ zscale(noline)
     }
@@ -597,15 +575,22 @@ program _clegend
             local ++i
             qui replace CLEG_Z = `v' in `i'
         }
-        local height = min(50, (`N'-`hasmis')*3)
+        local hght = min(40, (`N'-`hasmis')*3)
         local zlabels zlabel(`labels', `format' labsize(vsmall))
     }
-    c_local plot (scatter CLEG_Y CLEG_X in 1/`i', colorvar(CLEG_Z) colorcuts(`values')/*
-        */ colorlist(`colors') colorkeysrange)
-    c_local clegend ztitle("") `zlabels' /*
-        */ clegend(position(0) bplace(ne) width(3) height(`height')/*
-        */ bmargin(l=0 r=0 b=1 t=1) region(margin(zero)))/*
-        */ `options'
+    // layout of clegend
+    if `"`position'"'==""  local position 4
+    if "`outside'"!=""     local position position(`position')
+    else                   local position position(0) bplace(`position')
+    if `"`width'"'==""     local width width(3)
+    if `"`height'"'==""    local height height(`hght')
+    if `"`bmargin'"'==""   local bmargin bmargin(l=0 r=0 b=1 t=1)
+    if `"`region'"'==""    local region region(margin(zero))
+    local options `position' `width' `height' `bmargin' `region' `options'
+    // return clegend plot and clegend option
+    c_local plot (scatter CLEG_Y CLEG_X in 1/`i', colorvar(CLEG_Z)/*
+        */ colorcuts(`values') colorlist(`colors') colorkeysrange)
+    c_local clegend ztitle("") `zlabels' clegend(`options')
 end
 
 program _process_coloropts // pass standard color options through ColrSpace
@@ -790,9 +775,10 @@ program _layer
     else if `"`plottype'"'=="line" {
         local TYPE   shape
         local hasSHP 1
-        local SIZEopt size(str)
+        local SIZEopt size(str asis)
         local varlist [varlist(default=none numeric max=1)]
         local WGT [iw/]
+        local WGTopt wmax(numlist max=1 >0)
         local zvlist 1
     }
     else {
@@ -805,6 +791,7 @@ program _layer
             local TYPE unit
             local varlist [varlist(default=none max=2 numeric)]
             local WGT [iw/]
+            local WGTopt wmax(numlist max=1 >0)
             local wgt "[aw=W]"
         }
         local MLABopts MLabel(varname) MLABVposition(varname numeric) /*
@@ -818,8 +805,10 @@ program _layer
     frame `frame' {
         // syntax
         qui syntax `varlist' [if] [in] `WGT' [, LABel(str asis) `Zopts'/*
-            */ `SIZEopt' `PLVopts' `MLABopts' * ]
+            */ `SIZEopt' `WGTopt' `PLVopts' `MLABopts' * ]
         local cuts: list uniq cuts
+        _parse_size `size' // => size, s_max, s_scale
+        local hasSIZE = `"`size'"'!=""
         _parse_levels `levels' // => levels, method, l_wvar
         if `"`fcolor'"'!="" mata: _get_colors("fcolor")
         marksample touse, novarlist
@@ -878,7 +867,12 @@ program _layer
         if `hasWGT' {
             tempname wvar
             qui gen double `wvar' = abs(`exp') if `touse'
-            markout `touse' `wvar' // exclude obs with missing weight
+            markout `touse' `wvar'          // exclude obs with missing weight!
+            if `"`wmax'"'=="" {
+                su `wvar' if `touse', meanonly
+                local wmax = max(1, r(max))
+            }
+            qui replace `wvar' = `wvar' / `wmax' if `touse'
             if `hasSHP' {
                 tempname WVAR
                 local org `org' `wvar'
@@ -887,29 +881,6 @@ program _layer
             else local WVAR `wvar'
             local ORG `ORG' `WVAR'
             local TGT `TGT' W
-            if "`TYPE'"=="shape" {
-                geoframe get centroids, flip local(wYX)
-                if !`: list sizeof wYX' {
-                    di as txt "layer `layer': centroids not found;"/*
-                        */ " computing centroids on the fly"
-                    di as txt "generate/declare centroids using " /*
-                        */ "{helpb geoframe} to avoid such extra computations"
-                    tempvar tmp_CX tmp_CY
-                    qui geoframe gen centroids `tmp_CX' `tmp_CY', noset
-                    local wYX `tmp_CY' `tmp_CX'
-                }
-                if `hasSHP' {
-                    tempname wY wX
-                    local org `org' `wYX'
-                    local tgt `tgt' `wY' `wX'
-                }
-                else {
-                    gettoken wY wYX : wYX
-                    gettoken wX wYX : wYX
-                }
-                local ORG `ORG' `wY' `wX'
-                local TGT `TGT' wY wX
-            }
         }
         else local wgt
         // handle Z
@@ -943,42 +914,62 @@ program _layer
             }
         }
         // handle size
-        if `"`size'"'!="" {
-            geoframe get centroids, flip local(sizeYX)
-            if !`: list sizeof sizeYX' local sizeYX `wYX'
-            if !`: list sizeof sizeYX' {
+        if `hasSIZE' {
+            geoframe get area, local(AREA)
+            if !`: list sizeof AREA' {
+                di as txt "layer `layer': area variable (original size) not"/*
+                    */ " found; computing areas on the fly"
+                di as txt "generate/declare area variable using " /*
+                    */ "{helpb geoframe} to avoid such extra computations"
+                tempvar AREA
+                qui geoframe gen area `AREA', noset
+            }
+            tempname svar
+            qui gen double `svar' = abs(`size') / `AREA' if `touse'
+            if `"`s_max'"'=="" {
+                su `svar' if `touse', meanonly
+                local s_max = r(max)
+            }
+            qui replace `svar' = `svar' * (`s_scale'/`s_max') if `touse'
+            if `hasSHP' {
+                tempname SVAR
+                local Svar `SVAR'
+                local org `org' `svar'
+                local tgt `tgt' `SVAR'
+            }
+            else {
+                local SVAR `svar'
+                tepname Svar
+            }
+            local ORG `ORG' `SVAR'
+            local TGT `TGT' `Svar' // tempvar only
+        }
+        // get centroids (used by weights and size() in area/line)
+        if (`hasWGT' & ("`TYPE'"=="shape")) | `hasSIZE' {
+            geoframe get centroids, flip local(cYX)
+            if !`: list sizeof cYX' {
                 di as txt "layer `layer': centroids not found;"/*
                     */ " computing centroids on the fly"
                 di as txt "generate/declare centroids using " /*
                     */ "{helpb geoframe} to avoid such extra computations"
                 tempvar tmp_CX tmp_CY
                 qui geoframe gen centroids `tmp_CX' `tmp_CY', noset
-                local sizeYX `tmp_CY' `tmp_CX'
+                local cYX `tmp_CY' `tmp_CX'
             }
-            geoframe get area, local(sizeAREA)
-            if !`: list sizeof sizeAREA' {
-                di as txt "layer `layer': area variable (original size) not"/*
-                    */ " found; computing areas on the fly"
-                di as txt "generate/declare area variable using " /*
-                    */ "{helpb geoframe} to avoid such extra computations"
-                tempvar sizeAREA
-                qui geoframe gen area `sizeAREA', noset
-            }
-            tempname sizevar
-            qui gen double `sizevar' = abs(`size') if `touse'
             if `hasSHP' {
-                tempname SIZE CY CX AREA
-                local org `org' `sizevar' `sizeYX' `sizeAREA'
-                local tgt `tgt' `SIZE' `CY' `CX' `AREA'
+                tempname CY CX
+                local cY `CY'
+                local cX `CX'
+                local org `org' `cYX'
+                local tgt `tgt' `CY' `CX'
             }
             else {
-                local SIZE `sizevar'
-                gettoken CY sizeYX : sizeYX
-                gettoken CX sizeYX : sizeYX
-                local AREA `sizeAREA'
+                gettoken CY cYX : cYX
+                gettoken CX cYX : cYX
+                tempname cY cX
             }
-            local ORG `ORG' `SIZE' `CY' `CX' `AREA'
-            local TGT `TGT' SIZE CY CX AREA
+            local ORG `ORG' `CY' `CX'
+            local TGT `TGT' `cY' `cX' // tempvars only
         }
         // handle marker labels
         local hasMLAB = `"`mlabel'"'!=""
@@ -1040,6 +1031,16 @@ program _layer
     }
     local in in `n0'/`n1'
     qui replace LAYER = `layer' `in'
+    // process size (area/line only)
+    if `hasSIZE' {
+        qui replace Y = `cY' + (Y-`cY') * sqrt(`Svar') if `Svar'<. `in'
+        qui replace X = `cX' + (X-`cX') * sqrt(`Svar') if `Svar'<. `in'
+    }
+    // process weights (area/line only)
+    if `hasWGT' & ("`TYPE'"=="shape") {
+        qui replace Y = `cY' + (Y-`cY') * sqrt(W) if W<. & `cY'<. & `cX'<. `in'
+        qui replace X = `cX' + (X-`cX') * sqrt(W) if W<. & `cY'<. & `cX'<. `in'
+    }
     // prepare PLV
     if `hasPLV' {
         if `"`ecolor'"'=="" local ecolor white // default for enclaves
@@ -1281,6 +1282,16 @@ program _layer
     }
     c_local plot `plot'
     c_local p `p'
+end
+
+program _parse_size
+    _parse comma size 0 : 0
+    c_local size `"`size'"'
+    if `"`size'"'=="" exit
+    syntax [, Dmax(numlist max=1 >0) Scale(numlist max=1 >0) ]
+    if "`scale'"=="" local scale 1
+    c_local s_max `dmax'
+    c_local s_scale `scale'
 end
 
 program _parse_levels

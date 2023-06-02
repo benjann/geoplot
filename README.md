@@ -17,7 +17,82 @@ The following packages are required:
 
 ---
 
+Examples:
+
+Load data using `geoframe`.
+
+    local url http://fmwww.bc.edu/repec/bocode/i/
+    geoframe create regions  `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) ///
+                     shpfile(`url'Italy-RegionsCoordinates.dta)
+    geoframe create country  `url'Italy-OutlineCoordinates.dta
+    geoframe create capitals `url'Italy-Capitals.dta, coord(xcoord ycoord)
+    geoframe create lakes    `url'Italy-Lakes.dta, feature(water)
+    geoframe create rivers   `url'Italy-Rivers.dta, feature(water)
+
+Basic map of Italian regions.
+
+    geoplot (area regions) (line country, lwidth(medthick)), tight
+
+![example 1](/images/1.png)
+
+Basic map with lakes and rivers.
+
+    geoplot (area regions) (area lakes) (line rivers), tight
+
+![example 2](/images/2.png)
+
+Regions colored by number of fortune tellers (per million population).
+
+    geoplot (area regions fortell, color) (area regions), tight
+
+![example 3](/images/3.png)
+
+Different formatting of legend labels.
+
+    geoplot (area regions fortell, color label("@lb-@ub")) (area regions), tight
+
+![example 4](/images/4.png)
+
+Similar graph with more colors and alternative type of legend (requires Stata 18)
+
+    geoplot (area regions fortell, color levels(20) lcolor(gray)), tight ///
+        clegend(position(ne) height(30)) zlabel(4(3)28)
+
+![example 5](/images/5.png)
+
+Map with provincial capitals.
+
+    geoplot ///
+        (area regions) ///
+        (point capitals [w=pop98], z(size) discrete color(Set1, opacity(50)) ///
+            mlcolor(%0)) ///
+        (labels capitals city if pop98>250000, color(black)) ///
+        , tight legend(position(sw))
+
+![example 6](/images/6.png)
+
+Map with composite legend.
+
+    geoplot ///
+        (area regions fortell, color) ///
+        (point capitals [w=pop98], z(size) discrete color(Set1, reverse ///
+            opacity(50)) mlcolor(white)) ///
+        , tight legend(layout(- "FORTELL" 1 | - "CITY SIZE" 2) position(sw))
+
+![example 7](/images/7.png)
+
+---
+
 Main changes:
+
+    02jun2023 (version 0.1.9)
+    - global dmax() and wmax() discontinued; weights and size() will now be
+      normalized within layer; size() has now suboptions scale() and dmax(); wmax()
+      can now be specified within layer
+    - revised positioning options for legend() and clegend(); positioning is now
+      done with two suboptions, -position()- to select the position and -outside-
+      place the legend outside of the plot region rather than inside
+    - conflicting legend_options are now ignored by legend()
 
     01jun2023 (version 0.1.8)
     - suboption layout() in legend() can now be used to compile a legend from
