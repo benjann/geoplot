@@ -31,32 +31,32 @@ Load data using `geoframe`.
 
 Basic map of Italian regions.
 
-    geoplot (area regions) (line country, lwidth(medthick)), tight
+    geoplot (area regions) (line country, lwidth(medthick))
 
 ![example 1](/images/1.png)
 
 Basic map with lakes and rivers.
 
-    geoplot (area regions) (area lakes) (line rivers), tight
+    geoplot (area regions) (area lakes) (line rivers)
 
 ![example 2](/images/2.png)
 
 Regions colored by number of fortune tellers (per million population).
 
-    geoplot (area regions fortell, color) (area regions), tight
+    geoplot (area regions fortell, color) (area regions)
 
 ![example 3](/images/3.png)
 
 Different formatting of legend labels.
 
-    geoplot (area regions fortell, color label("@lb-@ub")) (area regions), tight
+    geoplot (area regions fortell, color label("@lb-@ub")) (area regions)
 
 ![example 4](/images/4.png)
 
 Similar graph with more colors and alternative type of legend (requires Stata 18)
 
-    geoplot (area regions fortell, color levels(20) lcolor(gray)), tight ///
-        clegend(position(ne) height(30)) zlabel(4(3)28)
+    geoplot (area regions fortell, color levels(20) lcolor(gray)) ///
+        , clegend(position(ne) height(30)) zlabel(4(3)28)
 
 ![example 5](/images/5.png)
 
@@ -67,7 +67,7 @@ Map with provincial capitals.
         (point capitals [w=pop98], z(size) discrete color(Set1, opacity(50)) ///
             mlcolor(%0)) ///
         (labels capitals city if pop98>250000, color(black)) ///
-        , tight legend(position(sw))
+        , legend(position(sw))
 
 ![example 6](/images/6.png)
 
@@ -77,7 +77,7 @@ Map with composite legend.
         (area regions fortell, color) ///
         (point capitals [w=pop98], z(size) discrete color(Set1, reverse ///
             opacity(50)) mlcolor(white)) ///
-        , tight legend(layout(- "FORTELL" 1 | - "CITY SIZE" 2) position(sw))
+        , legend(layout(- "FORTELL" 1 | - "CITY SIZE" 2) position(sw))
 
 ![example 7](/images/7.png)
 
