@@ -67,7 +67,7 @@ Map with provincial capitals.
         (point capitals [w=pop98], z(size) discrete color(Set1, opacity(50)) ///
             mlcolor(%0)) ///
         (label capitals city if pop98>250000, color(black)) ///
-        , legend(position(sw))
+        , legend compass sbar(length(300) units(km))
 
 ![example 6](/images/6.png)
 
@@ -84,6 +84,18 @@ Map with composite legend.
 ---
 
 Main changes:
+
+    05jun2023 (version 0.2.1)
+    geoplot:
+    - global option scalebar() added
+    - global option compass() added
+    - global option margin() now supports syntax {l|r|b|t}=#
+    - global option margin() now uses the minimum of the vertical and horizontal
+      size as reference by default; global option refdim() added to select the
+      reference (the reference size will also be used by scalebar() and compass())
+    - global option rotate() renamed to angle()
+    - __geoplot_layer is now a separate ado; this allows users to program additional
+      layer types that make use of __geoplot_layer
 
     02jun2023 (version 0.2.0)
     - option -lock- added to area/line to lock the orientation of shapes in case of

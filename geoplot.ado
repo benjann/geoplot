@@ -1,4 +1,4 @@
-*! version 0.2.0  02jun2023  Ben Jann
+*! version 0.2.1  05jun2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -33,15 +33,17 @@ program geoplot, rclass
     _parse comma lhs 0 : 0
     syntax [, /*
         */ LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
-        */ rotate(real 0) /* rotate whole map around midpoint by angle
-        */ Margin(numlist max=4 >=0) tight /* margin: l r b t (will be recycled)
-        */ ASPECTratio(str) YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
+        */ SBAR SBAR2(str asis) COMPass COMPass2(str asis) /*
+        */ ANGle(real 0) tight Margin(str) REFdim(str) ASPECTratio(str) /* 
+        */ YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
         */ frame(str) * ]
     local legend  = `"`legend'`legend2'"'!=""
     local clegend = `"`clegend'`clegend2'"'!=""
     if !`legend' & !`clegend' local legend 1
     _parse_aspectratio `aspectratio' // returns aspectratio, aspectratio_opts
-    if "`margin'"=="" local margin 0
+    if "`margin'"=="" local margin 0 0 0 0
+    else              _parse_margin `margin'
+    _parse_refdim `refdim'
     _parse_frame `frame' // returns frame, replace
     
     // parse layers
@@ -131,28 +133,43 @@ program geoplot, rclass
         }
         
     // rotate map
-        _rotate `rotate'
+        _rotate `angle'
         capt drop cY cX
         
     // graph dimensions
-        _grdim "`margin'" `aspectratio' // returns yrange, xrange, aratio
+        _grdim "`margin'" "`refdim'" `aspectratio' /* returns refsize 
+            Ymin Ymax Xmin Xmax yrange xrange aratio */
         local aspectratio aspectratio(`aratio'`aspectratio_opts')
         if "`tight'"!="" {
             // update ysize and ysize
             _grdim_tight, aratio(`aratio') `scheme' `ysize' `xsize' 
         }
         
-    // compile legend
+    // scale bar
+        if `"`sbar'`sbar2'"'!="" {
+            _scalebar `refsize' `Ymin' `Ymax' `Xmin' `Xmax', `sbar2'
+            local plots `plots' `plot'
+        }
+    
+    // compass
+        if `"`compass'`compass2'"'!="" {
+            _compass `refsize' `Ymin' `Ymax' `Xmin' `Xmax', `compass2'
+            local plots `plots' `plot'
+        }
+        
+    // legend
         if `legend' {
             _legend, `legend2' // returns legend
         }
         else local legend legend(off)
+    
+    // clegend
         if `clegend' {
             _clegend, `clegend2' // returns plot, clegend
             local plots `plots' `plot'
         }
         else local clegend
-        
+    
     // draw graph
          local graph /*
             */ graph twoway `plots',/*
@@ -194,6 +211,56 @@ program _parse_aspectratio
     else local lhs 1 // default
     c_local aspectratio `lhs'
     c_local aspectratio_opts `rhs'
+end
+
+program _parse_margin
+    capt numlist `"`0'"', max(4) range(>=0) // margin must be positive
+    if _rc==1 exit 1
+    if _rc==0 {
+        local MRG `r(numlist)'
+        forv i = 1/4 {
+            if `"`mrg'"'=="" local mrg: copy local MRG // recycle
+            gettoken m mrg : mrg
+            local margin `margin' `m'
+        }
+        c_local margin `margin'
+        exit
+    }
+    local l 0
+    local r 0
+    local b 0
+    local t 0
+    while (`"`0'"'!="") {
+        gettoken m 0 : 0, parse("= ")
+        if inlist(`"`m'"',"l","r","b","t") {
+            gettoken eq : 0, parse("= ")
+            if `"`eq'"'=="=" gettoken eq 0 : 0, parse("= ") // remove "="
+            gettoken val 0 : 0
+            capt numlist `"`val'"', max(1) range(>=0)
+            if _rc==1 exit 1
+            if _rc==0 {
+                local `m' `val'
+                continue
+            }
+        }
+        di as err "invalid syntax in margin()"
+        exit 198
+    }
+    c_local margin `l' `r' `b' `t'
+end
+
+program _parse_refdim
+    if `"`0'"'=="" exit
+    local l = strlen(`"`0'"')
+    if      `"`0'"'=="y"                        local 0 y
+    else if `"`0'"'=="x"                        local 0 x
+    else if `"`0'"'==substr("vertical",1,`l')   local 0 y
+    else if `"`0'"'==substr("horizontal",1,`l') local 0 x
+    else {
+        di as err "invalid specification in refdim()"
+        exit 198
+    }
+    c_local refdim `0'
 end
 
 program _parse_frame
@@ -268,29 +335,35 @@ program _rotate
 end
 
 program _grdim
-    args margin aratio
-    tempname min max
+    args margin refdim aratio
     foreach v in X Y {
-        tempname `v'min `v'max `v'range
         su `v', mean
-        scalar ``v'min' = r(min)
-        scalar ``v'max' = r(max)
+        local `v'min = r(min)
+        local `v'max = r(max)
         capt confirm variable `v'2, exact
         if _rc==0 {
             su `v'2, mean
-            scalar ``v'min' = min(``v'min', r(min))
-            scalar ``v'max' = max(``v'max', r(max))
+            local `v'min = min(``v'min', r(min))
+            local `v'max = max(``v'max', r(max))
         }
-        scalar ``v'range' = ``v'max' - ``v'min'
-        if "`MRG'"=="" local MRG `margin' // recycle
-        gettoken m MRG : MRG
-        scalar ``v'min' = ``v'min' - ``v'range' * (`m'/100)
-        if "`MRG'"=="" local MRG `margin' // recycle
-        gettoken m MRG : MRG
-        scalar ``v'max' = ``v'max' + ``v'range' * (`m'/100)
+        local `v'range = ``v'max' - ``v'min'
     }
-    c_local yrange yscale(off range(`=`Ymin'' `=`Ymax'')) ylabel(none)
-    c_local xrange xscale(off range(`=`Xmin'' `=`Xmax'')) xlabel(none)
+    if      "`refdim'"=="y" local refsize `Yrange'
+    else if "`refdim'"=="x" local refsize `Xrange'
+    else                    local refsize = min(`Yrange', `Xrange')
+    foreach v in X Y {
+        gettoken m margin : margin
+        local `v'min = ``v'min' - `refsize' * (`m'/100)
+        gettoken m margin : margin
+        local `v'max = ``v'max' + `refsize' * (`m'/100)
+    }
+    c_local refsize `refsize' // reference size (before adding margin)
+    c_local Ymin `Ymin'       // after adding margin
+    c_local Ymax `Ymax'       // after adding margin
+    c_local Xmin `Xmin'       // after adding margin
+    c_local Xmax `Xmax'       // after adding margin
+    c_local yrange yscale(off range(`Ymin' `Ymax')) ylabel(none)
+    c_local xrange xscale(off range(`Xmin' `Xmax')) xlabel(none)
     c_local aratio = (`Ymax'-`Ymin') / (`Xmax'-`Xmin') * `aratio'
 end
 
@@ -456,6 +529,7 @@ program _legend
     }
     local opts `opts' `size' `symysize' `symxsize' `keygap' `colgap' `rowgap'
     if `"`position'"'=="" local position 2
+    else                  _parse_position `position' // compass => clock
     if "`outside'"!=""    local position position(`position')
     else                  local position position(0) bplace(`position')
     if `"`bmargin'"'==""  local bmargin bmargin(zero)
@@ -587,6 +661,7 @@ program _clegend
     }
     // layout of clegend
     if `"`position'"'==""  local position 4
+    else                   _parse_position `position' // compass => clock
     if "`outside'"!=""     local position position(`position')
     else                   local position position(0) bplace(`position')
     if `"`width'"'==""     local width width(3)
@@ -600,44 +675,383 @@ program _clegend
     c_local clegend ztitle("") `zlabels' clegend(`options')
 end
 
-program _process_coloropts // pass standard color options through ColrSpace
-    _parse comma nm 0 : 0
-    local opts COLor FColor LColor MColor MFColor MLColor MLABColor
-    foreach o of local opts {
-        local OPTS `OPTS' `o'(str asis)
+program _scalebar
+    // syntax
+    syntax anything [,/*
+        */ Length(numlist max=1 >0) Scale(str) n(numlist max=1 int >0) even/*
+        */ Units(str) NOLABel LABel(str) TItle(str)/*
+        */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
+        */ Height(numlist max=1 >=0 <=100) POSition(str)/*
+        */ XMargin(numlist max=1 >=0 <=100)/*
+        */ YMargin(numlist max=1 >=0 <=100) * ]
+    gettoken refsize anything : anything
+    gettoken Ymin    anything : anything // (includes margin)
+    gettoken Ymax    anything : anything // (includes margin)
+    gettoken Xmin    anything : anything // (includes margin)
+    gettoken Xmax    anything : anything // (includes margin)
+    if `"`scale'"'=="" local scale 0.001 // 1/1000
+    else               local scale = `scale'
+    if `scale'>=. | `scale'<=0 {
+        di as err "invalid syntax in scale()"
+        exit 198
     }
-    syntax [, `OPTS' * ]
-    local opts = strlower("`opts'")
-    local OPTS
-    foreach o of local opts {
-        if `"``o''"'!="" {
-            mata: _get_colors("`o'")
-            local OPTS `OPTS' `o'(``o'')
+    if "`n'"=="" local n 5
+    _parse_scalerbar_label, `label'
+    _parse_scalerbar_title `title'
+    if `"`color'"'==""       local color color(black)
+    if `"`fintensity'"'==""  local fintensity finten(100)
+    if `"`lwidth'"'==""      local lwidth lwidth(vthin)
+    local options `color' `fintensity' `lwidth' `options'
+    if `"`position'"'=="" local position 7
+    else                  _parse_position `position' // compass => clock
+    if "`xmargin'"=="" local xmargin 1
+    if "`ymargin'"=="" local ymargin 3
+    if "`height'"==""  local height 1
+    // determine length
+    local lmax = `Xmax' - `Xmin'
+    if !inlist(`position',0,6,12) local lmax = `lmax' * (1-`xmargin'/100)
+    if "`length'"=="" {
+        _natscale 0 `=`refsize'/3' `=`n'+1'
+        local delta = r(delta)
+        local LENGTH = `n' * `delta'
+        if `LENGTH'>`lmax' {
+            di as err "scalebar(): could not determine length; specify length()"
+            exit 498
+        }
+        local length = `LENGTH' * `scale'
+    }
+    else {
+        local LENGTH = `length' / `scale'
+        if `LENGTH '>`lmax' {
+            di as err "scalebar(): length too large; "/*
+                */ "maximum available length is " `lmax'*`scale'
+            exit 498
+        }
+        local delta = `LENGTH' / `n'
+    }
+    // coordinates of overall bar
+    local xmargin = `refsize' * (`xmargin'/100)
+    local ymargin = `refsize' * (`ymargin'/100)
+    local height  = `refsize' * (`height'/100)
+    if inrange(`position',7,11) {
+        local X0 = `Xmin' + `xmargin'
+        local X1 = `X0' + `LENGTH'
+    }
+    else if inrange(`position',1,5) {
+        local X1 = `Xmax' - `xmargin'
+        local X0 =  `X1' - `LENGTH'
+    }
+    else {
+        local X0 = (`Xmin' + `Xmax' - `LENGTH')/2
+        local X1 = (`Xmin' + `Xmax' + `LENGTH')/2
+    }
+    if inrange(`position',4,8) {
+        local Y0 = `Ymin' + `ymargin'
+        local Y1 = `Y0'   + `height'
+    }
+    else if inlist(`position',1,2,10,11,12) {
+        local Y1 = `Ymax' - `ymargin'
+        local Y0 = `Y1'   - `height'
+    }
+    else {
+        local Y0 = (`Ymin' + `Ymax' - `height')/2
+        local Y1 = (`Ymin' + `Ymax' + `height')/2
+    }
+    local b = _N + 4
+    qui set obs `b'
+    local a = `b' - 3
+    mata: st_store((`a',`b'), "Y", (`Y0', `Y0', `Y1', `Y1')')
+    mata: st_store((`a',`b'), "X", (`X0', `X1', `X1', `X0')')
+    // labels
+    if `lab_above' local Ylab `Y1'
+    else           local Ylab `Y0'
+    if "`nolabel'"=="" {
+        local lblmax `: di `lab_format' `length''
+        if `"`units'"'!="" {
+            local ul = strlen(`"`units'"')
+            if `ul' {
+                local ul = `ul' + 2
+                local lblmax `"{space `ul'}`lblmax' `units'"'
+            }
+        }
+        if `lab_minmax' {
+            local LABEL `Ylab' `X0' "0" `Ylab' `X1' `"`lblmax'"'
+        }
+        else {
+            local LABEL `Ylab' `X0' "0"
+            forv i=1/`=`n'-1' {
+                local x1 = `X0' + `i'*`delta'
+                local x1lab = `i'*`delta'*`scale'
+                local x1lab `: di `lab_format' `x1lab''
+                local LABEL `LABEL' `Ylab' `x1' "`x1lab'"
+            }
+            local LABEL `LABEL' `X0' "0" `Ylab' `X1' `"`lblmax'"'
+        }
+        if `lab_above' local lab_opts place(n) `lab_opts'
+        else           local lab_opts place(s) `lab_opts'
+        local LABEL text(`LABEL', `lab_opts')
+    }
+    else local LABEL
+    // title
+    if `"`title'"'!="" {
+        if `ti_below' local Ylab `Y0'
+        else          local Ylab `Y1'
+        local x1 = (`X0' + `X1') / 2
+        local TITLE `Ylab' `x1' `"`title'"'
+        if `ti_below' local ti_opts place(s) `ti_opts'
+        else          local ti_opts place(n) `ti_opts'
+        local TITLE text(`TITLE', `ti_opts')
+    }
+    else local TITLE
+    // plot for overall bar
+    local plot (area Y X in `a'/`b', `LABEL' `TITLE' `options')
+    // add stripes
+    local b = _N
+    local a = `b' + 1
+    if "`even'"!="" local i 1
+    else            local i 2
+    forv i = `i'(2)`n' {
+        local b = _N + 5
+        qui set obs `b'
+        local x0 = `X0' + (`i'-1)*`delta'
+        local x1 = `X0' + `i'*`delta'
+        mata: st_store((`b'-4,`b'-1), "Y", (`Y0', `Y0', `Y1', `Y1')')
+        mata: st_store((`b'-4,`b'-1), "X", (`x0', `x1', `x1', `x0')')
+    }
+    if `a'<=`b' {
+        local plot `plot' (area Y X in `a'/`b', `options'/*
+            */ cmissing(n) fcolor(white))
+    }
+    // returns
+    c_local plot `plot'
+end
+
+program _parse_scalerbar_label
+    syntax [, minmax Above Format(str) SIze(passthru) Margin(passthru) * ]
+    if `"`format'"'=="" local format %8.0g
+    if `"`size'"'==""   local size   size(vsmall) 
+    local options `size' `options'
+    if `"`margin'"'=="" local margin margin(vsmall)
+    local options `margin' `options'
+    c_local lab_minmax = "`minmax'"!=""
+    c_local lab_above = "`above'"!=""
+    c_local lab_format `"`format'"'
+    c_local lab_opts `options'
+end
+
+program _parse_scalerbar_title
+    _parse comma title 0 : 0
+    syntax [, Below SIze(passthru) Margin(passthru) * ]
+    if `"`size'"'==""   local size size(vsmall) 
+    local options `size' `options'
+    if `"`margin'"'=="" local margin margin(vsmall)
+    local options `margin' `options'
+    c_local title `"`title'"'
+    c_local ti_below = "`below'"!=""
+    c_local ti_opts `options'
+end
+
+program _compass
+    // syntax
+    syntax anything [,/*
+        */ Type(int 1) /*
+        */ ANGle(real 0)/*
+        */ SIze(numlist max=1 >=0)/*
+        */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
+        */ NOLABel LABel LABel2(str)/*
+        */ noCIRcle noMSPikes /*
+        */ POSition(str)/*
+        */ XMargin(numlist max=1 >=0 <=100)/*
+        */ YMargin(numlist max=1 >=0 <=100) * ]
+    gettoken refsize anything : anything
+    gettoken Ymin    anything : anything // (includes margin)
+    gettoken Ymax    anything : anything // (includes margin)
+    gettoken Xmin    anything : anything // (includes margin)
+    gettoken Xmax    anything : anything // (includes margin)
+    if `"`size'"'==""   local size 5
+    if `"`color'"'==""  local color color(black)
+    if `"`lwidth'"'=="" local lwidth lwidth(vthin)
+    local options `color' `lwidth' `options'
+    if `"`fintensity'"'=="" local fintensity finten(100)
+    local aoptions lalign(center) `fintensity' `options' cmissing(n) nodropbase
+    if `"`label2'"'!="" local label label
+    _parse_compass_label, `label2'
+    if `"`lab_color'"'=="" local lab_color `color'
+    if "`nolabel'"!="" local label // nolabel takes precedence
+    if `"`position'"'=="" local position 5
+    else                  _parse_position `position' // compass => clock
+    if "`xmargin'"=="" local xmargin 2
+    if "`ymargin'"=="" local ymargin 2
+    // compass elements
+    local a0 = _N + 1
+    local plot
+    if `type'==1 {
+        if "`circle'"=="" {
+            mata: _compass_circle(100, .7, 0) // inner circle
+            local plot (line Y X in `a'/`b', `options')
+            mata: _compass_circle(100, .775, .05) // outer circle
+            local plot `plot' (area Y X in `a'/`b', `aoptions')
+        }
+        if "`mspikes'"=="" {
+            mata: _compass_spike1(.7, `angle'+45, 1) // inner empty spikes
+            local plot `plot' (area Y X in `a'/`b', `aoptions' fcolor(white))
+            mata: _compass_spike1(.7, `angle'+45, -1) // inner filled spikes
+            local plot `plot' (area Y X in `a'/`b', `aoptions')
+        }
+        mata: _compass_spike1(1, `angle', 1) // outer empty spikes
+        local plot `plot' (area Y X in `a'/`b', `aoptions' fcolor(white))
+        mata: _compass_spike1(1, `angle', -1) // outer filled spikes
+        local plot `plot' (area Y X in `a'/`b', \`LABEL' `aoptions' )
+        // position of labels: local LABEL will be filled in later on
+        if "`nolabel'"=="" {
+            mata: _compass_label1(1 + `lab_gap'/100, `angle')
+            local label label
         }
     }
-    c_local `nm' `OPTS' `options'
+    else if `type'==2 {
+        mata: _compass_spike2(`angle')
+        local plot `plot' (area Y X in `a'/`b', \`LABEL' `aoptions')
+        // position of label: local LABEL will be filled in later on
+        if "`nolabel'"=="" {
+            mata: _compass_store(0, 0.5 + `lab_gap'/100, `angle')
+            local label label
+        }
+    }
+    else if `type'==3 {
+        if "`circle'"=="" {
+            mata: _compass_circle(100, .55,  0)
+            local plot (line Y X in `a'/`b', `options')
+        }
+        mata: _compass_spike3(`angle', -1) // empty spike (south)
+        local plot `plot' (area Y X in `a'/`b', `aoptions' fcolor(white))
+        mata: _compass_spike3(`angle', 1) // filled spike (north)
+        local plot `plot' (area Y X in `a'/`b', \`LABEL' `aoptions')
+        if "`label'"!="" mata: _compass_store(0, 0.55+`lab_gap'/100, `angle')
+    }
+    else {
+        di as err "invalid specification in type()"
+        exit 198
+    }
+    // adjust size
+    local SIZE = `refsize' * (`size'/100)
+    qui replace Y = Y * `SIZE' in `a0'/`b'
+    qui replace X = X * `SIZE' in `a0'/`b'
+    // adjust position
+    local xmargin = `refsize' * (`xmargin'/100)
+    local ymargin = `refsize' * (`ymargin'/100)
+    su Y in `a0'/`b', meanonly
+    local ymin = r(min)
+    local ymax = r(max)
+    su X in `a0'/`b', meanonly
+    local xmin = r(min)
+    local xmax = r(max)
+    local rc 0
+    if inrange(`position',7,11) {
+        local X0 = `Xmin' + `xmargin' - `xmin'
+        if (`X0'+`xmax')>`Xmax' local rc 1
+    }
+    else if inrange(`position',1,5) {
+        local X0 = `Xmax' - `xmargin' - `xmax'
+        if (`X0'+`xmin')<`Xmin' local rc 1
+    }
+    else {
+        local X0 = (`Xmin' + `Xmax')/2
+        if (`X0'+`xmax')>`Xmax' local rc 1
+        if (`X0'+`xmin')<`Xmin' local rc 1
+    }
+    if inrange(`position',4,8) {
+        local Y0 = `Ymin' + `ymargin' - `ymin'
+        if (`Y0'+`ymax')>`Ymax' local rc 1
+    }
+    else if inlist(`position',1,2,10,11,12) {
+        local Y0 = `Ymax'-`ymargin' - `ymax'
+        if (`Y0'+`ymin')<`Ymin' local rc 1
+    } 
+    else {
+        local Y0 = (`Ymin' + `Ymax')/2
+        if (`Y0'+`ymax')>`Ymax' local rc 1
+        if (`Y0'+`ymin')<`Ymin' local rc 1
+    }
+    if `rc' {
+         di as err "size of compass to large; reduce size()"
+         exit 498
+    }
+    qui replace Y = Y + `Y0' in `a0'/`b'
+    qui replace X = X + `X0' in `a0'/`b'
+    // collect labels
+    if "`label'"!="" {
+        local LABEL
+        local lbls "N S E W"
+        forv i=`a'/`b' {
+            gettoken lbl lbls : lbls
+            local y `: di %12.0g Y[`i']'
+            local x `: di %12.0g X[`i']'
+            local LABEL `LABEL' `y' `x' `"`lbl'"'
+        }
+        local LABEL text(`LABEL', `lab_color' `lab_opts')
+    }
+    // returns
+    c_local plot `plot'
+end
+
+program _parse_compass_label
+    syntax [, Gap(numlist max=1 >=0) Color(passthru) SIze(passthru) * ]
+    if "`gap'"==""    local gap 30
+    if `"`size'"'=="" local size size(vsmall)
+    c_local lab_gap   `gap'
+    c_local lab_color `color'
+    c_local lab_opts  `size' `options'
+end
+
+program _parse_position
+    capt confirm number `0'
+    if _rc==1 exit 1
+    if _rc==0 {
+        capt numlist `"`0'"', int max(1) range(>=0 <=12)
+        if _rc==1 exit 1
+        if _rc==0 exit // position is valid clockpos
+    }
+    local l = strlen(`"`0'"')
+    if      `"`0'"'==substr("north", 1, `l')        local 0 12
+    else if `"`0'"'==substr("top", 1, `l')          local 0 12
+    else if `"`0'"'==substr("neast", 1, max(2,`l')) local 0 1 // or 2
+    else if `"`0'"'==substr("east", 1, `l')         local 0 3
+    else if `"`0'"'==substr("right", 1, `l')        local 0 3
+    else if `"`0'"'==substr("seast", 1, max(2,`l')) local 0 5 // or 4
+    else if `"`0'"'==substr("south", 1, `l')        local 0 6
+    else if `"`0'"'==substr("bottom", 1, `l')       local 0 6
+    else if `"`0'"'==substr("swest", 1, max(2,`l')) local 0 7 // or 8
+    else if `"`0'"'==substr("west", 1, `l')         local 0 9
+    else if `"`0'"'==substr("left", 1, `l')         local 0 9
+    else if `"`0'"'==substr("nwest", 1, max(2,`l')) local 0 11 // 10
+    else if `"`0'"'==substr("center", 1, `l')       local 0 0
+    else {
+        di as err "invalid syntax in position()"
+        exit 198
+    }
+    c_local position `0'
 end
 
 program _geoplot_area
-    _layer area `0'
+    __geoplot_layer 0 area `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_line
-    _layer line `0'
+    __geoplot_layer 0 line `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_point
-    _layer scatter `0'
+    __geoplot_layer 0 scatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_scatter
-    _layer scatter `0'
+    __geoplot_layer 0 scatter `0'
     c_local plot `plot'
     c_local p `p'
 end
@@ -660,7 +1074,7 @@ program _geoplot_labels
         if `"``opt''"'!="" local `opt' mlab`opt'(``opt'')
     }
     if `"`tstyle'"'!="" local tstyle mlabtextstyle(`tstyle')
-    _layer scatter `layer' `p' `frame' `lhs', /*
+    __geoplot_layer 0 scatter `layer' `p' `frame' `lhs', /*
         */ msymbol(i) mlabel(`mlabl') `position' `vposition' `gap' /*
         */ `angle' `tstyle' `size' `color' `format' /*
         */ `options'
@@ -669,1103 +1083,127 @@ program _geoplot_labels
 end
 
 program _geoplot_pcspike
-    _layer pcspike `0'
+    __geoplot_layer 0 pcspike `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pccapsym
-    _layer pccapsym `0'
+    __geoplot_layer 0 pccapsym `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcarrow
-    _layer pcarrow `0'
+    __geoplot_layer 0 pcarrow `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcbarrow
-    _layer pcbarrow `0'
+    __geoplot_layer 0 pcbarrow `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcpoint
-    _layer pcscatter `0'
+    __geoplot_layer 0 pcscatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcscatter
-    _layer pcscatter `0'
+    __geoplot_layer 0 pcscatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pointi
-    _layeri scatteri `0'
+    __geoplot_layer 1 scatteri `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_scatteri
-    _layeri scatteri `0'
+    __geoplot_layer 1 scatteri `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pci
-    _layeri pci `0'
+    __geoplot_layer 1 pci `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcarrowi
-    _layeri pcarrowi `0'
+    __geoplot_layer 1 pcarrowi `0'
     c_local plot `plot'
     c_local p `p'
 end
-
-program _layeri
-    gettoken plottype 0 : 0
-    gettoken layer 0 : 0
-    gettoken p 0 : 0
-    _parse comma lhs 0 : 0
-    syntax [, LABel(str asis) * ]
-    _process_coloropts options, `options'
-    local ++p
-    _parse_label `label'
-    _add_quotes label `label'
-    if `"`label'"'=="" local label `""""'
-    local legend `p' `label'
-    local lsize 1
-    char LAYER[Keys_`layer'] `p'
-    char LAYER[Legend_`layer'] `legend'
-    char LAYER[Lsize_`layer'] `lsize'
-    c_local p `p'
-    c_local plot (`plottype' `lhs', `options')
-end
-
-program _layer
-    // setup
-    gettoken plottype 0 : 0
-    gettoken layer 0 : 0
-    gettoken p 0 : 0
-    gettoken frame 0 : 0
-    local hasSHP 0
-    local TYPE
-    local OPTS LABel(str asis)
-    local hasPLV 0
-    local PLVopts
-    local WGT
-    local MLABopts
-    local Zopts Zvar(varname numeric) COLORVar(varname numeric)/*
-        */ LEVels(str) cuts(numlist sort min=2) DISCRete MISsing(str asis) /*
-        */ COLor COLor2(str asis) LWidth(passthru) LPattern(passthru)
-    local Zel color lwidth lpattern
-    local zvlist 1
-    local YX Y X // coordinate variable names used in plot data
-    if `"`plottype'"'=="area" {
-        local TYPE   shape
-        local hasSHP 1
-        local OPTS `OPTS' size(str asis) lock wmax(numlist max=1 >0)
-        local hasPLV 1
-        local PLVopts FColor(str asis) EColor(str asis)
-        local varlist [varlist(default=none numeric max=1)]
-        local WGT [iw/]
-        local Zopts `Zopts' FIntensity(passthru)
-        local Zel `Zel' fintensity
-        local zvlist 1
-    } 
-    else if `"`plottype'"'=="line" {
-        local TYPE   shape
-        local hasSHP 1
-        local OPTS `OPTS' size(str asis) lock wmax(numlist max=1 >0)
-        local varlist [varlist(default=none numeric max=1)]
-        local WGT [iw/]
-        local zvlist 1
-    }
-    else {
-        if substr(`"`plottype'"',1,2)=="pc" { // paired coordinate plot
-            local TYPE pc
-            local varlist [varlist(default=none max=4 numeric)]
-            local YX  Y  X Y2 X2 // variable names used in plot data
-        }
-        else {  // scatter assumed
-            local TYPE unit
-            local OPTS `OPTS' wmax(numlist max=1 >0)
-            local varlist [varlist(default=none max=2 numeric)]
-            local WGT [iw/]
-            local wgt "[aw=W]"
-        }
-        local MLABopts MLabel(varname) MLABVposition(varname numeric) /*
-            */ MLABFormat(str)
-        local Zopts `Zopts' Msymbol(passthru) MSIZe(passthru) /*
-            */ MSAngle(passthru) MLWidth(passthru) MLABSize(passthru) /*
-            */ MLABANGle(passthru) MLABColor(passthru)
-        local Zel `Zel' msymbol msize msangle mlwidth mlabsize mlabangle/*
-            */ mlabcolor
-    }
-    frame `frame' {
-        // syntax
-        qui syntax `varlist' [if] [in] `WGT' [, `OPTS' `Zopts' `PLVopts'/*
-            */ `MLABopts' * ]
-        local cuts: list uniq cuts
-        _parse_size `size' // => size, s_max, s_scale
-        local hasSIZE = `"`size'"'!=""
-        _parse_levels `levels' // => levels, method, l_wvar
-        if `"`fcolor'"'!="" mata: _get_colors("fcolor")
-        marksample touse, novarlist
-        geoframe get feature, l(FEATURE)
-        // check Z
-        if `"`colorvar'"'!="" {
-            local color color
-            if "`zvar'"=="" local zvar `colorvar'
-        }
-        if `zvlist' {
-            if "`zvar'"=="" local zvar `varlist'
-            local varlist
-        }
-        local hasZ = `"`zvar'"'!=""
-        if `"`color2'"'!=""   local color color(`color2')
-        else if "`color'"!="" local color color()
-        local color2
-        // check shpframe
-        if `hasSHP' {
-            geoframe get shpframe, local(shpframe)
-            local hasSHP = `"`shpframe'"'!=""
-        }
-        if `hasSHP' {
-            local org `touse'
-            local tgt `touse'
-        }
-        else local shpframe `frame'
-        // handle coordinates, PLV, and unit ID
-        frame `shpframe' {
-            if "`TYPE'"=="pc" local typeSHP pc // enforce pc
-            else {
-                geoframe get type, local(typeSHP)
-                if `"`typeSHP'"'=="" local typeSHP `TYPE'
-            }
-            if "`varlist'"!="" local yx `varlist'
-            else geoframe get coordinates, strict flip local(yx) `typeSHP'
-            if `:list sizeof yx'!=`: list sizeof YX' {
-                di as err "wrong number of coordinate variables"
-                exit 498
-            }
-            local ORG `yx'
-            local TGT `YX'
-            _get_PLV `hasPLV' `hasZ' `"`fcolor'"' `"`FEATURE'"' // => PLV
-            if `hasPLV' {
-                local ORG `ORG' `PLV'
-                local TGT `TGT' PLV
-            }
-            geoframe get id, local(ID)
-            if "`ID'"!="" {
-                local ORG `ORG' `ID'
-                local TGT `TGT' ID
-            }
-        }
-        // handle weights
-        local hasWGT = "`weight'"!=""
-        if `hasWGT' {
-            tempname wvar
-            qui gen double `wvar' = abs(`exp') if `touse'
-            markout `touse' `wvar'          // exclude obs with missing weight!
-            if `"`wmax'"'=="" {
-                su `wvar' if `touse', meanonly
-                local wmax = max(1, r(max))
-            }
-            qui replace `wvar' = `wvar' / `wmax' if `touse'
-            if `hasSHP' {
-                tempname WVAR
-                local org `org' `wvar'
-                local tgt `tgt' `WVAR'
-            }
-            else local WVAR `wvar'
-            local ORG `ORG' `WVAR'
-            local TGT `TGT' W
-        }
-        else local wgt
-        // handle Z
-        if `hasZ' {
-            local zfmt: format `zvar'
-            if `hasSHP' {
-                tempname ZVAR
-                local org `org' `zvar'
-                local tgt `tgt' `ZVAR'
-            }
-            else local ZVAR `zvar'
-            local ORG `ORG' `ZVAR'
-            local TGT `TGT' Z
-            if "`l_wvar'"!="" {
-                tempname L_WVAR
-                if `hasSHP' {
-                    local org `org' `l_wvar'
-                    local tgt `tgt' `L_WVAR'
-                    local ORG `ORG' `L_WVAR'
-                }
-                else local ORG `ORG' `l_wvar'
-                local TGT `TGT' `L_WVAR'
-           }
-        }
-        else {
-            foreach el of local Zel {
-                if `"``el''"'=="" continue
-                local options ``el'' `options'
-                local `=strupper("`el'")' `el'
-                local `el'
-            }
-        }
-        // handle size
-        if `hasSIZE' {
-            geoframe get area, local(AREA)
-            if !`: list sizeof AREA' {
-                di as txt "layer `layer': area variable (original size) not"/*
-                    */ " found; computing areas on the fly"
-                di as txt "generate/declare area variable using " /*
-                    */ "{helpb geoframe} to avoid such extra computations"
-                tempvar AREA
-                qui geoframe gen area `AREA', noset
-            }
-            tempname svar
-            qui gen double `svar' = abs(`size') / `AREA' if `touse'
-            if `"`s_max'"'=="" {
-                su `svar' if `touse', meanonly
-                local s_max = r(max)
-            }
-            qui replace `svar' = `svar' * (`s_scale'/`s_max') if `touse'
-            if `hasSHP' {
-                tempname SVAR
-                local Svar `SVAR'
-                local org `org' `svar'
-                local tgt `tgt' `SVAR'
-            }
-            else {
-                local SVAR `svar'
-                tepname Svar
-            }
-            local ORG `ORG' `SVAR'
-            local TGT `TGT' `Svar' // tempvar only
-        }
-        // get centroids (used by weights and size() in area/line)
-        if (`hasWGT' & ("`TYPE'"=="shape")) | `hasSIZE' | "`lock'"!="" {
-            geoframe get centroids, flip local(cYX)
-            if !`: list sizeof cYX' {
-                di as txt "layer `layer': centroids not found;"/*
-                    */ " computing centroids on the fly"
-                di as txt "generate/declare centroids using " /*
-                    */ "{helpb geoframe} to avoid such extra computations"
-                tempvar tmp_CX tmp_CY
-                qui geoframe gen centroids `tmp_CX' `tmp_CY', noset
-                local cYX `tmp_CY' `tmp_CX'
-            }
-            if `hasSHP' {
-                tempname CY CX
-                local org `org' `cYX'
-                local tgt `tgt' `CY' `CX'
-            }
-            else {
-                gettoken CY cYX : cYX
-                gettoken CX cYX : cYX
-            }
-            if "`lock'"!="" {
-                local cY cY
-                local cX cX
-            }
-            else if `hasSHP' {
-                local cY `CY'
-                local cX `CX'
-            }
-            else {
-                tempname cY cX
-            }
-            local ORG `ORG' `CY' `CX'
-            local TGT `TGT' `cY' `cX'
-        }
-        // handle marker labels
-        local hasMLAB = `"`mlabel'"'!=""
-        if `hasMLAB' {
-            if `"`mlabformat'"'!="" confirm format `mlabformat'
-            if "`mlabvposition'"!="" {
-                if `hasSHP' {
-                    tempname MLABPOS
-                    local org `org' `mlabvposition'
-                    local tgt `tgt' `MLABPOS'
-                }
-                else local MLABPOS `mlabvposition'
-                local ORG `ORG' `MLABPOS'
-                local TGT `TGT' MLABPOS
-            }
-            tempname MLAB
-            qui gen strL `MLAB' = ""
-            mata: _generate_mlabels("`MLAB'", "`mlabel'", "`mlabformat'",/*
-                */ "`touse'")
-            if `hasSHP' {
-                tempname MLAB
-                local org `org' `MLAB'
-                local tgt `tgt' `MLAB'
-            }
-            local ORG `ORG' `MLAB'
-            local TGT `TGT' MLAB
-        }
-        // inject colors
-        _process_coloropts options, `options'
-        if `"`fcolor'"'!="" {
-            local options fcolor(`fcolor') `options'
-        }
-    }
-    // copy data
-    if `hasSHP' {
-        // copy relevant variables from unit frame into shape frame
-        qui frame `shpframe': geoframe copy `frame' `org', target(`tgt')
-        qui frame `shpframe': replace `touse' = 0 if `touse'>=. 
-    }
-    local n0 = _N + 1
-    qui geoframe append `shpframe' `ORG', target(`TGT') touse(`touse')
-    local n1 = _N
-    if "`TYPE'"=="shape" { // only if plottype area or line
-        if !inlist(`"`typeSHP'"', "unit", "pc") { // only if data not unit or pc
-            if "`ID'"!="" { // only if ID variable is available
-                // remove units without shape data (i.e. units that only have
-                // a single observation and for which the coordinate variables
-                // are missing)
-                mata: _drop_empty_shapes(`n0', `n1', "ID", tokens("`YX'"))
-            }
-        }
-    }
-    local n1 = _N
-    if `n1'<`n0' {
-        c_local plot
-        c_local p `p'
-        di as txt "(layer `layer' is empty)"
-        exit
-    }
-    local in in `n0'/`n1'
-    qui replace LAYER = `layer' `in'
-    // process size (area/line only)
-    if `hasSIZE' {
-        qui replace Y = `cY' + (Y-`cY') * sqrt(`Svar') if `Svar'<. `in'
-        qui replace X = `cX' + (X-`cX') * sqrt(`Svar') if `Svar'<. `in'
-    }
-    // process weights (area/line only)
-    if `hasWGT' & ("`TYPE'"=="shape") {
-        qui replace Y = `cY' + (Y-`cY') * sqrt(W) if W<. & `cY'<. & `cX'<. `in'
-        qui replace X = `cX' + (X-`cX') * sqrt(W) if W<. & `cY'<. & `cX'<. `in'
-    }
-    // prepare PLV
-    if `hasPLV' {
-        if `"`ecolor'"'=="" local ecolor white // default for enclaves
-        mata: _get_colors("ecolor")
-        qui replace PLV = 0 if PLV>=. `in' // treat missing as 0
-        qui levelsof PLV `in'
-        local plevels `r(levels)'
-    }
-    else local plevels .
-    // handle Z elements
-    local opts
-    if `hasZ' {
-        // - categorize Z
-        tempname CUTS
-        mata: _z_cuts("`CUTS'", (`n0', `n1')) // => CUTS, cuts, levels
-        _z_categorize `CUTS' `in', levels(`levels') `discrete'
-            // => zlevels hasmis discrete
-        if `discrete' {
-            frame `frame': _z_labels `zvar' `cuts' // => zlabels
-        }
-        // - process options
-        if `levels' {
-            local ZEL
-            foreach el of local Zel {
-                if "`el'"=="mlabcolor" {
-                    if `hasMLAB' {
-                        if `"`COLOR'"'!="" {
-                            // color() takes precedence over mlabcolor()
-                            _process_coloropts mlabcolor, `mlabcolor'
-                            local opts mlabcolor(`mlabcolor')
-                            local mlabcolor `"`color'"'
-                        }
-                        else {
-                            if `"``el''"'=="" continue
-                            _z_colors `levels' mlabcolor `mlabcolor'
-                            local color `"`mlabcolor'"'
-                        }
-                    }
-                    else {
-                        local mlabcolor
-                        continue
-                    }
-                }
-                else {
-                    if `"``el''"'=="" continue
-                    if "`el'"=="color"/*
-                        */ _z_colors `levels' color `color'
-                    else _z_recycle `levels' `el', ``el''
-                }
-                if `: list sizeof `el''==0 continue
-                local `=strupper("`el'")' `el'
-                local ZEL `ZEL' `el'
-            }
-        }
-        // - process hasmis
-        if `hasmis' z_parse_missing `plottype', `missing' /*
-            => missing missing_color missing_lab */
-    }
-    else local zlevels 0
-    // Set default options
-    if `"`plottype'"'=="area" {
-        local opts cmissing(n) nodropbase lalign(center) `opts'
-        if `"`FEATURE'"'=="water" {
-            if "`COLOR'"=="" local opts color("135 206 235") `opts' // SkyBlue
-            if "`FINTENSITY'"=="" local opts finten(50) `opts'
-            if "`LWIDTH'"=="" local opts lwidth(thin) `opts'
-        }
-        else {
-            if "`COLOR'"=="" {
-                local opts lcolor(gray) `opts'
-                if `"`fcolor'"'=="" local opts fcolor(none) `opts'
-            }
-            if "`FINTENSITY'"=="" local opts finten(100) `opts'
-            if "`LWIDTH'"=="" {
-                local opts lwidth(thin) `opts'
-                if `hasZ' local opts lcolor(%0) `opts'
-            }
-        }
-        if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
-    }
-    else if "`plottype'"'=="line" {
-        local opts `opts' cmissing(n)
-        if "`COLOR'"=="" {
-            if `"`FEATURE'"'=="water"/*
-                */ local opts color("135 206 235") `opts' // SkyBlue
-            else   local opts lcolor(gray) `opts'
-        }
-        if "`LWIDTH'"==""   local opts lwidth(thin) `opts'
-        if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
-    }
-    if `hasMLAB' {
-        if "`mlabel'"!=""        local opts `opts' mlabel(MLAB)
-        if "`mlabvposition'"!="" local opts `opts' mlabvposition(MLABPOS)
-        if "`mlabformat'"!=""    local opts `opts' mlabformat(`mlabformat')
-    }
-    // compile plot
-    if `hasWGT' local in inrange(_n,`n0',`n1')) | (_n<3)
-    local plot
-    local p0 = `p' + 1
-    gettoken pl0 : plevels
-    foreach pl of local plevels {
-        local iff
-        if `pl'<. {
-            local iff PLV==`pl'
-            local enclave = mod(`pl',2)
-        }
-        else local enclave 0
-        if `hasZ' {
-            foreach el of local ZEL {
-                local EL = strupper("`el'")
-                local `EL': copy local `el'
-            }
-        }
-        foreach i of local zlevels {
-            local IFF `iff'
-            if `hasZ' {
-                if `i'==0 local OPTS `missing' // missing
-                else {
-                    local OPTS
-                    foreach el of local ZEL {
-                        local EL = strupper("`el'")
-                        gettoken tmp `EL' : `EL', quotes
-                        local OPTS `OPTS' `el'(`tmp')
-                    }
-                    local OPTS `opts' `OPTS'
-                }
-                if `"`IFF'"'!="" local IFF `IFF' & Z==`i'
-                else             local IFF Z==`i'
-                if `pl'!=`pl0' {
-                    // skip empty plots in additional layers
-                    qui count `IFF' `in'
-                    if r(N)==0 continue
-                }
-            }
-            else local OPTS `opts'
-            if `hasWGT' {
-                if `"`IFF'"'!=""  local IFF if (`IFF' & `in'
-                else              local IFF if (`in'
-            }
-            else if `"`IFF'"'!="" local IFF if `IFF' `in'
-            else                  local IFF `in'
-            local IFF `IFF' `wgt'
-            if `enclave' local OPTS `OPTS' fcolor(`ecolor')
-            local OPTS `OPTS' `options'
-            if `"`OPTS'"'!="" {
-                local IFF `IFF', `OPTS'
-            }
-            local plot `plot' (`plottype' `YX' `IFF')
-            local ++p
-        }
-        if `pl'==`pl0' local p1 `p'
-    }
-    numlist "`p0'/`p1'"
-    local keys `r(numlist)'
-    // compile legend keys
-    _parse_label `label'
-    if `hasZ' {
-        local lkeys: copy local keys
-        if `"`format'"'=="" local format `zfmt'
-        if `hasmis'    gettoken mis_key lkeys : lkeys
-        if `nomissing' local mis_key
-        local legend
-        local lsize 0
-        if `discrete' {
-            _label_separate `label' // => lab_keys, lab_lbls
-            if "`nolabels'"!="" local lbls: copy local cuts
-            else                local lbls: copy local zlabels
-            local i 0
-            foreach key of local lkeys {
-                local ++i
-                gettoken lbl lbls : lbls
-                capt confirm number `lbl'
-                if _rc==0 {
-                    local lbl `: di `format' `lbl''
-                }
-                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `"`"`lbl'"'"')
-                if `reverse' local legend `legend' `key' `lbl'
-                else         local legend `key' `lbl' `legend'
-                local ++lsize
-            }
-        }
-        else {
-            if `"`label'"'=="" local label 1 "[@lb,@ub]"
-            _label_separate `label' // => lab_keys, lab_lbls
-            local CUTS: copy local cuts
-            gettoken lb CUTS : CUTS
-            local i 0
-            foreach key of local lkeys {
-                local ++i
-                gettoken ub CUTS : CUTS
-                local mid `: di `format' (`ub'+`lb')/2'
-                local lb  `: di `format' `lb''
-                local ub  `: di `format' `ub''
-                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `""(@lb,@ub]""')
-                local lbl: subinstr local lbl "@lb" "`lb'", all
-                local lbl: subinstr local lbl "@ub" "`ub'", all
-                local lbl: subinstr local lbl "@mid" "`mid'", all
-                if `reverse' local legend `legend' `key' `lbl'
-                else         local legend `key' `lbl' `legend'
-                local lb `ub'
-                local ++lsize
-            }
-        }
-        if "`mis_key'"!="" {
-            local mis_key `mis_key' `missing_lab'
-            if `gap' {
-                if `mfirst' local legend - " " `legend'
-                else        local legend `legend' - " "
-                local ++lsize
-            }
-            if `mfirst' local legend `mis_key' `legend'
-            else        local legend `legend' `mis_key'
-            local ++lsize
-        }
-    }
-    else {
-        _add_quotes label `label'
-        if `"`label'"'=="" local label `""`frame'""'
-        local legend `p1' `label'
-        local lsize 1
-    }
-    // return results
-    char LAYER[Keys_`layer'] `keys'
-    char LAYER[Legend_`layer'] `legend'
-    char LAYER[Lsize_`layer'] `lsize'
-    if `hasZ' {
-        char LAYER[Layers_Z] `:char LAYER[Layers_Z]' `layer'
-        char LAYER[Discrete_`layer'] `discrete'
-        char LAYER[Hasmis_`layer'] `hasmis'
-        char LAYER[Format_`layer'] `zfmt'
-        char LAYER[Values_`layer'] `cuts'
-        char LAYER[Labels_`layer'] `"`zlabels'"'
-        char LAYER[Labmis_`layer'] `"`missing_lab'"'
-        if `"`color'"'!="" {
-            char LAYER[Layers_C] `:char LAYER[Layers_C]' `layer'
-            char LAYER[Colors_`layer'] `"`color'"'
-            char LAYER[Colmis_`layer'] `"`missing_color'"'
-        }
-    }
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _parse_size
-    _parse comma size 0 : 0
-    c_local size `"`size'"'
-    if `"`size'"'=="" exit
-    syntax [, Dmax(numlist max=1 >0) Scale(numlist max=1 >0) ]
-    if "`scale'"=="" local scale 1
-    c_local s_max `dmax'
-    c_local s_scale `scale'
-end
-
-program _parse_levels
-    if `"`0'"'=="" exit
-    capt n __parse_levels `0'
-    if _rc==1 exit _rc
-    if _rc {
-        di as err "(error in option levels())"
-        exit _rc
-    }
-    c_local levels `levels'
-    c_local method `method'
-    c_local l_wvar `l_wvar'
-end
-
-program __parse_levels
-    _parse comma n 0 : 0
-    if `"`n'"'!="" {
-        numlist `"`n'"', int min(0) max(1) range(>0)
-        local n "`r(numlist)'"
-    }
-    else local n .
-    local methods Quantiles Kmeans //Jenks
-    syntax [, `methods' Weight(varname numeric) ]
-    local methods = strlower("`methods'")
-    foreach m of local methods {
-        local method `method' ``m''
-    }
-    if `:list sizeof method'>1 {
-        di as err "too many methods specified; only one method allowed"
-        exit 198
-    }
-    if "`method'"=="kmeans" {
-        if "`weight'"!="" {
-            di as err "{bf:weight()} not allowed with method {bf:kmeans}"
-            exit 198
-        }
-    }
-    c_local levels `n'
-    c_local method `method'
-    c_local l_wvar `weight'
-end
-
-program _z_categorize
-    syntax anything(name=CUTS) in, levels(str) [ discrete ]
-    tempname tmp
-    qui gen byte `tmp' = . `in'
-    if "`discrete'"!="" {
-        forv i=1/`levels' {
-            qui replace `tmp' = `i' if Z==`CUTS'[1,`i'] `in'
-        }
-    }
-    else {
-        forv i=1/`levels' {
-            if `i'==1 local iff inrange(Z, `CUTS'[1,`i'], `CUTS'[1,`i'+1])
-            else      local iff Z>`CUTS'[1,`i'] & Z<=`CUTS'[1,`i'+1]
-            qui replace `tmp' = `i' if `iff' `in'
-        }
-    }
-    local hasmis 0
-    qui count if Z>=. `in'
-    if r(N) { // set missings to 0
-        qui replace `tmp' = 0 if Z>=. `in'
-        local hasmis 1
-    }
-    qui replace Z = `tmp' `in'
-    numlist "`=1-`hasmis''/`levels'"
-    c_local zlevels `r(numlist)'
-    c_local hasmis `hasmis'
-    c_local discrete = "`discrete'"!=""
-end
-
-program _get_PLV
-    args hasPLV hasZ fcolor FEATURE
-    if !`hasPLV' exit
-    if `hasZ' {
-        if strtrim(`"`fcolor'"')=="none" local hasPLV 0
-    }
-    else {
-        if `"`fcolor'"'=="" & `"`FEATURE'"'!="water" local hasPLV 0
-        else if strtrim(`"`fcolor'"')=="none"        local hasPLV 0
-    }
-    if `hasPLV' {
-        geoframe get plevel, l(PLV)
-        if "`PLV'"=="" local hasPLV 0
-    }
-    c_local hasPLV `hasPLV'
-    c_local PLV `PLV'
-end
-
-program _z_labels
-    gettoken var 0 : 0
-    local labname: value label `var'
-    if `"`labname'"'=="" {
-        local labels `0'
-    }
-    else {
-        local labels
-        local space
-        foreach val of local 0 {
-            local lab: label `labname' `val'
-            local labels `"`labels'`space'`"`lab'"'"'
-            local space " "
-        }
-    }
-    c_local zlabels `"`labels'"'
-end
-
-program _z_colors
-    gettoken levels 0 : 0
-    gettoken nm 0 : 0
-    local 0 `", `0'"'
-    syntax [, `nm'(str asis) ]
-    _parse comma color 0 : `nm'
-    if `"`color'"'=="" local color viridis
-    syntax [, NOEXPAND n(passthru) IPolate(passthru) * ]
-    if "`noexpand'"=="" local noexpand noexpand
-    if `"`n'`ipolate'"'=="" local n n(`levels')
-    colorpalette `color', nograph `noexpand' `n' `ipolate' `options'
-    local color `"`r(p)'"'
-    if `:list sizeof color'<`levels' {
-        // recycle or interpolate colors if too few colors have been obtained
-        colorpalette `color', nograph n(`levels') class(`pclass')
-        local color `"`r(p)'"'
-    }
-    c_local `nm' `"`color'"'
-end
-
-program _z_recycle
-    _parse comma lhs 0 : 0
-    gettoken k  lhs : lhs
-    gettoken el lhs : lhs
-    syntax [, `el'(str asis) ]
-    loca opt: copy local `el'
-    // try numlist
-    capt numlist `"`opt'"'
-    if _rc==1 _rc
-    if _rc==0 {
-        local opt `"`r(numlist)'"'
-        if `: list sizeof opt'==2 {
-            // generate range
-            gettoken lb opt : opt
-            gettoken ub opt : opt
-            mata: st_local("opt", /*
-                */ invtokens(strofreal(rangen(`lb', `ub', `k')')))
-        }
-    }
-    // expand
-    mata: st_local("opt", invtokens(_vecrecycle(`k', tokens(st_local("opt")))))
-    c_local `el' `"`opt'"'
-end
-
-program z_parse_missing
-    _parse comma plottype 0 : 0
-    syntax [, LABel(str asis) COLor(str asis) * ]
-    _add_quotes label `label'
-    if `"`label'"'=="" local label `""no data""'
-    _process_coloropts options, `options'
-    if `"`color'"'=="" local color gs14
-    local options color(`color') `options'
-    if `"`plottype'"'=="area" {
-        local options cmissing(n) nodropbase lalign(center) finten(100)/*
-            */ lwidth(thin) lpattern(solid) lcolor(%0) `options'
-    }
-    else if "`plottype'"'=="line" {
-        local options cmissing(n) lwidth(thin) lpattern(solid) `options'
-    }
-    c_local missing `options'
-    c_local missing_color `"`color'"'
-    c_local missing_lab   `"`label'"'
-end
-
-program _parse_label
-    _parse comma label 0 : 0
-    syntax [, NOLabel Format(str) Reverse NOMissing MFirst noGap ]
-    c_local label `"`label'"'
-    c_local nolabel `nolabel'
-    c_local format `format'
-    c_local reverse = "`reverse'"!=""
-    c_local nomissing = "`nomissing'"!=""
-    c_local mfirst = "`mfirst'"!=""
-    c_local gap = "`gap'"==""
-end
-
-program _label_separate
-    // add "* =" if needed
-    gettoken l : 0, quotes qed(hasquotes) parse("= ")
-    if `hasquotes' local 0 `"* = `0'"'
-    else {
-        // check whether 1st token is integer (possibly including wildcards)
-        local l: subinstr local l "*" "", all
-        local l: subinstr local l "?" "", all
-        if `"`l'"'=="" local l 0
-        capt confirm integer number `l'
-        if _rc==1 exit 1
-        if _rc local 0 `"* = `"`0'"'"'
-    }
-    // parse list
-    local keys
-    local lbls
-    while (1) {
-        gettoken key 0 : 0, parse("= ")
-        if `"`key'"'=="" continue, break
-        local keys `"`keys' `key'"'
-        local lbl
-        local space
-        gettoken eq : 0, parse("= ")
-        if `"`eq'"'=="=" {
-            gettoken eq 0 : 0, parse("= ")
-        }
-        gettoken l : 0, quotes qed(hasquotes)
-        while (`hasquotes') {
-            gettoken l 0 : 0, quotes
-            local lbl `"`lbl'`space'`l'"'
-            local space " "
-            gettoken l : 0, quotes qed(hasquotes)
-        }
-        local lbls `"`lbls' `"`lbl'"'"'
-    }
-    c_local lab_keys `"`keys'"'
-    c_local lab_lbls `"`lbls'"'
-end
-
-program _add_quotes
-    gettoken nm 0 : 0
-    __add_quotes `0'
-    c_local `nm' `"`0'"'
-end
-
-program __add_quotes
-    if `"`0'"'=="" {
-        c_local 0
-        exit
-    }
-    gettoken tmp : 0, qed(hasquote)
-    if !`hasquote' {
-        local 0 `"`"`0'"'"'
-    }
-    c_local 0 `"`0'"'
-end
-
 
 version 17
 mata:
 mata set matastrict on
 
-void _drop_empty_shapes(real scalar n0, real scalar n1, string scalar ID,
-    string rowvector YX)
+void _compass_store(real colvector X, real colvector Y, real colvector A)
 {
-    real colvector id, p
-    real matrix    yx
+    real scalar    a, b
+    real colvector R
     
-    if (n1<n0) return // no data
-    // look for units that only have a single obs
-    id = st_data((n0,n1), ID) // assuming data is ordered by ID
-    p = (_mm_unique_tag(id) + _mm_unique_tag(id, 1)):==2 // first = last
-    p = selectindex(p)
-    if (!length(p)) return // all units have more than one obs
-    // check whether coordinate variables are missing
-    st_view(yx=., (n0,n1), YX)
-    p = select(p, rowmissing(yx[p,]):==cols(yx))
-    // remove single-obs units for which all coordinate variables are missing
-    if (length(p)) st_dropobsin((n0-1):+p) // remove empty obs
+    R = A * (pi() / 180)
+    a = st_nobs() + 1
+    b = rows(X)
+    st_addobs(b)
+    b = a + b - 1
+    st_store((a,b), "X", X :* cos(R) - Y :* sin(R))
+    st_store((a,b), "Y", X :* sin(R) + Y :* cos(R))
+    st_local("a", strofreal(a))
+    st_local("b", strofreal(b))
 }
 
-transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
-{   // x must have at least one element
-    real scalar r, c
-    
-    r = rows(x); c = cols(x)
-    if (r>c) return(J(ceil(k/c), 1, x)[|1\k|]) // => rowvector if x is 1x1
-    return(J(1, ceil(k/c), x)[|1\k|])
-}
-
-void _z_cuts(string scalar CUTS, real rowvector range)
+void _compass_circle(real scalar n, real scalar scale, real scalar wd)
 {
-    string scalar  cuts, method, wvar
-    real scalar    discrete, k, lb, ub
-    real rowvector minmax
-    real colvector C, X, w, p
+    real colvector X, Y, A
     
-    // CASE 1: cuts() specified
-    discrete = st_local("discrete")!=""
-    cuts     = st_local("cuts")
-    if (cuts!="") { // cuts() specified
-        C = strtoreal(tokens(cuts)')
-        k = length(C)
-        if (!discrete) k = k - 1
-        st_matrix(CUTS, C')
-        st_local("levels", strofreal(k))
-        return
+    X = J(n+1, 1, scale)
+    Y = J(n+1, 1, 0)
+    A = (0::n) * (360/n)
+    if (wd) {
+        X = X \ J(n+1, 1, scale+wd)
+        Y = Y \ J(n+1, 1, 0)
+        A = A \ -A
     }
-    // tag first obs of each unit (if ID is available)
-    if (st_local("ID")!="") {
-        // assuming data is ordered by ID; assuming Z is constant
-        // within ID
-        p = selectindex(_mm_unique_tag(st_data(range, "ID")))
-    }
-    else p = .
-    // CASE 2: discrete
-    if (discrete) { // discrete specified
-        C = mm_unique(st_data(range, "Z")[p])
-        C = select(C, C:<.) // remove missing codes
-        st_matrix(CUTS, C')
-        st_local("cuts", invtokens(strofreal(C)'))
-        st_local("levels", strofreal(length(C)))
-        return
-    }
-    // get data
-    X = st_data(range, "Z")[p]
-    minmax = minmax(X)
-    // SPECIAL CASE 1: no nonmissing data
-    if (minmax==J(1,2,.)) {
-        st_matrix(CUTS, J(1,0,.))
-        st_local("cuts", "")
-        st_local("levels", "0")
-        return
-    }
-    // get requested number of levels and method
-    k = strtoreal(st_local("levels"))
-    if (k>=.) k = 5 // default number of levels
-    method = st_local("method")
-    // SPECIAL CASE 2: no variance
-    lb = minmax[1]; ub = minmax[2]
-    if (lb==ub) {
-        st_matrix(CUTS, minmax)
-        st_local("cuts", invtokens(strofreal(minmax)))
-        st_local("levels", "1")
-        return
-    }
-    // CASE 3: equidistant intervals
-    if (method=="") {
-        C = rangen(lb, ub, k+1) 
-        st_matrix(CUTS, C')
-        st_local("cuts", invtokens(strofreal(C)'))
-        st_local("levels", strofreal(length(C)-1))
-        return
-    }
-    // get weights
-    wvar  = st_local("L_WVAR")
-    if (wvar!="") {
-        w = st_data(range, wvar)[p]
-        _editmissing(w, 0)
-    }
-    else w = 1
-    // CASE 4: quantiles
-    if (method=="quantiles") {
-        p = selectindex(X:<.) // remove missings
-        X = X[p]
-        if (wvar!="") w = w[p]
-        C = mm_quantile(X, w, rangen(0, 1, k+1))
-    }
-    // CASE 5: kmeans
-    else if (method=="kmeans") {
-        X = select(X, X:<.) // remove missings
-        C = lb \ _z_cuts_kmeans(k, X)
-    }
-    else exit(error(3499))
-    // return results from CASE 4 or 5
-    C = _mm_unique(C)
-    k = length(C)
-    if (C[1]>lb) C[1] = lb // make sure that min is included
-    if (C[k]<ub) C[k] = ub // make sure that max is included
-    st_matrix(CUTS, C')
-    st_local("cuts", invtokens(strofreal(C)'))
-    st_local("levels", strofreal(k-1))
+    _compass_store(X, Y, A)
 }
 
-real colvector _z_cuts_kmeans(real scalar k, real colvector X)
+void _compass_spike1(real scalar scale, real scalar angle, real scalar dir)
 {
-    real colvector C, p
-    string scalar  frame, cframe
-
-    cframe = st_framecurrent()
-    frame  = st_tempname()
-    st_framecreate(frame)
-    st_framecurrent(frame)
-    (void) st_addvar("double", "X")
-    st_addobs(rows(X))
-    st_store(., "X", X)
-    stata(sprintf("cluster kmeans X, k(%g) name(C) start(segments)", k))
-    C = st_data(., "C")
-    st_framecurrent(cframe)
-    st_framedrop(frame) // (not really needed)
-    // return sorted list of upper bounds of clusters
-    p = order((C,X), (1,2))
-    return(sort(select(X[p], _mm_unique_tag(C[p], 1)), 1))
-}
-
-void _generate_mlabels(string scalar var, string scalar VAR, string scalar fmt, 
-    string scalar touse)
-{
-    real scalar      isstr
-    real colvector   X
-    string scalar    vl
-    string colvector L
-
-    isstr = st_isstrvar(VAR)
-    if (isstr) L = st_sdata(., VAR, touse)
-    else {
-        X = st_data(., VAR, touse)
-        vl = st_varvaluelabel(VAR)
-        if (vl!="") {
-            if (!st_vlexists(vl)) vl = ""
-        }
-        if (vl!="") {
-            L = st_vlmap(vl, X)
-            if (anyof(L, "")) {
-                L = L + (L:=="") :* 
-                    strofreal(X, fmt!="" ? fmt : st_varformat(VAR))
-            }
-        }
-        else {
-            L = strofreal(X, fmt!="" ? fmt : st_varformat(VAR))
-        }
-    }
-    st_sstore(., var, touse, L)
-}
-
-void _get_colors(string scalar lname, | string scalar lname2)
-{   /* function assumes that global ColrSpace object "_GEOPLOT_ColrSpace_S"
-       exists; maintaining a global is less work than initializing ColrSpace
-       in each call */
-    real scalar      i
-    string scalar    c
-    string rowvector C, kw1, kw2
-    pointer (class ColrSpace scalar) scalar S
+    real scalar    i
+    real colvector A
     
-    if (args()<2) lname2 = lname
-    kw1 = ("none", "bg", "fg", "background", "foreground")
-    kw2 = ("*", "%")
-    S = findexternal("_GEOPLOT_ColrSpace_S")
-    //if ((S = findexternal("_GEOPLOT_ColrSpace_S"))==NULL) S = &(ColrSpace())
-    C = tokens(st_local(lname2))
-    i = length(C)
-    for (;i;i--) {
-        c = C[i]
-        if (anyof(kw1, c)) continue
-        if (anyof(kw2, substr(c,1,1))) continue
-        S->colors("`"+`"""' + C[i] + `"""'+"'")
-        C[i] = S->colors()
-    }
-    st_local(lname, invtokens(C))
+    A = J(20, 1, .)
+    for (i=1;i<=4;i++) A[|i*5-4 \ i*5|] = J(5, 1, angle + ((i-1) * 90))
+    _compass_store(J(4, 1, scale * (0, 1,     .15, 0, .)'),
+                   J(4, 1, scale * (0, 0, dir*.15, 0, .)'), A)
 }
 
-void  _get_lbl(string scalar key, string scalar keys, string scalar lbls,
-    string scalar def)
+void _compass_label1(real scalar scale, real scalar angle)
 {
-    real scalar   i, n
-    string vector Keys
-    
-    Keys = tokens(st_local(keys))
-    n = length(Keys)
-    for (i=1;i<=n;i++) {
-        if (strmatch(key, Keys[i])) break
-    }
-    if (i>n) st_local("lbl", def)
-    else st_local("lbl", tokens(st_local(lbls))[i])
+    _compass_store(scale * (0,  0, 1, -1)',
+                   scale * (1, -1, 0,  0)', angle)
+}
+
+void _compass_spike2(real scalar angle)
+{
+    _compass_store(( 0, -.3,    0,  .3,  0)',
+                   (.5, -.5, -.25, -.5, .5)', angle)
+}
+
+void _compass_spike3(real scalar angle, real scalar dir)
+{
+    _compass_store(dir * ( 0, -.125, .125,  0)',
+                   dir * (.5,     0,    0, .5)', angle)
 }
 
 end
-
-

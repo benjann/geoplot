@@ -1,5 +1,5 @@
 {smcl}
-{* 02jun2023}{...}
+{* 05jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -21,7 +21,7 @@
     where {it:layer} is
 
 {p 8 15 2}
-    {help geoplot##plottypes:{it:plottype}} [{it:frame}] [{it:...}] [{cmd:,}
+    {help geoplot##layertype:{it:layertype}} [{it:frame}] [{it:...}] [{cmd:,}
     {help geoplot##zopts:{it:z_options}}
     {it:other_options} ]
 
@@ -35,26 +35,26 @@
 
 
 {synoptset 20 tabbed}{...}
-{marker plottypes}{synopthdr:plottypes}
+{marker layertype}{synopthdr:layertype}
 {synoptline}
-{synopt :{helpb geoplot##area:area}}plot shapes, potentially filled
+{synopt :{helpb geoplot##area:area}}shapes, potentially filled
     {p_end}
-{synopt :{helpb geoplot##line:line}}plot shapes, line only
+{synopt :{helpb geoplot##line:line}}shapes, line only
     {p_end}
-{synopt :{helpb geoplot##point:point}}plot single-coordinate markers
+{synopt :{helpb geoplot##point:point}}single-coordinate markers
     {p_end}
-{synopt :{helpb geoplot##labels:{ul:lab}el}}plot single-coordinate labels
+{synopt :{helpb geoplot##labels:{ul:lab}el}}single-coordinate labels
     {p_end}
 
-{synopt :{helpb geoplot##pcspike:pcspike}}plot paired-coordinate spikes
+{synopt :{helpb geoplot##pcspike:pcspike}}paired-coordinate spikes
     {p_end}
-{synopt :{helpb geoplot##pccapsym:pccapsym}}plot paired-coordinate spikes capped with symbols
+{synopt :{helpb geoplot##pccapsym:pccapsym}}paired-coordinate spikes capped with symbols
     {p_end}
-{synopt :{helpb geoplot##pcarrow:pcarrow}}plot paired-coordinate arrows
+{synopt :{helpb geoplot##pcarrow:pcarrow}}paired-coordinate arrows
     {p_end}
-{synopt :{helpb geoplot##pcbarrow:pcbarrow}}plot paired-coordinate arrows with two heads
+{synopt :{helpb geoplot##pcbarrow:pcbarrow}}paired-coordinate arrows with two heads
     {p_end}
-{synopt :{helpb geoplot##pcpoint:pcpoint}}plot paired-coordinate markers
+{synopt :{helpb geoplot##pcpoint:pcpoint}}paired-coordinate markers
     {p_end}
 
 {p2coldent:* {helpb geoplot##pointi:pointi}}{cmd:point} with immediate arguments
@@ -125,22 +125,28 @@
 {marker opt}{synopthdr:global_options}
 {synoptline}
 {syntab :Main}
+{synopt :{helpb geoplot##angle:{ul:ang}le({it:angle})}}rotate map by {it:angle}
+    {p_end}
 {synopt :{helpb geoplot##tight:tight}}adjust graph size to dimension of map
     {p_end}
 {synopt :{helpb geoplot##margin:{ul:m}argin({it:spec})}}specify (minimum) margin
     around map
     {p_end}
-{synopt :{helpb geoplot##rotate:rotate({it:angle})}}rotate map by {it:angle}
+{synopt :{helpb geoplot##refdim:{ul:ref}dim({it:spec})}}select reference dimension
     {p_end}
 {synopt :{helpb geoplot##aspect:{ul:aspect}ratio({it:spec})}}adjust aspect
     ratio of map
     {p_end}
 {synopt :{it:{help twoway_options}}}twoway options, other than {cmd:by()}
 
-{syntab :Legend}
+{syntab :Legends}
 {synopt :{helpb geoplot##legend:{ul:leg}end{sf:[}({it:options}){sf:]}}}add standard legend
     {p_end}
 {synopt :{helpb geoplot##clegend:{ul:cleg}end{sf:[}({it:options}){sf:]}}}add {helpb contour} plot legend
+    {p_end}
+{synopt :{helpb geoplot##sbar:sbar{sf:[}({it:options}){sf:]}}}add scale bar
+    {p_end}
+{synopt :{helpb geoplot##compass:{ul:comp}ass{sf:[}({it:options}){sf:]}}}add compass
     {p_end}
 
 {syntab :Data}
@@ -171,7 +177,7 @@
         {com}. {stata ssc install moremata}{txt}
 
 
-{title:Plottypes}
+{title:Layer types}
 
 {marker area}{...}
 {dlgtab:shapes, potentially filled}
@@ -264,7 +270,7 @@
 
 {phang2}
     {cmd:size(}{it:{help geoplot##size:spec}}{cmd:)} sets the shape sizes as
-    described for plottype {helpb geoplot##area:area}.
+    described for layer type {helpb geoplot##area:area}.
 
 {phang2}
     {it:{help line_options}} are options to affect the look of lines as described in
@@ -351,7 +357,7 @@
     and {cmd:mlabangle()}.
 
 {phang}
-    Plot type {cmd:label} is implemented as a wrapper for plot type {cmd:point}.
+    Layer type {cmd:label} is implemented as a wrapper for layer type {cmd:point}.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes}
@@ -489,7 +495,7 @@
     as a synonym for {opt zvar()}.
 
 {pmore}
-    Some {help geoplot##plottype:{it:plottypes}} allow {it:Z} as an
+    Some {help geoplot##layertype:{it:layertypes}} allow {it:Z} as an
     argument. In these cases option {cmd:zvar()} is not needed; if specified nonetheless,
     it takes precedence over {it:Z} specified as an argument.
 
@@ -562,7 +568,7 @@
     {opt mlabangle(list)} specify lists of line widths, line pattern, fill
     intensities, markers symbols, marker sizes, marker angles, marker outline
     widths, marker label sizes, and marker label angles to be used for the
-    levels. The availability of these options depends on plot type; for example,
+    levels. The availability of these options depends on layer type; for example,
     marker options will be available with {helpb geoplot##point:point}, but not
     with {helpb geoplot##area:area} or {helpb geoplot##line:line}.
 
@@ -686,10 +692,14 @@
 
 {phang2}
     {cmd:color()}, {cmd:lwidth()}, {cmd:lpattern()}, etc. are standard graph
-    options depending on plot type. In case of {helpb geoplot##area:area},
+    options depending on layer type. In case of {helpb geoplot##area:area},
     the default is to use color {cmd:gs14} for areas for which {help geoplot##zvar:{it:Z}} is missing.
 
 {dlgtab:Global options}
+
+{marker angle}{...}
+{phang}
+    {opt angle(angle)} rotates the map by {it:angle} degrees (counter clock-wise).
 
 {marker tight}{...}
 {phang}
@@ -713,28 +723,44 @@
 
 {marker margin}{...}
 {phang}
-    {cmd:margin(}{it:#} [{it:#} {it:#} {it:#}]{cmd:)} sets the margin by which
-    the plotregion extends the size of the map. Default is {cmd:margin(0)},
-    which means that the plotregion will tightly fit the map. Specify, for example,
-    {cmd:margin(1)} to increase the plotregion horizontally by 1 percent of the
-    horizontal size of the map and vertically by 1 percent of the vertical size
-    of the map (the size of the map is determined by the minimum and maximum coordinates
-    of the elements included in the map).
+    {cmd:margin(}{it:marginexp}{cmd:)} sets the margin by which
+    the plotregion extends the size of the map, where {it:marginexp} is
+    {it:#} [{it:#} {it:#} {it:#}] or one or more elements of the form
+
+            {{cmd:l}|{cmd:r}|{cmd:b}|{cmd:t}} [{cmd:=}] {it:#}
 
 {pmore}
-    Specify {cmd:margin(}{it:l} {it:r} {it:b} {it:t}{cmd:)} to use different
+    such as {cmd:l=5} or {cmd:t=10}. Default is {cmd:margin(0)},
+    which means that the plotregion will tightly fit the map. Specify, for example,
+    {cmd:margin(1)} to increase the plotregion by 1 percent on each side of the
+    map. The default reference for computing the margins is the minimum of the horizontal
+    and vertical size of the map; also see option {helpb geoplot##refdim:refdim()}.
+
+{pmore}
+    Specify {cmd:margin(}{it:#} {it:#} {it:#} {it:#}{cmd:)} to use different
     margins on the left, right, bottom, and top (numbers will be recycled if
     less than four numbers are specified). For example, {cmd:margin(10 5 0 7)}
     will increase the plotregion by 10 percent on the left, 5 percent on the
     right, 0 percent at the bottom, and 7 percent at the top.
 
 {pmore}
+    Alternatively, use the {{cmd:l}|{cmd:r}|{cmd:b}|{cmd:t}}{cmd:=}{it:#}
+    syntax. For example, {cmd:margin(r=5 t=10)} will increase the plotregion
+    by 5 percent on the right and by 10 at the top (and by 0 percent on the other
+    sides).
+
+{pmore}
     {cmd:margin()} may be useful, for example, if you need to make space for a
     legend, such that it does not cover parts of the map.
 
-{marker rotate}{...}
+{marker refdim}{...}
 {phang}
-    {opt rotate(angle)} rotates map by {it:angle} degrees.
+    {cmd:refdim(}{it:spec}{cmd:)} selects the reference dimension for size
+    calculations (e.g., when determining margins). {it:spec} may be {cmd:y} or
+    {cmdab:v:ertical} for the vertical dimension, or {cmd:x} or {cmdab:h:orizontal}
+    for the horizontal dimension. If {cmd:refdim()} is omitted, the
+    minimum of the horizontal and vertical size of the map is used a the
+    reference size.
 
 {marker aspect}{...}
 {phang}
@@ -787,10 +813,9 @@
     arrange the legend vertically (in columns).
 
 {phang2}
-    {opth position(clockposstyle)} overrides the default location of the legend,
-    which is in the upper right corner. As long as {opt outside} is omitted, you
-    may specify {it:{help compassdirstyle}} instead of
-    {it:{help clockposstyle}}.
+    {opt position(spec)} overrides the default location of the legend,
+    which is in the upper right corner. {it:spec} may be {it:{help compassdirstyle}}
+    or {it:{help clockposstyle}}.
 
 {phang2}
     {opt out:side} places the legend outside of the plot region. The default is
@@ -835,10 +860,9 @@
     set the label for missing.
 
 {phang2}
-    {opth position(clockposstyle)} overrides the default location of the legend,
-    which is in the lower right corner. As long as {opt outside} is omitted, you
-    may specify {it:{help compassdirstyle}} instead of
-    {it:{help clockposstyle}}.
+    {opt position(spec)} overrides the default location of the legend,
+    which is in the lower right corner. {it:spec} may be {it:{help compassdirstyle}}
+    or {it:{help clockposstyle}}.
 
 {phang2}
     {opt out:side} places the legend outside of the plot region. The default is
@@ -857,6 +881,124 @@
     {helpb axis_label_options:zlabel()} and {helpb axis_label_options:ztick()}
     to affect the axis labels and ticks, and option
     {helpb axis_scale_options:zscale()} to control further aspects of the axis.
+
+{marker sbar}{...}
+{phang}
+    {cmd:sbar}[{cmd:(}{it:options}{cmd:)}] adds a scale bar to the map. {it:options}
+    are as follows.
+
+{phang2}
+    {opt s:cale(exp)} determines how coordinates will be translated into the units
+    of the scale bar. Default is {cmd:scale(1/1000)} (that is, by default, if
+    coordinates are in meters, the scale bar will be in kilometers).
+
+{phang2}
+    {opt l:ength(#)}, {it:#}>0, set the length of the scale bar in units
+    depending on {cmd:scale()}. {cmd:geoplot} will abort with error
+    if the resulting scale bar is too large (i.e., has
+    coordinates outside of the plotregion). An appropriate
+    length is determined automatically if {cmd:length()} is omitted.
+
+{phang2}
+    {opt n(#)} sets the number of segments in the scale bar. Default is
+    {cmd:n(5)}.
+
+{phang2}
+    {opt even} causes even segments to be filled. The default is to fill
+    odd segments.
+
+{phang2}
+    {opt h:eight(#)}, {it:#}>=0, sets the height of the bar in percent of
+    the map's reference size; see {helpb geoplot##refdim:refdim()}. Default is
+    {cmd:height(1)}. {cmd:geoplot}
+    will abort with error if the resulting scale bar is too large (i.e., has
+    coordinates outside of the plotregion).
+
+{phang2}
+    {opt lab:el(options)} affects the rendering of the numeric labels, where
+    {it:options} are {it:{help textbox_options}} such as {opt c:olor()} or {opt si:ze()}
+    (defaults are {cmd:color(black)} and {cmd:size(vsmall)}), {cmd:minmax} to label
+    only the minimum and maximum, {opt a:bove} to place the labels above the
+    scale bar (rather than below), and {opth f:ormat(fmt)} to set the display
+    format; default is {cmd:format(%8.0g)}. Type {opt nolab:el} to omit the numeric
+    labels.
+
+{phang2}
+    {opt u:nits(text)} specifies text to be appended to the rightmost label. Use
+    this to denote units, e.g., {cmd:units(km)}.
+
+{phang2}
+    {cmdab:ti:tle(}{it:text}[{cmd:,} {it:options}]{cmd:)} adds a title above the
+    scale bar. {it:options} are {it:{help textbox_options}} such as {opt c:olor()}
+    or {opt si:ze()} (defaults are {cmd:color(black)} and {cmd:size(vsmall)}), and
+    {opt b:elow} to place the title below the scale bar (rather than above).
+
+{phang2}
+    {opth pos:ition(compassdirstyle)} overrides the default location
+    of the scale bar, which is in the lower left corner.
+
+{phang2}
+    {opt xm:argin(#)} and {opt ym:argin(#)} specify how much the
+    scale bar will be moved away from the edge of the plotregion, in percent of the map's
+    reference size; see {helpb geoplot##refdim:refdim()}. Defaults are {cmd:xmargin(1)}
+    and {cmd:ymargin(3)}.
+
+{phang2}
+    {it:{help area_options}} are general options to affect the rendering of the
+    scale bar, such as {cmdab:c:olor()} or {cmdab:lw:idth()}. Defaults are
+    {cmd:color(black)}, {cmd:fintensity(100)}, and {cmd:lwidth(vthin)}.
+
+{marker compass}{...}
+{phang}
+    {cmd:compass}[{cmd:(}{it:options}{cmd:)}] adds a compass to the map. {it:options}
+    are as follows.
+
+{phang2}
+    {opt t:ype(type)} selects the type of compass. Argument {it:type} may be
+    {cmd:1} (the default), {cmd:2}, or {cmd:3}.
+
+{phang2}
+    {opt ang:le(angle)} rotates the compass by {it:angle} degrees
+    (counter clock-wise).
+
+{phang2}
+    {opt si:ze(#)}, {it:#}>=0, sets the size (or half-size) of the compass
+    in percent of the map's reference size; see {helpb geoplot##refdim:refdim()}. The default
+    is {cmd:size(5)}. For compass type 1, {cmd:size()} sets the half-size; for compass types
+    2 and 3, {cmd:size()} sets the size. {cmd:geoplot} will abort with error if the resulting
+    compass is too large (i.e., has coordinates outside of the plotregion).
+
+{phang2}
+    {opt lab:el}[{cmd:(}{it:options}{cmd:)}] affects the rendering of the compass
+    labels, where {it:options} are {it:{help textbox_options}} such as {opt c:olor()} or
+    {opt si:ze()} (defaults are {cmd:color(black)} and {cmd:size(vsmall)}) as
+    well as {opt g:ap(#)} to determine how far the labels will be moved out from
+    the edge of the compass. Argument {it:#}>0 is in percent of the size
+    (or half-size) of the compass; default is {cmd:gap(30)}. Labels are printed
+    for compass types 1 ("N", "S", "E", and "W") and 2 ("N" only) by default; specify
+    {cmd:label} to print label "N" in compass type 3. Specify {opt nolab:el}
+    to omit the labels in compass types 1 and 2.
+
+{phang2}
+    {opt nocir:cle} omits the circle in compass types 1 and 3.
+
+{phang2}
+    {opt nomsp:ikes} omits the minor spikes in compass type 1.
+
+{phang2}
+    {opth pos:ition(compassdirstyle)} overrides the default location
+    of the compass, which is in the lower right corner.
+
+{phang2}
+    {opt xm:argin(#)} and {opt ym:argin(#)} specify how much the
+    compass will be moved away from the edge of the plotregion, in percent of the map's
+    reference size; see {helpb geoplot##refdim:refdim()}. Defaults are {cmd:xmargin(2)}
+    and {cmd:ymargin(2)}.
+
+{phang2}
+    {it:{help area_options}} are general options to affect the rendering of the
+    compass, such as {cmdab:c:olor()} or {cmdab:lw:idth()}. Defaults are
+    {cmd:color(black)}, {cmd:fintensity(100)}, and {cmd:lwidth(vthin)}.
 
 {marker frame}{...}
 {phang}
