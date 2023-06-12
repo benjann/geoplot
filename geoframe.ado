@@ -1,11 +1,11 @@
-*! version 0.2.1  05jun2023  Ben Jann
+*! version 0.2.2  12jun2023  Ben Jann
 
 program geoframe
     version 17
     gettoken subcmd 0 : 0, parse(" ,")
     _parse_subcmd `subcmd'
     _geoframe_`subcmd' `macval(0)'
-    if `"`local'"'!="" { // pass through returns from _geoframe_get
+    if `"`local'"'!="" { // pass through returns (_geoframe_get, _geoframe_flip)
         c_local `local' `"`value'"'
     }
 end
@@ -16,6 +16,7 @@ program _parse_subcmd
     else if `"`0'"'==substr("describe", 1, max(1,`l'))  local 0 describe
     else if `"`0'"'=="set"                              local 0 set
     else if `"`0'"'=="get"                              local 0 get
+    else if `"`0'"'=="flip"                             local 0 flip // undocumented
     else if `"`0'"'==substr("link", 1, max(1,`l'))      local 0 link
     else if `"`0'"'==substr("unlink", 3, max(1,`l'))    local 0 unlink
     else if `"`0'"'==substr("generate", 1, max(1,`l'))  local 0 generate
@@ -616,9 +617,7 @@ program __geoframe_get_coordinates
             local exp `VARS'
         }
     }
-    if "`flip'"!="" {
-        mata: st_local("exp",  _strreverse(st_local("exp")))
-    }
+    if "`flip'"!="" geoframe flip `exp', local(exp)
     c_local exp `exp'
 end
 
@@ -640,10 +639,16 @@ program __geoframe_get_centroids
             local exp `VARS'
         }
     }
-    if "`flip'"!="" {
-        mata: st_local("exp",  _strreverse(st_local("exp")))
-    }
+    if "`flip'"!="" geoframe flip `exp', local(exp)
     c_local exp `exp'
+end
+
+program _geoframe_flip
+    _parse comma lhs 0 : 0
+    syntax [, Local(str) ]
+    mata: _flip("lhs")
+    c_local local `local'
+    c_local value `"`lhs'"'
 end
 
 program _geoframe_link
@@ -894,7 +899,7 @@ program _geoframe_append
     }
     local N = _N
     local cframe = c(frame)
-    capt n mata: _geoframe_append("`frame'", "`touse'",/*
+    capt n mata: _append("`frame'", "`touse'",/*
         */ tokens(st_local("varlist")), tokens(st_local("TARGET")))
     if _rc {
         frame change `cframe'
@@ -961,6 +966,24 @@ void _add_path_to_shpf(string scalar shpf, string scalar path0)
     st_local(shpf, pathjoin(path, st_local(shpf)))
 }
 
+void _flip(string scalar nm)
+{
+    real scalar      i
+    real rowvector   p
+    string rowvector S
+    
+    S = tokens(st_local(nm))
+    i = cols(S)
+    p = J(1,i,i)
+    if (mod(i,2)) i-- // skip last if uneven
+    for (;i;i--) {
+        p[i] = i - 1
+        i--
+        p[i] = i + 1
+    }
+    st_local(nm, invtokens(S[p]))
+}
+
 string scalar _strreverse(string scalar s)
 {
     real scalar      n
@@ -1000,8 +1023,8 @@ void _copy_by_ID(string scalar frame, string scalar ID0,
     st_framecurrent(cframe)
 }
 
-void _geoframe_append(string scalar frame, string scalar touse,
-    string rowvector vars, string rowvector VARS)
+void _append(string scalar frame, string scalar touse, string rowvector vars,
+    string rowvector VARS)
 {
     real scalar       i, k, n, n0
     pointer rowvector X

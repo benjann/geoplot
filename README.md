@@ -43,19 +43,19 @@ Basic map with lakes and rivers.
 
 Regions colored by number of fortune tellers (per million population).
 
-    geoplot (area regions fortell, color) (line regions)
+    geoplot (area regions fortell) (line regions)
 
 ![example 3](/images/3.png)
 
 Different formatting of legend labels.
 
-    geoplot (area regions fortell, color label("@lb-@ub")) (line regions)
+    geoplot (area regions fortell, label("@lb-@ub")) (line regions)
 
 ![example 4](/images/4.png)
 
 Similar graph with more colors and alternative type of legend (requires Stata 18)
 
-    geoplot (area regions fortell, color levels(20) lcolor(gray)) ///
+    geoplot (area regions fortell, levels(20) lcolor(gray)) ///
         , clegend(position(ne) height(30)) zlabel(4(3)28)
 
 ![example 5](/images/5.png)
@@ -64,7 +64,7 @@ Map with provincial capitals.
 
     geoplot ///
         (area regions) ///
-        (point capitals [w=pop98], z(size) discrete color(Set1, opacity(50)) ///
+        (point capitals size [w=pop98], discrete color(Set1, opacity(50)) ///
             mlcolor(%0)) ///
         (label capitals city if pop98>250000, color(black)) ///
         , legend compass sbar(length(300) units(km))
@@ -74,8 +74,8 @@ Map with provincial capitals.
 Map with composite legend.
 
     geoplot ///
-        (area regions fortell, color) ///
-        (point capitals [w=pop98], z(size) discrete color(Set1, reverse ///
+        (area regions fortell) ///
+        (point capitals size [w=pop98], discrete color(Set1, reverse ///
             opacity(50)) mlcolor(white)) ///
         , legend(layout(- "FORTELL" 1 | - "CITY SIZE" 2) position(sw))
 
@@ -85,14 +85,43 @@ Map with composite legend.
 
 Main changes:
 
+    12jun2023 (version 0.2.2)
+    geoplot
+    - layertypes -symbol- and -symboli- added
+    - layertypes -pie- and -bar- added
+    - syntax in now more consistent across layertypes; point, label, and pc*
+      now allow argument zvar, and custom coordinates can be provided as
+      coordinates(); area/line now also support coordinates(); options centroids() 
+      and area() can now be used to provide custom centroids and area sizes in
+      area/line; option zvar() is discontinued
+    - zvar now implies color()
+    - default color scheme for discrete zvar now Set1
+    - color(none), color(fg), color(bg), color(%#), color(*#) now supported if zvar
+      is specified
+    - label():
+      o @n now insterts the number of units
+      o @lb, @ub, @mid now also supported if -discrete-
+      o @lab now inserts standard label (value label if -discrete-, @lb-@ub else)
+      o options nomissing, mfirst, and gap removed
+    - missing():
+      o @n can now be used in label() to insert number of missing units
+      o options nolabel, first, and gap added
+    - can now specify wmax without argument to use obs max even if smaller than 1
+    - layertype -label- is now an external program
+    - __geoplot_layer now supports argument <layer> equal to . ("hidden" layer)
+    geoframe:
+    - geoframe flip added (undocumented)
+    - -geoframe get coordinates, flip- did not return correct order in case of pc;
+      this is fixed
+
     05jun2023 (version 0.2.1)
     geoplot:
-    - global option scalebar() added
+    - global option sbar() added
     - global option compass() added
     - global option margin() now supports syntax {l|r|b|t}=#
     - global option margin() now uses the minimum of the vertical and horizontal
       size as reference by default; global option refdim() added to select the
-      reference (the reference size will also be used by scalebar() and compass())
+      reference (the reference size will also be used by sbar() and compass())
     - global option rotate() renamed to angle()
     - __geoplot_layer is now a separate ado; this allows users to program additional
       layer types that make use of __geoplot_layer
