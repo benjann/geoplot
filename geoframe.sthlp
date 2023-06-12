@@ -409,7 +409,7 @@
     {stata geoframe create regions `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) shpfile(`url'Italy-RegionsCoordinates.dta)}
     {p_end}
 {p 8 12 2}
-    {stata geoplot (area regions fortell, color), tight}
+    {stata geoplot (area regions fortell), tight}
     {p_end}
 
 {pstd}
@@ -441,7 +441,7 @@
     {stata "frame regions: geoframe describe"}
     {p_end}
 {p 8 12 2}
-    {stata geoplot (area regions fortell, color), tight}
+    {stata geoplot (area regions fortell), tight}
     {p_end}
 
 {pstd}
@@ -474,7 +474,7 @@
     {stata "frame regions: describe"}
     {p_end}
 {p 8 12 2}
-    {stata geoplot (area regions fortell, color), tight}
+    {stata geoplot (area regions fortell), tight}
     {p_end}
 
 {pstd}
