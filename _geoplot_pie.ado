@@ -1,4 +1,4 @@
-*! version 0.2.2  12jun2023  Ben Jann
+*! version 0.2.3  13jun2023  Ben Jann
 
 program _geoplot_pie
     version 17
@@ -9,17 +9,18 @@ program _geoplot_pie
     frame `frame' {
         // syntax
         qui syntax varlist(numeric) [if] [in] [iw/] [,/*
-            */ Type(int 1) EXPLode(str) asis REVerse mid ANGle(real 0)/*
+            */ polar EXPLode(str) asis REVerse mid ANGle(real 90)/*
             */ SIze(str) n(numlist int max=1 >0) OFFset(numlist max=2)/*
-            */ noLABel CIRCle CIRCle2(str)/*
+            */ noLABel OUTline OUTline2(str) wmax WMAX2(numlist max=1 >0)/*
             */ COLORVar(str) LEVels(str) cuts(str) DISCRete/* (will be ignored)
             */ COORdinates(varlist numeric min=1 max=2) /*
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ * ]
+        local options `wmax' `wmax2' `options'
         if "`n'"=="" local n 100
         _parse_explode `: list sizeof varlist' `explode'
-        if `"`circle'`circle2'"'!="" _parse_sym, `circle2'
-        else                         local sym 0
+        if `"`outline'`outline2'"'!="" _parse_sym, `outline2'
+        else                           local sym 0
         // parse size
         local scale .
         if `"`size'"'=="" local size .
@@ -37,33 +38,43 @@ program _geoplot_pie
         gettoken oangle: oangle
         if "`offset'"=="" local offset 0
         if "`oangle'"=="" local oangle 0
-        // sample
+        // sample and weights
         marksample touse
-        tempname wvar
-        if "`weight'"!="" {
-            qui gen double `wvar' = abs(`exp') if `touse'
-            markout `touse' `wvar'
-            local wgt [iw=W]
-        }
-        else {
-            qui gen byte `wvar' = 1
-            if "`type'"=="2" local wgt [iw=W]
-        }
         geoframe get id, local(ID)
         if "`ID'"!="" {
             // select one row per ID; assuming data is ordered by ID; assuming
             // Z and centroids are constant within ID
             qui replace `touse' = 0 if `ID'==`ID'[_n-1]
         }
-        if "`coordinates'"!="" geoframe flip `coordinates', local(coordinates)
+        if "`coordinates'"!="" geoframe flip `coordinates', local(coord)
         else {
-            geoframe get coordinates, strict flip local(coordinates)
-            if `:list sizeof coordinates'!=2 {
+            geoframe get coordinates, strict flip local(coord)
+            if `:list sizeof coord'!=2 {
                 di as err "wrong number of coordinate variables"
                 exit 498
             }
         }
-        markout `touse' `coordinates' // include nonmissing coordinates only
+        markout `touse' `coord' // include nonmissing coordinates only
+        tempname wvar
+        if "`weight'"!="" {
+            qui gen double `wvar' = abs(`exp') if `touse'
+            markout `touse' `wvar'
+            if `"`wmax2'"'=="" {
+                su `wvar' if `touse', meanonly
+                if "`wmax'"!="" local wmax2 = r(max)
+                else            local wmax2 = max(1, r(max)) 
+            }
+            qui replace `wvar' = `wvar' / `wmax2' if `touse'
+            local wgt [iw=W]
+            local wmaxopt wmax(1)
+        }
+        else {
+            qui gen byte `wvar' = 1
+            if "`polar'"!="" {
+                local wgt [iw=W]
+                local wmaxopt wmax(1)
+            }
+        }
         // collect labels
         local lbls
         local i 0
@@ -86,8 +97,8 @@ program _geoplot_pie
         // compute slices of pies and post coordinates into temporary frame
         tempname frame1 SIZE
         frame create `frame1'
-        mata: _compute_pies("`frame1'", "`touse'", `type', `size', `scale',/*
-            */ `angle', `n', `offset', `oangle',/*
+        mata: _compute_pies("`frame1'", "`touse'", "`polar'"!="", `size',/*
+            */ `scale', `angle', `n', `offset', `oangle',/*
             */ "`asis'"!="", "`reverse'"!="", "`mid'"!="")
             // => makes frame1 the current frame
         // add labels
@@ -97,17 +108,22 @@ program _geoplot_pie
     ***
     if `sym'==1 local ++p
     __geoplot_layer 0 area `layer' `p' `frame1' `wgt',/*
-        */ colorvar(Z) lock discrete `options'
+        */ colorvar(Z) lock discrete `wmaxopt' `options'
     ***
     if `sym' {
         local PLOT: copy local plot
-        // pass weights, size, etc. through to circle
-        if `sym_wgt' local sym_wgt `wgt'
-        else         local sym_wgt
-        if `offset' {
-            if `"`sym_offset'"'=="" {
-                local sym_offset offset(`offset' `oangle')
+        // pass weights, size, coordinates, etc. through to outline
+        if "`coordinates'"!="" local sym_coord coordinates(`coordinates')
+        if `sym_wgt' & "`weight'"!="" {
+            local sym_wgt [`weight'=`exp']
+            if `"`sym_wmax'"'=="" {
+                if "`wmax2'"!="" local sym_wmax wmax(`wmax2')
+                else             local sym_wmax `wmax'
             }
+        }
+        else local sym_wgt
+        if `offset' {
+            if `"`sym_offset'"'=="" local sym_offset offset(`offset' `oangle')
         }
         if substr(`"`sym_size'"',1,1)=="*" {
             local sym_size = substr(`"`sym_size'"',2,.)
@@ -128,8 +144,11 @@ program _geoplot_pie
             local sym_lcolor lcolor(`sym_lcolor')
         }
         // generate plot
-        _geoplot_symbol . `p' `frame' `if' `in' `sym_wgt', shape(circle)/*
-            */ `sym_offset' `sym_size' `sym_lcolor' `sym_opts'
+        local n0 = _N + 1
+        _geoplot_symbol . `p' `frame' `if' `in' `sym_wgt', `sym_coord'/*
+            */ shape(circle) `sym_offset' `sym_size' `sym_lcolor' `sym_wmax'/*
+            */ `sym_opts'
+        qui replace LAYER = `layer' in `n0'/l
         if `sym'==1 {
             local --p
             local plot `plot' `PLOT'
@@ -178,24 +197,26 @@ program _parse_explode
 end
 
 program _parse_sym
-    syntax [, ABOve noWeight SIze(str) OFFset(passthru)/*
+    syntax [, below noWeight SIze(str) OFFset(passthru)/*
+        */ wmax WMAX2(passthru) /*
         */ COLor(passthru) LColor(passthru)/*
         */ COLORVar(passthru)/* will be ignored
         */ * ]
-    if "`above'"!="" c_local sym 2
-    else             c_local sym 1
-    c_local sym_size   `"`size'"'
+    if "`below'"!="" c_local sym 1
+    else             c_local sym 2
     c_local sym_wgt    = "`weight'"==""
-    c_local sym_hascol = `"`color'`lcolor'"'!=""
+    c_local sym_size   `"`size'"'
     c_local sym_offset `offset'
-    c_local sym_opts   `options'
+    c_local sym_wmax   `wmax' `wmax2'
+    c_local sym_hascol = `"`color'`lcolor'"'!=""
+    c_local sym_opts   `color' `lcolor' `options'
 end
 
 version 17
 mata:
 mata set matastrict on
 
-void _compute_pies(string scalar frame, string scalar touse, real scalar t,
+void _compute_pies(string scalar frame, string scalar touse, real scalar polar,
     real scalar size, real scalar scale, real scalar a, real scalar n,
     real scalar off, real scalar oang, real scalar asis, real scalar rev,
     real scalar mid)
@@ -207,7 +228,7 @@ void _compute_pies(string scalar frame, string scalar touse, real scalar t,
 
     // get data
     e = strtoreal(tokens(st_local("explode")))
-    YX = st_data(., st_local("coordinates"), touse)
+    YX = st_data(., st_local("coord"), touse)
     Z  = abs(st_data(., st_local("varlist"), touse)) // |Z|
     w  = st_data(., st_local("wvar"), touse)
     r  = rows(YX)
@@ -227,25 +248,26 @@ void _compute_pies(string scalar frame, string scalar touse, real scalar t,
     v = st_addvar("double", ("_Y","_X","_CY","_CX", "Z", "W"))
     // generate coordinates of pies
     for (i=1;i<=r;i++)
-        _compute_pie(t, s, a, n, asis, rev, mid, e, v, Z[i,], YX[i,], w[i])
+        _compute_pie(polar, s, a, n, asis, rev, mid, e, v, Z[i,], YX[i,], w[i])
 } 
 
-void _compute_pie(real scalar t, real scalar s, real scalar a, real scalar n,
-    real scalar asis, real scalar rev, real scalar mid, real rowvector e,
-    real rowvector v, real rowvector z, real rowvector yx, real scalar w)
+void _compute_pie(real scalar polar, real scalar s, real scalar a,
+    real scalar n, real scalar asis, real scalar rev, real scalar mid,
+    real rowvector e, real rowvector v, real rowvector z, real rowvector yx,
+    real scalar w)
 {
     real scalar j, c
     real scalar z0
     
     if (asis) z = z / 100
     else      z = z / sum(z)
-    if (mid & rev) z0 = -(.25-z[1]/2+a/360)
-    else if (mid)  z0 = -(.25+z[1]/2+a/360)
-    else           z0 = -(.25+a/360)
+    if (mid & rev) z0 = -(a/360 - z[1]/2)
+    else if (mid)  z0 = -(a/360 + z[1]/2)
+    else           z0 = -(a/360)
     c = cols(z)
     for (j=1;j<=c;j++) {
-        if (t==2) _compute_slice(s, n, rev, e[j], v, j,  1/c, yx, z[j]*w, z0)
-        else      _compute_slice(s, n, rev, e[j], v, j, z[j], yx,      w, z0)
+        if (polar) _compute_slice(s, n, rev, e[j], v, j, 1/c, yx, c*z[j]*w, z0)
+        else       _compute_slice(s, n, rev, e[j], v, j, z[j], yx, w, z0)
     }
 }
 

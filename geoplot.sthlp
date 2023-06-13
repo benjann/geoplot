@@ -1,5 +1,5 @@
 {smcl}
-{* 12jun2023}{...}
+{* 13jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -49,9 +49,9 @@
     hexagons, stars, etc.)
     {p_end}
 
-{synopt :{helpb geoplot##pie:pie}}pie charts
+{p2coldent:* {helpb geoplot##pie:pie}}pie charts
     {p_end}
-{synopt :{helpb geoplot##bar:bar}}bar charts
+{p2coldent:* {helpb geoplot##bar:bar}}stacked bar charts
     {p_end}
 
 {synopt :{helpb geoplot##pcspike:pcspike}}paired-coordinate spikes
@@ -217,13 +217,13 @@
     the shapes by the absolute (and normalized) values of {it:exp}. {it:options}
     are as follows.
 
-{phang2}
+{phang}
     {it:{help geoplot##zopts:zvar_options}} are options determining the look of
     the shapes (e.g. color) depending on the values of
     {help geoplot##zvar:{it:zvar}} as described
     {help geoplot##zvar_options:below}.
 
-{phang2}
+{phang}
     {cmd:wmax}[{cmd:(}{it:#}{cmd:)}] specifies a custom upper bound for
     normalization of weights. This is only relevant if {it:{help weight}} has
     been specified. The default is to normalize by max(1,{it:wmax}), where
@@ -232,7 +232,7 @@
     without argument to normalize by {it:wmax} even if {it:wmax}<1.
 
 {marker size}{...}
-{phang2}
+{phang}
     {cmdab:si:ze(}{it:{help exp}}[{cmd:,} {opt s:cale(#)} {opt d:max(#)}]{cmd:)}
     resizes the shapes such that their sizes are proportional to {it:exp}
     (typically, {it:exp} is a {varname}; the size of a shape is equal to the
@@ -242,12 +242,12 @@
     {it:exp} will be treated as positive; shapes for which {it:exp} is missing
     will keep their original size.
 
-{pmore2}
+{pmore}
     Suboption {cmd:scale()} multiplies all sizes by {it:#} (after
     normalization). Suboption {cmd:dmax()} specifies a custom maximum density
     for normalization; use this option to make sizes comparable across layers.
 
-{phang2}
+{phang}
     {cmdab:ec:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}
     sets the fill color used for enclaves. {it:colorspec} is a (single) color
     specification as described in
@@ -255,23 +255,23 @@
     {cmd:ecolor(white)}. The color of an enclave will only be visible if not
     covered by a corresponding exclave.
 
-{phang2}
+{phang}
     {it:{help area_options}} are options to affect the look of areas as
     described in {helpb twoway area}. For example, use option {cmd:lcolor()} to
     set the outline color. Color options support {it:colorspec} as described in
     {helpb colorpalette##colorlist:colorpalette}.
 
-{phang2}
+{phang}
     {opt lock} causes the orientation of the shapes to be unaffected by global
     option {helpb geoplot##angle:angle()}. That is, if {cmd:lock} is specified,
     {helpb geoplot##angle:angle()} will rotate only positions only.
 
-{phang2}
+{phang}
     {opt coor:dinates(X Y)} specifies custom coordinate variables. The default
     is to use the variables returned by
     {helpb geoframe##get:geoframe get coordinates}.
 
-{phang2}
+{phang}
     {opt centr:oids(X Y)} specifies custom centroid variables. The default is
     to use the variables returned by
     {helpb geoframe##get:geoframe get centroids}. If no centroid variables are
@@ -279,7 +279,7 @@
     {helpb geoframe##generate:geoframe generate centroids}. The centroids are
     needed if weights, option {cmd:size()}, or option {cmd:lock} is specified.
 
-{phang2}
+{phang}
     {opt area(AREA)} specifies a custom shape size variable. The default is to
     use the variable returned by
     {helpb geoframe##get:geoframe get area}. If no shape size variable is found,
@@ -311,12 +311,12 @@
     the shapes by the absolute (and normalized) values of {it:exp}. {it:options}
     are as follows.
 
-{phang2}
+{phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()},
     {cmd:lock}, {opt coordinates()}, {opt centroids()}, and {cmd:area()} are
     options as described for layer type {helpb geoplot##area:area}.
 
-{phang2}
+{phang}
     {it:{help line_options}} are options to affect the look of lines as
     described in {helpb twoway line}. For example, use option {cmd:lwidth()} to
     set the width of lines. Color options support {it:colorspec} as described in
@@ -337,16 +337,17 @@
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the size of the
     markers by the absolute (and normalized) values of {it:exp} (also see
-    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}). {it:options}
+    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}). {cmdab:sc:atter}
+    may be used as a synonym for {cmd:point}. {it:options}
     are as follows.
 
-{phang2}
+{phang}
     {it:{help geoplot##zopts:zvar_options}} are options determining the look
     of the markers (e.g. color or size) depending on the values of
     {help geoplot##zvar:{it:zvar}} as described
     {help geoplot##zvar_options:below}.
 
-{phang2}
+{phang}
     {cmd:wmax}[{cmd:(}{it:#}{cmd:)}] specifies a custom upper bound for
     normalization of weights. This is only relevant if {it:{help weight}} has
     been specified. The default is to normalize by max(1,{it:wmax}), where
@@ -354,20 +355,17 @@
     layer). Specify {opt wmax(#)} to normalize by {it:#}. Specify {cmd:wmax}
     without argument to normalize by {it:wmax} even if {it:wmax}<1.
 
-{phang2}
+{phang}
     {it:{help marker_options}}, {it:{help marker_label_options}},
     {it:{help connect_options}}, and {it:jitter_options} are options to affect
     the look of markers as described in {helpb twoway scatter}. For example,
     use option {cmd:msymbol()} to set the marker symbol. Color options
     support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
-{phang2}
+{phang}
     {opt coor:dinates(X Y)} specifies custom coordinate variables. The default
     is to use the variables returned by
     {helpb geoframe##get:geoframe get coordinates}.
-
-{pstd}
-    {cmdab:sc:atter} may be used as a synonym for {cmd:point}.
 
 {marker labels}{...}
 {dlgtab:single-coordinate labels}
@@ -381,15 +379,16 @@
     where {it:frame} is the frame containing the coordinates of the labels to be
     plotted (see {helpb geoframe}), {it:labelvar} is a (numeric or string) variable
     providing the labels, and {help geoplot##zvar:{it:zvar}} is an optional
-    variable to determine styling. {it:options} are as follows.
+    variable to determine styling. {cmd:label} is implemented as a wrapper for
+    {helpb geoplot##point:point}. {it:options} are as follows.
 
-{phang2}
+{phang}
     {it:{help geoplot##zopts:zvar_options}} are options determining the look
     of the labels (e.g. color or size) depending on the values of
     {help geoplot##zvar:{it:zvar}} as described
     {help geoplot##zvar_options:below}.
 
-{phang2}
+{phang}
     {opth si:ze(textsizestyle)},
     {cmdab:col:or(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)},
     {opth ang:le(anglestyle)},
@@ -402,19 +401,16 @@
     described in help {it:{help marker_label_options}}. Color options
     support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
-{pmore2}
+{pmore}
     If {help geoplot##zvar:{it:zvar}} is specified, options {cmd:size()},
     {cmd:color()}, and {cmd:angle()} are interpreted in the way as described
     {help geoplot##zvar_options:below} for {cmd:mlabsize()}, {cmd:mlabcolor()},
     and {cmd:mlabangle()}.
 
-{phang2}
+{phang}
     {opt coor:dinates(X Y)} specifies custom coordinate variables. The default
     is to use the variables returned by
     {helpb geoframe##get:geoframe get coordinates}.
-
-{pstd}
-    Layer type {cmd:label} is implemented as a wrapper for layer type {cmd:point}.
 
 {marker symbol}{...}
 {dlgtab:single-coordinate symbols}
@@ -433,26 +429,10 @@
     absolute (and normalized) values of {it:exp}. {it:options}
     are as follows.
 
-{phang2}
-    {opt line} plots the symbols using plot type {helpb geoplot##line:line}. The
-    default is to plot the symbols using plot type {helpb geoplot##area:area}. Note
-    that, by default, the symbols do not have a fill color even if option
-    {cmd:line} is omitted. Specify {help geoplot##zvar:{it:zvar}} to color the
-    symbols depending on the values of {help geoplot##zvar:{it:zvar}}. Specify
-    {cmd:color(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} or
-    {cmd:fcolor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} to set a
-    single fill color for all symbols.
-
-{phang2}
-    {it:{help area_options}} or {it:{help line_options}}, depending on whether
-    option {cmd:line} has been specified, are regular graph options to affect
-    the look of the symbols. Color options support {it:colorspec} as described in
-    {helpb colorpalette##colorlist:colorpalette}.
-
-{phang2}
+{phang}
     {opt sh:ape(spec)} selects or defines the symbol. {it:shape} may be
 
-{p2colset 13 29 31 2}{...}
+{p2colset 9 25 27 2}{...}
 {p2col:{cmdab:c:ircle}}circle (or oval)
     {p_end}
 {p2col:{cmdab:t:riangle}}triangle
@@ -486,41 +466,41 @@
 {p2col:{it:name} [{it:arg}]}mata function {cmd:__geoplot_symbol_}{it:name}{cmd:()} returning shape coordinates
     {p_end}
 
-{pmore2}
+{pmore}
     The default is {cmd:circle}. For {cmd:arc} and
     {cmd:slice}, argument {it:angle} in [-360,360] specifies the size of the
     segment in degrees; default is {cmd:180} (half circle). In case of
-    {cmd:arc} you may want to specify option {cmd:line} to prevent
+    {cmd:arc} you may want to specify option {cmd:line} (see below) to prevent
     connecting the first and the last point. For {cmd:pin} and {cmd:pin2}, argument
     {it:headsize} in [0,1] specifies the size of the head; default is one third for
     {cmd:pin} and 0.6 for {cmd:pin2}.
 
-{pmore2}
+{pmore}
     Use {opt shape(numlist)} or {opt shape(matname)} to
     create a custom symbol. {it:{help numlist}} is a list of shape coordinates specified
     as
 
-                {it:y1} {it:x1} [{it:y2} {it:x2} ...]
+            {it:y1} {it:x1} [{it:y2} {it:x2} ...]
 
-{pmore2}
+{pmore}
     {it:matname} is the name of a matrix containing the shape coordinates. The matrix may
     contain a single row or column of consecutive points or it may contain two
     rows or two columns, one for Y and one for X. For example, to create a
     kite symbol, you could type
 
-                {cmd:shape(-1 0 0 .5 .5 0 0 -.5 -1 0)}
+            {cmd:shape(-1 0 0 .5 .5 0 0 -.5 -1 0)}
 
-{pmore2}
+{pmore}
     or you could define a matrix such as
 
-                {cmd:KITE = (-1, 0, 0, .5, .5, 0, 0, -.5, -1, 0)}
+            {cmd:KITE = (-1, 0, 0, .5, .5, 0, 0, -.5, -1, 0)}
 
-{pmore2}
+{pmore}
     or
 
-                {cmd:KITE = (-1, 0, .5, 0, -1)', (0, .5, 0, -.5, 0)'}
+            {cmd:KITE = (-1, 0, .5, 0, -1)', (0, .5, 0, -.5, 0)'}
 
-{pmore2}
+{pmore}
     and then type {cmd:shape(KITE)}. Furthermore, you may create a custom symbol
     by defining a Mata function
     {cmd:__geoplot_symbol_}{it:name}{cmd:()} and then call the function
@@ -536,21 +516,21 @@
     even-level parts are treated regular parts and odd-level parts are treated as
     white space). For example, to create a kite symbol, define function
 
-                {com}real matrix __geoplot_symbol_Kite(real scalar n, string scalar arg)
-                {
-                    pragma unused n
-                    pragma unused arg
+            {com}real matrix __geoplot_symbol_Kite(real scalar n, string scalar arg)
+            {
+                pragma unused n
+                pragma unused arg
 
-                    return(((-1, 0, .5, 0, -1)', (0, .5, 0, -.5, 0)'))
-                }{txt}
+                return(((-1, 0, .5, 0, -1)', (0, .5, 0, -.5, 0)'))
+            }{txt}
 
-{pmore2}
+{pmore}
     and then type {cmd:shape(Kite)}. Note that repeating the first point at the
     end is not strictly necessary (at
     least if option {cmd:line} is not specified). Multipart symbols can be
     created by introducing a missing point between parts.
 
-{phang2}
+{phang}
     {opt n(n)} sets the number of points used to draw a circle. Technically,
     a circle is drawn as a polygon with {it:n} edges; if {it:n} is large enough,
     the polygon appears as a smooth circle. This also means that you can use {cmd:shape(circle)}
@@ -562,31 +542,49 @@
     max(2, ceil(abs({it:angle})/360 * 100)). For {cmd:shape(pin)} and {cmd:shape(pin2)}, the default
     is {it:n} = max(4, ceil({it:headsize} * 100)).
 
-{phang2}
+{phang}
     {opt ratio(#)} adjusts the ratio between the height and the width of the symbol. The default
     is {cmd:ratio(1)}. For example, type {cmd:ratio(2)} to double the height.
 
-{phang2}
-    {opt ang:le(angle)} rotates the symbol by {it:angle} degrees (counter clock-wise).
+{phang}
+    {opt ang:le(angle)} rotates the symbol by {it:angle} degrees (counterclockwise).
 
-{phang2}
-    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the symbol. For
-    the predefined symbol, {cmd:size()} sets the length of the
-    radius of the circle enclosing the symbol. For symbol created by {opt shape(numlist)}
-    or {opt shape(matname)}, {cmd:size()} sets the unit length of the specified
-    coordinates. Type {opt size(#)} to specify an absolute size (i.e. in units of the underlying
+{phang}
+    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the symbols. For
+    the predefined symbols, {cmd:size()} sets the length of the
+    radius of the circle enclosing the symbol. For custom symbols, {cmd:size()} sets
+    the unit length of the specified coordinates. Type {opt size(#)} to specify
+    an absolute size (i.e. in units of the underlying
     map). Alternatively, specify {cmd:size(*}{it:#}{cmd:)} to multiply the default
-    size by {it:#}. The default size depends on the spread of the positions of the
-    symbol on the map.
+    size by {it:#}. The default size is set to 3% of the minimum of the horizontal
+    and vertical size of the underlying map (as it exists at the point when the
+    symbols are added, including the positions of the symbols; the smallest possible
+    default size is 1).
 
-{phang2}
+{phang}
     {cmdab:off:set(}{it:offset} [{it:angle}]{cmd:)} offsets the positions of the
     symbol by {it:offset} percent of {cmd:size()} in the direction of {it:angle}. The
     default {it:angle} is 0 (east). For example, set {it:angle} to 90 for north, 180
     for west, or -45 for south-east.
 
-{phang2}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, and
+{phang}
+    {opt line} plots the symbols using plot type {helpb geoplot##line:line}. The
+    default is to plot the symbols using plot type {helpb geoplot##area:area}. Note
+    that, by default, the symbols do not have a fill color even if option
+    {cmd:line} is omitted. Specify {help geoplot##zvar:{it:zvar}} to color the
+    symbols depending on the values of {help geoplot##zvar:{it:zvar}}. Specify
+    {cmd:color(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} or
+    {cmd:fcolor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} to set a
+    single fill color for all symbols.
+
+{phang}
+    {it:{help area_options}} or {it:{help line_options}}, depending on whether
+    option {cmd:line} has been specified, are regular graph options to affect
+    the look of the symbols. Color options support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}.
+
+{phang}
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:ecolor()}, and
     {opt coordinates()} are options as described for layer type
     {helpb geoplot##area:area}.
 
@@ -594,17 +592,192 @@
 {dlgtab:pie charts}
 
 {p 8 15 2}
-    {cmd:pie} {it:frame} {it:varlist} {ifin} {weight}
+    {cmd:pie} {it:frame} {varlist} {ifin} {weight}
     [{cmd:,}
     {it:options} ]
+
+{pstd}
+    where {it:frame} is the frame containing the coordinates of the positions of
+    the pie charts (see {helpb geoframe}), {it:varlist} contains the values determining
+    the slice sizes (a separate pie chart will be created for each unit/row in the data), and
+    {it:weight}, specified as {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
+    {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the pie charts by the
+    absolute (and normalized) values of {it:exp}. {it:options}
+    are as follows.
+
+{phang}
+    {opt asis} omits normalization of the values provided by {it:varlist}. By
+    default, the values will be normalized such they sum to 100 across {it:varlist}
+    in each row of the data. Option {cmd:asis} may be useful if the provided
+    values are percentages and you want to leave part of the pie blank
+    if the percentages do not sum up to 100.
+
+{phang}
+    {opt expl:ode(spec)} displays exploded pie charts. An exploded pie
+    chart is a pie chart in which one or more slices are moved out from the
+    center. {it:spec} may be {it:#} to move all slices out by {it:#} percent of
+    the radius of the pie. Alternatively, {it:spec} may be
+
+            {it:index} = {it:#} [{it:index} = {it:#} ...]
+
+{pmore}
+    where {it:index} is the index of the slice to be moved out ({cmd:1} for the
+    slice corresponding to the first variable, {cmd:2} for the second, etc.)
+    and {it:#} is the value of the shift in percent of the radius of the pie.
+
+{phang}
+    {opt polar} causes polar area diagrams to be displayed rather than regular
+    pie charts. A polar area diagram is a pie chart in which each slice has the
+    same angle and the values from {it:varlist} determine how far the
+    slices extend from the center of the pie. In a regular pie chart the values of
+    {it:varlist} determine the angles of the slices and all slices extend from the
+    center by the same amount.
+
+{phang}
+    {opt rev:erse} travels in counterclockwise direction around the circle. The
+    default is to arrange the slices in clockwise order.
+
+{phang}
+    {opt mid} shifts the start of the first slice by half its angle. By default,
+    the edge of the first slice starts at 90 degrees (north). Specify {cmd:mid}
+    to center the first slice at 90 degrees.
+
+{phang}
+    {opt ang:le(angle)} rotates the pies by {it:angle} degrees
+    (counterclockwise). The default is {cmd:angle(90)} such that the first
+    slice of a pie starts at an angle of 90 degrees (north). For example, type
+    {cmd:angle(0)} place the first slice at 0 degrees (east).
+
+{phang}
+    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the
+    pies. Type {opt size(#)} to specify an absolute size (i.e. in units of the underlying
+    map) for the radius of the pie. Alternatively, specify {cmd:size(*}{it:#}{cmd:)}
+    to multiply the default radius by {it:#}. The default radius is set to 3% of the minimum
+    of the horizontal and vertical size of the underlying map (as it exists at the point when the
+    symbols are added, including the positions of the pies; the smallest possible
+    default radius is 1).
+
+{phang}
+    {cmdab:off:set(}{it:offset} [{it:angle}]{cmd:)} offsets the positions of the
+    pies by {it:offset} percent of their radius in the direction of {it:angle}. The
+    default {it:angle} is 0 (east). For example, set {it:angle} to 90 for north, 180
+    for west, or -45 for south-east.
+
+{phang}
+    {opt out:line}[{cmd:(}{it:options}]{cmd:)} adds an outline circle to each pie
+    by calling layertype {helpb geoplot##symbol:symbol}. This may
+    be useful, for example, to complete the circle for the part of a pie that may be
+    left empty if {cmd:asis} is specified, to draw a reference outline in
+    case of {cmd:polar}, or to create doughnut charts. {it:options} are as follows.
+
+{phang2}
+    {opt below} plots the outlines below the pie charts. The the default is
+    to plot the outlines on top.
+
+{phang2}
+    {opt now:eight} requests that the specified weights be ignored when
+    determining the sizes of the outlines.
+
+{phang2}
+    {cmd:size()}, {cmd:ratio()}, {cmd:n()}, {cmd:offset()}, {cmd:line},
+    and {it:{help area_options}} or {it:{help line_options}} are
+    options as described for layertype {helpb geoplot##symbol:symbol}. Several
+    of these options will be set automatically, which can be overridden by specifying
+    the options explicitly. {cmd:size(*}{it:#}{cmd:)} will be interpreted
+    as {it:#} times the size used for the pies.
+
+{phang}
+    {opt n(n)} sets the number of points used to draw a circle. Default is
+    {cmd:n(100)}. Each slice will use a fraction of points corresponding to the
+    angle of the slice (with an imposed minimum of 2 points).
+
+{phang}
+    {opt nolab:el} uses variable names rather variable labels in the legend.
+
+{phang}
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()},
+    {it:{help area_options}}, and {opt coordinates()} are options as described
+    for layer type {helpb geoplot##area:area}. {it:zvar_options} without asterisk
+    will be ignored.
 
 {marker bar}{...}
-{dlgtab:bar charts}
+{dlgtab:stacked bar charts}
 
 {p 8 15 2}
-    {cmd:pie} {it:frame} {it:varlist} {ifin} {weight}
+    {cmd:bar} {it:frame} {it:varlist} {ifin} {weight}
     [{cmd:,}
     {it:options} ]
+
+{pstd}
+    where {it:frame} is the frame containing the coordinates of the positions of
+    the bar charts (see {helpb geoframe}), {it:varlist} contains the values determining
+    the bar segments (a separate bar chart will be created for each unit/row in the data), and
+    {it:weight}, specified as {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
+    {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the bar charts by the
+    absolute (and normalized) values of {it:exp}. {it:options}
+    are as follows.
+
+{phang}
+    {opt asis} omits normalization of the values provided by {it:varlist}. By
+    default, the values will be normalized such they sum to 100 across {it:varlist}
+    in each row of the data. Option {cmd:asis} may be useful if the provided
+    values are percentages and you want to leave part of the bar chart blank
+    if the percentages do not sum up to 100.
+
+{phang}
+    {opt ang:le(angle)} rotates the bar charts by {it:angle} degrees
+    (counterclockwise). The default is to display upright bar charts. For
+    example, Type {cmd:angle(-90)} for horizontal bar charts (west to east).
+
+{phang}
+    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the
+    bar charts. Type {opt size(#)} to specify an absolute size (i.e. in units of
+    the underlying map) for the width of the bars. Alternatively, specify {cmd:size(*}{it:#}{cmd:)} to
+    multiply the default width by {it:#}. The default width is set to 3% of the minimum
+    of the horizontal and vertical size of the underlying map (as it exists at the
+    point when the symbols are added, including the positions of the bar charts;
+    the smallest possible default width is 1).
+
+{phang}
+    {opt ratio(#)} adjusts the ratio between the height and the width of the
+    bars charts. The default is {cmd:ratio(2)}.
+
+{phang}
+    {cmdab:off:set(}{it:offset} [{it:angle}]{cmd:)} offsets the positions of the
+    bar charts by {it:offset} percent of their width in the direction of {it:angle}. The
+    default {it:angle} is 0 (east). For example, set {it:angle} to 90 for north, 180
+    for west, or -45 for south-east.
+
+{phang}
+    {opt box}[{cmd:(}{it:options}]{cmd:)} adds an outline frame to each bar
+    chart by calling layertype {helpb geoplot##symbol:symbol}. This may
+    be useful, for example, to illustrate the part of the bar chart
+    that may be left empty if {cmd:asis} is specified. {it:options} are as follows.
+
+{phang2}
+    {opt below} plots the outlines below the bar charts. The the default is
+    to plot the outlines on top.
+
+{phang2}
+    {opt now:eight} requests that the specified weights be ignored when
+    determining the sizes of the outlines.
+
+{phang2}
+    {cmd:size()}, {cmd:ratio()}, {cmd:angle()}, {cmd:offset()}, {cmd:line},
+    and {it:{help area_options}} or {it:{help line_options}} are
+    options as described for layertype {helpb geoplot##symbol:symbol}. Several
+    of these options will be set automatically, which can be overridden by specifying
+    the options explicitly. {cmd:size(*}{it:#}{cmd:)} will be interpreted
+    as {it:#} times the size used for the bar charts.
+
+{phang}
+    {opt nolab:el} uses variable names rather variable labels in the legend.
+
+{phang}
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()},
+    {it:{help area_options}}, and {opt coordinates()} are options as described
+    for layer type {helpb geoplot##area:area}. {it:zvar_options} without asterisk
+    will be ignored.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes, arrows, or markers}
@@ -632,28 +805,26 @@
 {pstd}
     where {it:frame} is the frame containing the paired coordinates (see
     {helpb geoframe}) and {help geoplot##zvar:{it:zvar}} is an optional
-    variable to determine styling. {it:options} are as follows.
+    variable to determine styling. {cmd:pcscatter} may be used as a synonym
+    for {cmd:pcpoint}. {it:options} are as follows.
 
-{phang2}
+{phang}
     {it:{help geoplot##zopts:zvar_options}} are options determining the look
     of the objects (e.g. color or size) depending on the values of
     {help geoplot##zvar:{it:zvar}} as described
     {help geoplot##zvar_options:below}.
 
-{phang2}
+{phang}
     Options to affect the rendering of the spike
     lines, arrows, and markers as described in {helpb twoway pcspike},
     {helpb twoway pccapsym}, {helpb twoway pcarrow}, and
     {helpb twoway pcscatter}, respectively. Color options support
     {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
-{phang2}
+{phang}
     {opt coor:dinates(X1 Y1 X2 Y2)} specifies custom coordinate variables. The
     default is to use the variables returned by
     {helpb geoframe##get:geoframe get coordinates}.
-
-{pstd}
-    {cmd:pcscatter} may be used as a synonym for {cmd:pcpoint}.
 
 {marker pointi}{...}
 {dlgtab:point, spikes, or arrows with immediate arguments}
@@ -671,16 +842,11 @@
     where {it:immediate_values} and {it:options} as described in
     {helpb twoway scatteri}, {helpb twoway pci}, and {helpb twoway pcarrowi},
     respectively. Color options support {it:colorspec} as described in
-    {helpb colorpalette##colorlist:colorpalette}.
-
-{pstd}
-    Option {opt label(label)}, where {it:label} is
+    {helpb colorpalette##colorlist:colorpalette}. {cmd:scatteri} may be used as
+    a synonym for {cmd:pointi}. Option {opt label(label)}, where {it:label} is
     {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}], sets a key label
     for use by {helpb geoplot##legend:legend()}. Multiple lines are created if
     multiple {cmd:"}{it:text}{cmd:"} elements are specified.
-
-{pstd}
-    {cmd:scatteri} may be used as a synonym for {cmd:pointi}.
 
 {marker symboli}{...}
 {dlgtab:symbol with immediate arguments}
@@ -918,7 +1084,7 @@
 
 {marker angle}{...}
 {phang}
-    {opt angle(angle)} rotates the map by {it:angle} degrees (counter clock-wise).
+    {opt angle(angle)} rotates the map by {it:angle} degrees (counterclockwise).
 
 {marker tight}{...}
 {phang}
@@ -1177,7 +1343,7 @@
 
 {phang2}
     {opt ang:le(angle)} rotates the compass by {it:angle} degrees
-    (counter clock-wise).
+    (counterclockwise).
 
 {phang2}
     {opt si:ze(#)}, {it:#}>=0, sets the size (or half-size) of the compass
@@ -1315,7 +1481,7 @@
     {p_end}
 
 {pstd}
-    Map with bar charts
+    Map with pie charts
 
 {p 8 12 2}
     {stata geoplot (area regions) (pie regions relig?, label(, reverse)), tight}
@@ -1325,7 +1491,7 @@
     Map with bar charts
 
 {p 8 12 2}
-    {stata geoplot (area regions) (bar regions relig1, asis box), tight}
+    {stata geoplot (area regions) (bar regions relig1, asis outline), tight}
     {p_end}
 
 

@@ -85,6 +85,13 @@ Map with composite legend.
 
 Main changes:
 
+    13jun2023 (version 0.2.3)
+    geoplot
+    - pie and bar now documented
+    - some bug fixes and refinements to pie and bar; option type() in bar replaced
+      by option -polar-; circle() and box() now called outline()
+    - suboption nolabel in label() did not work; this is fixed
+
     12jun2023 (version 0.2.2)
     geoplot
     - layertypes -symbol- and -symboli- added

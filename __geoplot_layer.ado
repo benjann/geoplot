@@ -1,4 +1,4 @@
-*! version 0.2.2  12jun2023  Ben Jann
+*! version 0.2.3  13jun2023  Ben Jann
 
 /*
     Syntax:
@@ -552,7 +552,7 @@ program _layer
             local NOBS: copy local nobs
             local CUTS: copy local cuts
             _label_separate `label' // => lab_keys, lab_lbls
-            if "`nolabels'"!="" local zlabels: copy local cuts
+            if "`nolabel'"!="" local zlabels: copy local cuts
             local i 0
             foreach key of local lkeys {
                 local ++i

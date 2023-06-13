@@ -1,4 +1,4 @@
-*! version 0.2.2  12jun2023  Ben Jann
+*! version 0.2.3  13jun2023  Ben Jann
 
 program geoframe
     version 17

@@ -1,4 +1,4 @@
-*! version 0.2.2  12jun2023  Ben Jann
+*! version 0.2.3  13jun2023  Ben Jann
 
 program _geoplot_bar
     version 17
@@ -11,13 +11,13 @@ program _geoplot_bar
         qui syntax varlist(numeric) [if] [in] [iw/] [,/*
             */ asis ANGle(real 0)/*
             */ SIze(str) ratio(real 2) OFFset(numlist max=2)/*
-            */ noLABel box BOX2(str)/*
+            */ noLABel OUTline OUTline2(str) wmax WMAX2(passthru)/*
             */ COLORVar(str) LEVels(str) cuts(str) DISCRete/* (will be ignored)
             */ COORdinates(varlist numeric min=1 max=2) /*
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ * ]
-        if `"`box'`box2'"'!="" _parse_sym, `box2'
-        else                   local sym 0
+        if `"`outline'`outline2'"'!="" _parse_sym, `outline2'
+        else                           local sym 0
         // parse size
         local scale .
         if `"`size'"'=="" local size .
@@ -35,6 +35,7 @@ program _geoplot_bar
         gettoken oangle: oangle
         if "`offset'"=="" local offset 0
         if "`oangle'"=="" local oangle 0
+        local offset = `offset' * sqrt(2)
         // sample
         marksample touse
         tempname wvar
@@ -52,15 +53,15 @@ program _geoplot_bar
             // Z and centroids are constant within ID
             qui replace `touse' = 0 if `ID'==`ID'[_n-1]
         }
-        if "`coordinates'"!="" geoframe flip `coordinates', local(coordinates)
+        if "`coordinates'"!="" geoframe flip `coordinates', local(coord)
         else {
-            geoframe get coordinates, strict flip local(coordinates)
-            if `:list sizeof coordinates'!=2 {
+            geoframe get coordinates, strict flip local(coord)
+            if `:list sizeof coord'!=2 {
                 di as err "wrong number of coordinate variables"
                 exit 498
             }
         }
-        markout `touse' `coordinates' // include nonmissing coordinates only
+        markout `touse' `coord' // include nonmissing coordinates only
         // collect labels
         local lbls
         local i 0
@@ -80,7 +81,7 @@ program _geoplot_bar
         local refsize = min(`refsize', r(max) - r(min))
     }
     frame `frame' {
-        // compute slices of pies and post coordinates into temporary frame
+        // compute slices of bars and post coordinates into temporary frame
         tempname frame1 SIZE
         frame create `frame1'
         mata: _compute_bars("`frame1'", "`touse'", `size', `scale',/*
@@ -93,13 +94,17 @@ program _geoplot_bar
     ***
     if `sym'==1 local ++p
     __geoplot_layer 0 area `layer' `p' `frame1' `wgt',/*
-        */ colorvar(Z) lock discrete `options'
+        */ colorvar(Z) lock discrete `wmax' `wmax2' `options'
     ***
     if `sym' {
         local PLOT: copy local plot
-        // pass weights, size, etc. through to box
-        if `sym_wgt' local sym_wgt `wgt'
-        else         local sym_wgt
+        // pass weights, size, coordinates, etc. through to outline
+        if "`coordinates'"!="" local sym_coord coordinates(`coordinates')
+        if `sym_wgt' & "`weight'"!="" {
+            local sym_wgt [`weight'=`exp']
+            if `"`sym_wmax'"'=="" local sym_wmax `wmax' `wmax2'
+        }
+        else local sym_wgt
         if `offset' {
             if `"`sym_offset'"'=="" {
                 local sym_offset offset(`offset' `oangle')
@@ -134,9 +139,11 @@ program _geoplot_bar
             local sym_lcolor lcolor(`sym_lcolor')
         }
         // generate plot
-        _geoplot_symbol . `p' `frame' `if' `in' `sym_wgt', shape(square)/*
-            */ `sym_offset' `sym_angle' `sym_ratio' `sym_size' `sym_lcolor'/*
-            */ `sym_opts'
+        local n0 = _N + 1
+        _geoplot_symbol . `p' `frame' `if' `in' `sym_wgt', `sym_coord'/*
+            */ shape(square) `sym_offset' `sym_angle' `sym_ratio' `sym_size'/*
+            */ `sym_lcolor' `sym_wmax' `sym_opts'
+        qui replace LAYER = `layer' in `n0'/l
         if `sym'==1 {
             local --p
             local plot `plot' `PLOT'
@@ -151,18 +158,20 @@ program _geoplot_bar
 end
 
 program _parse_sym
-    syntax [, ABOve noWeight SIze(str) ratio(passthru) OFFset(passthru)/*
-        */ ANGle(passthru) COLor(passthru) LColor(passthru)/*
+    syntax [, below noWeight SIze(str) ratio(passthru) OFFset(passthru)/*
+        */ ANGle(passthru) wmax WMAX2(passthru)/*
+        */ COLor(passthru) LColor(passthru)/*
         */ COLORVar(passthru)/* will be ignored
         */ * ]
-    if "`above'"!="" c_local sym 2
-    else             c_local sym 1
-    c_local sym_size   `"`size'"'
+    if "`below'"!="" c_local sym 1
+    else             c_local sym 2
     c_local sym_wgt    = "`weight'"==""
-    c_local sym_hascol = `"`color'`lcolor'"'!=""
-    c_local sym_offset `offset'
+    c_local sym_size   `"`size'"'
     c_local sym_ratio  `ratio'
+    c_local sym_offset `offset'
     c_local sym_angle  `angle'
+    c_local sym_wmax   `wmax' `wmax2'
+    c_local sym_hascol = `"`color'`lcolor'"'!=""
     c_local sym_opts   `color' `lcolor' `options'
 end
 
@@ -180,7 +189,7 @@ void _compute_bars(string scalar frame, string scalar touse,
     real matrix    YX, Z
 
     // get data
-    YX = st_data(., st_local("coordinates"), touse)
+    YX = st_data(., st_local("coord"), touse)
     Z  = abs(st_data(., st_local("varlist"), touse)) // |Z|
     w  = st_data(., st_local("wvar"), touse)
     r  = rows(YX)
@@ -189,8 +198,9 @@ void _compute_bars(string scalar frame, string scalar touse,
     else {
         s = min(mm_coldiff(colminmax(YX)))
         s = max((s,strtoreal(st_local("refsize"))))
-        s = max((1, s * 0.02)) // 3% of min(yrange, xrange) of map
+        s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
     }
+    s = s / sqrt(2)
     if (scale<.) s = s * scale
     st_numscalar(st_local("SIZE"), s)
     // apply offset
