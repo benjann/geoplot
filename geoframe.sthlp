@@ -1,5 +1,5 @@
 {smcl}
-{* 13jun2023}{...}
+{* 14jun2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -210,6 +210,32 @@
     variable name. Option {cmd:replace} allows overwriting an existing
     variable. The created variable will be registered using
     {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is specified.
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmdab:pl:evel} [{it:PLEVEL}] [{cmd:,} {opt replace} {opt noset} ]
+
+{pstd}
+    generates a variable identifying the plot order of the different polygons
+    represented in the frame (only relevant for data of type {cmd:shape}). {it:PLEVEL}
+    specifies a name for the generated variable; {cmd:_PLEVEL} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
+    variable. The created variable will be registered using
+    {helpb geoframe##set:geoframe set plevel} unless option {cmd:noset} is
+    specified.
+
+{pstd}
+    {cmd:geoframe generate plevel} is useful to identify enclaves and exclaves
+    so that they do not get covered when plotting filled areas. The generated
+    variable will be set to 0 for polygons that are neither enclaves nor exclaves,
+    1 for enclaves, 2 for exclaves, 3 for enclaves within exclaves, 4 for exclaves
+    within enclaves, etc. {helpb geoplot} will then print the polygons in this
+    order. The algorithm used by {cmd:geoframe generate plevel} assumes
+    that polygons do not overlap (i.e. that a polygon is always either completely
+    inside or completely outside of another polygon; technically, a polygon is classified
+    as outside as soon as at least one coordinate lies outside). It also assumes that
+    enclaves are explicitly included in the data (that is, if unit A has
+    an exclave in unit B, then unit B must contain a corresponding enclave
+    polygon). Results will be invalid if these assumptions are not met.
 
 {marker set}{...}
 {dlgtab:geoframe set}

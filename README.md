@@ -85,6 +85,16 @@ Map with composite legend.
 
 Main changes:
 
+    14jun2023 (version 0.2.4)
+    geoplot:
+    - the palette class was not always taken into account when
+      interpolation/recycling colors; this is fixed
+    geoframe:
+    - geoframe generate plevel added
+    - geoframe generate centroids did not allow abbreviation; this is fixed
+    - geoframe set stored varnames into char even if they were equal to the default
+      names; this is fixed
+
     13jun2023 (version 0.2.3)
     geoplot
     - pie and bar now documented

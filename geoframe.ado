@@ -1,4 +1,4 @@
-*! version 0.2.3  13jun2023  Ben Jann
+*! version 0.2.4  14jun2023  Ben Jann
 
 program geoframe
     version 17
@@ -282,11 +282,17 @@ end
 
 program _geoframe_generate
     gettoken fcn 0 : 0, parse(" ,=")
-    capt mata: assert(st_islmname(st_local("fcn")))
-    if _rc==1 exit _rc
-    if _rc {
-        di as err `"`fcn' invalid procedure"'
-        exit 198
+    local fcn = strlower(`"`fcn'"')
+    local l = strlen(`"`fcn'"')
+    if      `"`fcn'"'==substr("centroids", 1, max(3,`l')) local fcn centroids
+    else if `"`fcn'"'==substr("plevel", 1, max(2,`l'))    local fcn plevel
+    else {
+        capt mata: assert(st_islmname(st_local("fcn")))
+        if _rc==1 exit 1
+        if _rc {
+            di as err `"`fcn': invalid function"'
+            exit 198
+        }
     }
     _geoframe_generate_`fcn' `0'
 end
@@ -497,6 +503,9 @@ program __geoframe_set_var
             }
         }
         confirm numeric variable `arg', exact
+        if "`var'"=="sid" local ARG shape_order
+        else              local ARG = strupper("_`var'")
+        if "`arg'"=="`ARG'" local arg // is default name; leave char empty
     }
     char _dta[GEOFRAME_`var'] `arg'
 end
@@ -526,6 +535,10 @@ program __geoframe_set_coordinates
             }
         }
         confirm numeric variable `arg', exact
+        if `"`type'"'=="unit"    local ARG _CX _CY
+        else if `"`type'"'=="pc" local ARG _X1 _Y1 _X2 _Y2
+        else                     local ARG _X _Y
+        if "`arg'"=="`ARG'" local arg // is default names; leave char empty
     }
     char _dta[GEOFRAME_coordinates] `arg'
 end
@@ -549,6 +562,7 @@ program __geoframe_set_centroids
             }
         }
         confirm numeric variable `arg', exact
+        if "`arg'"=="_CX _CY" local arg // is default names; leave char empty
     }
     char _dta[GEOFRAME_centroids] `arg'
 end
@@ -585,7 +599,7 @@ program __geoframe_get_var
     if `"`exp'"'=="" {
         // try default name
         if "`namelist'"=="sid" local VAR shape_order
-        else                   local VAR _`=strupper("`namelist'")'
+        else                   local VAR = strupper("_`namelist'")
         capt confirm numeric variable `VAR', exact
         if _rc==1 exit _rc
         if _rc==0 {

@@ -1,4 +1,4 @@
-*! version 0.2.3  13jun2023  Ben Jann
+*! version 0.2.4  14jun2023  Ben Jann
 
 /*
     Syntax:
@@ -811,6 +811,7 @@ program _z_colors
     colorpalette `color', nograph `noexpand' `n' `ipolate'/*
         */ `opacity' `intensity' `options'
     local color `"`r(p)'"'
+    local pclass `"`r(pclass)'"'
     local l: list sizeof color
     if `l'==0 {
         c_local `nm'
