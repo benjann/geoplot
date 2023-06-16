@@ -85,6 +85,17 @@ Map with composite legend.
 
 Main changes:
 
+    16jun2023 (version 0.2.5)
+    geoplot
+    - geoplot symbol/pie/bar no longer restrict sample to 1st obs per ID
+    - option id() added to area and line
+    - option plevel() added to area 
+    - geoplot symbol now looks for Mata functions called _geoplot_symbol_<name>(),
+      not __geoplot_symbol_<name>()
+    geoframe
+    - geoframe generate pid and geoframe generate plevel now operate on the linked
+      shape frame if applied to an attribute frame
+
     14jun2023 (version 0.2.4)
     geoplot:
     - the palette class was not always taken into account when

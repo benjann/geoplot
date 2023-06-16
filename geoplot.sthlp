@@ -1,5 +1,5 @@
 {smcl}
-{* 14jun2023}{...}
+{* 16jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -272,6 +272,19 @@
     {helpb geoframe##get:geoframe get coordinates}.
 
 {phang}
+    {opt id(ID)} specifies a custom ID variable. The default is
+    to use the variable returned by {helpb geoframe##get:geoframe get id}.
+
+{phang}
+    {opt pl:evel(PLEVEL)} specifies a custom plot level variable. The default is
+    to use the variable returned by {helpb geoframe##get:geoframe get plevel}.
+
+{phang}
+    {opt centr:oids(X Y)} specifies custom centroid variables. The default is
+    to use the variables returned by
+    {helpb geoframe##get:geoframe get centroids}. 
+
+{phang}
     {opt centr:oids(X Y)} specifies custom centroid variables. The default is
     to use the variables returned by
     {helpb geoframe##get:geoframe get centroids}. If no centroid variables are
@@ -313,7 +326,7 @@
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()},
-    {cmd:lock}, {opt coordinates()}, {opt centroids()}, and {cmd:area()} are
+    {cmd:lock}, {opt coordinates()}, {opt id()}, {opt centroids()}, and {cmd:area()} are
     options as described for layer type {helpb geoplot##area:area}.
 
 {phang}

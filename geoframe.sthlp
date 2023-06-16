@@ -1,5 +1,5 @@
 {smcl}
-{* 14jun2023}{...}
+{* 16jun2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}

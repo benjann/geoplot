@@ -1,4 +1,4 @@
-*! version 0.2.5  15jun2023  Ben Jann
+*! version 0.2.5  16jun2023  Ben Jann
 
 program _geoplot_symbol
     version 17
