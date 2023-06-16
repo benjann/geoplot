@@ -1,4 +1,4 @@
-*! version 0.2.5  14jun2023  Ben Jann
+*! version 0.2.5  16jun2023  Ben Jann
 
 program _geoframe_generate_plevel
     version 17
@@ -54,10 +54,8 @@ mata:
 mata set matastrict on
 
 struct unit {
-    real scalar a, b    // data range of unit
     real scalar n       // number of polygons within unit
     pointer (struct polygon) vector p
-    real scalar xmin, xmax, ymin, ymax
 }
 
 struct polygon {
@@ -113,28 +111,17 @@ struct unit scalar _read_unit(real scalar a, real scalar b,
     real colvector ID, real matrix XY)
 {
     real scalar        i
-    real colvector     i1, i2, id, xmin, xmax, ymin, ymax
+    real colvector     i1, i2, id
     struct unit scalar u
     
     id  = ID[|a \ b|]
     i1  = selectindex(_mm_unique_tag(id))    :- 1
     i2  = selectindex(_mm_unique_tag(id, 1)) :- 1
-    u.a = a
-    u.b = b
     u.n = i = rows(i1)
     u.p = J(u.n, 1, NULL)
-    xmin = xmax = ymin = ymax = J(u.n, 1, .)
     for (;i;i--) {
         u.p[i] = &_read_polygon(a+i1[i], a+i2[i], XY)
-        xmin[i] = u.p[i]->xmin
-        xmax[i] = u.p[i]->xmax
-        ymin[i] = u.p[i]->ymin
-        ymax[i] = u.p[i]->ymax
     }
-    u.xmin = min(xmin)
-    u.xmax = max(xmax)
-    u.ymin = min(ymin)
-    u.ymax = max(ymax)
     return(u)
 }
 

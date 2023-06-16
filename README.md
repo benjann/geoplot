@@ -93,6 +93,7 @@ Main changes:
     - geoplot symbol now looks for Mata functions called _geoplot_symbol_<name>(),
       not __geoplot_symbol_<name>()
     geoframe
+    - geoframe spjoin added
     - geoframe generate pid and geoframe generate plevel now operate on the linked
       shape frame if applied to an attribute frame
 

@@ -4,6 +4,7 @@ d
 d Author: Ben Jann, University of Bern, ben.jann@unibe.ch
 d
 d Distribution-Date: 20230616
+f _geoframe_spjoin.ado
 f geoframe.ado
 f geoplot.ado
 f _geoplot_label.ado

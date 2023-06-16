@@ -28,6 +28,8 @@
 {syntab :Manipulation}
 {p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variable in current frame
     {p_end}
+{p2col :{helpb geoframe##spjoin:spjoin}}spatial join of points in current frame to shape frame
+    {p_end}
 
 {syntab :Settings}
 {synopt :{helpb geoframe##set:set}}update geoframe settings of current frame
@@ -241,6 +243,28 @@
     enclaves are explicitly included in the data (that is, if unit A has
     an exclave in unit B, then unit B must contain a corresponding enclave
     polygon). Results will be invalid if these assumptions are not met.
+
+{marker spjoin}{...}
+{dlgtab:geoframe spjoin}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:spjoin} {it:shpframe} [{it:ID}]
+    [{cmd:,} {opt co:ordinates(X Y)} {opt replace} {opt noset} ]
+
+{pstd}
+    finds the positions of the points provided by the current frame in the shapes
+    defined by {it:shpframe}. The IDs of the matched shapes will be stored in
+    variable {it:ID} in the current frame; {cmd:_ID} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
+    variable. The created variable will be registered in the current frame using
+    {helpb geoframe##set:geoframe set id} unless option {cmd:noset} is
+    specified. Option {opt coordinates()} specifies custom coordinate variables
+    in the current frame; the default is to use the variables returned by
+    {helpb geoframe##set:geoframe get coordinates}. The spacial join algorithm assumes
+    that shapes do not
+    overlap (no crossings). It also assumes that nested shapes in {it:shpframe}
+    have been tagged using {helpb geoframe##gen_plevel:geoframe generate plevel}
+    (if there are nested shapes).
 
 {marker set}{...}
 {dlgtab:geoframe set}
