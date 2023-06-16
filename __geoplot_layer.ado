@@ -356,7 +356,7 @@ program _layer
             // remove units without shape data (i.e. units that only have
             // a single observation and for which the coordinate variables
             // are missing)
-            mata: _drop_empty_shapes("`touse'", "`id'", tokens("`YX'"))
+            mata: _drop_empty_shapes("`touse'", "`id'", tokens("`yx'"))
         }
         // categorize zvar
         if `hasZ' {
