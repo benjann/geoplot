@@ -205,23 +205,28 @@
 
 {pstd}
     generates a variable identifying the different polygons within each unit
-    represented in the frame (only relevant for data of type {cmd:shape}). {it:PID}
+    represented in the frame. If {cmd:geoframe generate pid} is applied to an attribute
+    frame, the operations will be performed on the linked shape frame (if available). {it:PID}
     specifies a name for the generated variable; {cmd:_PID} is used as default
     variable name. Option {cmd:replace} allows overwriting an existing
-    variable. The created variable will be registered using
-    {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is specified.
+    variable. The created variable will be registered in the shape frame using
+    {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is
+    specified.
 
+{marker gen_plevel}{...}
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmdab:pl:evel} [{it:PLEVEL}] [{cmd:,} {opt replace} {opt noset} ]
+    {cmd:geoframe} {cmdab:g:enerate} {cmdab:pl:evel} [{it:PLEVEL}] [{cmd:,} {opt replace} {opt noset} {opt force} ]
 
 {pstd}
     generates a variable identifying the plot order of the different polygons
-    represented in the frame (only relevant for data of type {cmd:shape}). {it:PLEVEL}
+    represented in the frame. If {cmd:geoframe generate pid} is applied to an attribute
+    frame, the operations will be performed on the linked shape frame (if available). {it:PLEVEL}
     specifies a name for the generated variable; {cmd:_PLEVEL} is used as default
     variable name. Option {cmd:replace} allows overwriting an existing
-    variable. The created variable will be registered using
+    variable. The created variable will be registered in the shape frame using
     {helpb geoframe##set:geoframe set plevel} unless option {cmd:noset} is
-    specified.
+    specified. Option {cmd:force} adds the variable even if no nested polygons
+    are found (the variable will be 0 for all observations in this case).
 
 {pstd}
     {cmd:geoframe generate plevel} is useful to identify enclaves and exclaves

@@ -1,4 +1,4 @@
-*! version 0.2.4  14jun2023  Ben Jann
+*! version 0.2.5  15jun2023  Ben Jann
 
 program _geoplot_pie
     version 17
@@ -40,12 +40,6 @@ program _geoplot_pie
         if "`oangle'"=="" local oangle 0
         // sample and weights
         marksample touse
-        geoframe get id, local(ID)
-        if "`ID'"!="" {
-            // select one row per ID; assuming data is ordered by ID; assuming
-            // Z and centroids are constant within ID
-            qui replace `touse' = 0 if `ID'==`ID'[_n-1]
-        }
         if "`coordinates'"!="" geoframe flip `coordinates', local(coord)
         else {
             geoframe get coordinates, strict flip local(coord)

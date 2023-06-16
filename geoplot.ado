@@ -67,7 +67,6 @@ program geoplot, rclass
     frame `main' {
         /* default variables:
             LAYER:   layer ID
-            ID:      unit ID
             Y:       Y coordinate
             X:       X coordinate
             W:       weight
@@ -83,7 +82,6 @@ program geoplot, rclass
         */
         gen byte LAYER = .
         char LAYER[Layers] `layer_n'
-        gen byte ID = .
         gen double Y = .
         gen double X = .
         qui set obs 2

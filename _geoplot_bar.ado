@@ -1,4 +1,4 @@
-*! version 0.2.4  14jun2023  Ben Jann
+*! version 0.2.5  15jun2023  Ben Jann
 
 program _geoplot_bar
     version 17
@@ -13,7 +13,7 @@ program _geoplot_bar
             */ SIze(str) ratio(real 2) OFFset(numlist max=2)/*
             */ noLABel OUTline OUTline2(str) wmax WMAX2(passthru)/*
             */ COLORVar(str) LEVels(str) cuts(str) DISCRete/* (will be ignored)
-            */ COORdinates(varlist numeric min=1 max=2) /*
+            */ COORdinates(varlist numeric min=1 max=2)/*
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ * ]
         if `"`outline'`outline2'"'!="" _parse_sym, `outline2'
@@ -46,12 +46,6 @@ program _geoplot_bar
         }
         else {
             qui gen byte `wvar' = 1
-        }
-        geoframe get id, local(ID)
-        if "`ID'"!="" {
-            // select one row per ID; assuming data is ordered by ID; assuming
-            // Z and centroids are constant within ID
-            qui replace `touse' = 0 if `ID'==`ID'[_n-1]
         }
         if "`coordinates'"!="" geoframe flip `coordinates', local(coord)
         else {

@@ -1,4 +1,4 @@
-*! version 0.2.4  14jun2023  Ben Jann
+*! version 0.2.5  14jun2023  Ben Jann
 
 program geoframe
     version 17
@@ -327,7 +327,7 @@ program _geoframe_generate_centroids
         rename `tmp' `var'
     }
     if "`set'"=="" _geoframe_set centroids `namelist'
-    di as txt "(variables {bf:`namelist'} generated)"
+    di as txt "(variables {bf:`namelist'} added to frame {bf:`cframe'})"
 end
 
 program __geoframe_generate_centroids, sortpreserve
@@ -379,7 +379,7 @@ program _geoframe_generate_area
     if _rc drop `namelist'
     rename `AREA' `namelist'
     if "`set'"=="" _geoframe_set area `namelist'
-    di as txt "(variable {bf:`namelist'} generated)"
+    di as txt "(variable {bf:`namelist'} added to frame {bf:`cframe'})"
 end
 
 program __geoframe_generate_area, sortpreserve
@@ -403,28 +403,41 @@ end
 program _geoframe_generate_pid
     syntax [name] [, replace noset ]
     if "`namelist'"=="" local namelist _PID
-    if "`replace'"=="" {
-        confirm new variable `namelist'
+    local cframe `"`c(frame)'"'
+    geoframe get type, l(type)
+    if "`type'"=="shape" local shpframe `"`cframe'"'
+    else geoframe get shpframe, local(shpframe) strict
+    frame `shpframe' {
+        if "`replace'"=="" {
+            cap n confirm new variable `namelist'
+            if _rc==1 exit 1
+            if _rc {
+                if "`shpframe'"!="`cframe'" {
+                    di as err "in frame {bf:`shpframe'}"
+                }
+                exit _rc
+            }
+        }
+        geoframe get id, l(ID) strict
+        geoframe get coordinates, l(X) strict
+        gettoken X : X
+        tempvar tmp
+        if (`X'[1]>=.) {
+            // first coordinate missing: assuming polygons start with missing
+            qui gen byte `tmp' = `X'>=. | `ID'!=`ID'[_n-1]
+        }
+        else {
+            // first coordinate non-missing: assuming polygons end with missing
+            qui gen byte `tmp' = `X'[_n-1]>=. | `ID'!=`ID'[_n-1]
+        }
+        qui replace `tmp' = `tmp' + `tmp'[_n-1] if `ID'==`ID'[_n-1]
+        capt confirm new variable `namelist'
+        if _rc==1 exit _rc
+        if _rc drop `namelist'
+        rename `tmp' `namelist'
+        if "`set'"=="" _geoframe_set pid `namelist'
+        di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
     }
-    geoframe get id, l(ID) strict
-    geoframe get coordinates, l(X) strict
-    gettoken X : X
-    tempvar tmp
-    if (`X'[1]>=.) {
-        // first coordinate missing: assuming polygons start with missing
-        qui gen byte `tmp' = `X'>=. | `ID'!=`ID'[_n-1]
-    }
-    else {
-        // first coordinate non-missing: assuming polygons end with missing
-        qui gen byte `tmp' = `X'[_n-1]>=. | `ID'!=`ID'[_n-1]
-    }
-    qui replace `tmp' = `tmp' + `tmp'[_n-1] if `ID'==`ID'[_n-1]
-    capt confirm new variable `namelist'
-    if _rc==1 exit _rc
-    if _rc drop `namelist'
-    rename `tmp' `namelist'
-    if "`set'"=="" _geoframe_set pid `namelist'
-    di as txt "(variable {bf:`namelist'} generated)"
 end
 
 program _geoframe_set

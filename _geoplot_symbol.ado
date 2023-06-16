@@ -1,4 +1,4 @@
-*! version 0.2.4  14jun2023  Ben Jann
+*! version 0.2.5  15jun2023  Ben Jann
 
 program _geoplot_symbol
     version 17
@@ -13,7 +13,7 @@ program _geoplot_symbol
             */ SIze(str) OFFset(numlist max=2)/*
             */ ANGle(real 0) ratio(real 1) n(passthru)/*
             */ COLORVar(varname numeric) LEVels(str)/*
-            */ COORdinates(varlist min=2 max=2)/*
+            */ COORdinates(varlist numeric min=2 max=2)/*
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ * ]
         // plottype
@@ -47,30 +47,18 @@ program _geoplot_symbol
             local wgt [iw=W]
         }
         else qui gen byte `wvar' = 1
-        geoframe get id, local(ID)
-        if "`ID'"!="" {
-            // select one row per ID; assuming data is ordered by ID; assuming
-            // Z and centroids are constant within ID
-            qui replace `touse' = 0 if `ID'==`ID'[_n-1]
-        }
-        if "`coordinates'"!="" geoframe flip `coordinates', local(coordinates)
+        if "`coordinates'"!="" geoframe flip `coordinates', local(coord)
         else {
-            geoframe get coordinates, strict flip local(coordinates)
-            if `:list sizeof coordinates'!=2 {
+            geoframe get coordinates, strict flip local(coord)
+            if `:list sizeof coord'!=2 {
                 di as err "wrong number of coordinate variables"
                 exit 498
             }
         }
-        markout `touse' `coordinates' // include nonmissing coordinates only
+        markout `touse' `coord' // include nonmissing coordinates only
         // extra variables to be copied
-        if "`ID'"!="" {
-            local ORG `ID' `wvar'
-            local TGT _ID W
-        }
-        else {
-            local ORG `wvar'
-            local TGT W
-        }
+        local ORG `wvar'
+        local TGT W
         if "`colorvar'"=="" local colorvar `varlist'
         if "`colorvar'"!="" {
             local zvar `colorvar'
@@ -199,7 +187,7 @@ void _compute_symbols(string scalar frame, string scalar touse,
     
     // get origin data
     ORG  = tokens(st_local("ORG"))
-    YX   = st_data(., st_local("coordinates"), touse)
+    YX   = st_data(., st_local("coord"), touse)
     Z    = st_data(., ORG, touse)
     INFO = _fmtvl(ORG) // collect formats and labels
     i    = rows(YX)
@@ -224,7 +212,7 @@ void _compute_symbols(string scalar frame, string scalar touse,
         if (cols(yx)!=2) yx = colshape(yx', 2)
     }
     else {
-        f = findexternal("__geoplot_symbol_"+shape+"()")
+        f = findexternal("_geoplot_symbol_"+shape+"()")
         if (f==NULL) {
             errprintf("function for symbol '%s' not found; error in shape()\n",
                 shape)
@@ -316,7 +304,7 @@ void _rotate(yx, angle)
 }
 
 
-real matrix __geoplot_symbol_circle(real scalar n, | string scalar arg)
+real matrix _geoplot_symbol_circle(real scalar n, | string scalar arg)
 {
     real colvector r
     pragma unused arg
@@ -327,12 +315,12 @@ real matrix __geoplot_symbol_circle(real scalar n, | string scalar arg)
     return((sin(r), cos(r)))
 }
 
-real matrix __geoplot_symbol_slice(real scalar n, string scalar arg)
+real matrix _geoplot_symbol_slice(real scalar n, string scalar arg)
 {
-    return((0,0) \ __geoplot_symbol_arc(n, arg) \ (0,0))
+    return((0,0) \ _geoplot_symbol_arc(n, arg) \ (0,0))
 }
 
-real matrix __geoplot_symbol_arc(real scalar n, string scalar arg)
+real matrix _geoplot_symbol_arc(real scalar n, string scalar arg)
 {
     real scalar    angle
     real colvector r
@@ -350,16 +338,16 @@ real matrix __geoplot_symbol_arc(real scalar n, string scalar arg)
     return((sin(r), cos(r)))
 }
 
-real matrix __geoplot_symbol_pentagram(real scalar n, string scalar arg)
+real matrix _geoplot_symbol_pentagram(real scalar n, string scalar arg)
 {
     real matrix YX, yx
     pragma unused n
     pragma unused arg
     
     // outer pentagon
-    YX = __geoplot_symbol_circle(5)
+    YX = _geoplot_symbol_circle(5)
     // inner pentagon
-    yx = __geoplot_symbol_circle(5) / (.5*(1+sqrt(5)))^2
+    yx = _geoplot_symbol_circle(5) / (.5*(1+sqrt(5)))^2
     _rotate(yx, 180)
     // merge
     YX = colshape((YX[1::5,], (yx[4::5,] \ yx[1::3,])), 2)
@@ -367,24 +355,24 @@ real matrix __geoplot_symbol_pentagram(real scalar n, string scalar arg)
     return(YX)
 }
 
-real matrix __geoplot_symbol_hexagram(real scalar n, string scalar arg)
+real matrix _geoplot_symbol_hexagram(real scalar n, string scalar arg)
 {
     real matrix YX, yx
     pragma unused n
     pragma unused arg
     
     // outer hexagon
-    YX = __geoplot_symbol_circle(6)
+    YX = _geoplot_symbol_circle(6)
     _rotate(YX, 90)
     // inner hexagon
-    yx = __geoplot_symbol_circle(6) * sqrt(1/3)
+    yx = _geoplot_symbol_circle(6) * sqrt(1/3)
     // merge
     YX = colshape(((YX[5::6,] \ YX[1::4,]), yx[1::6,]), 2)
     YX = YX \ YX[1,] // last point = first point
     return(YX)
 }
 
-real matrix __geoplot_symbol_pin(real scalar n, string scalar arg)
+real matrix _geoplot_symbol_pin(real scalar n, string scalar arg)
 {
     real colvector r, h
     real matrix    yx
@@ -405,7 +393,7 @@ real matrix __geoplot_symbol_pin(real scalar n, string scalar arg)
     return(yx)
 }
 
-real matrix __geoplot_symbol_pin2(real scalar n, string scalar arg)
+real matrix _geoplot_symbol_pin2(real scalar n, string scalar arg)
 {
     real colvector r, a, c
     real matrix    yx0, yx1

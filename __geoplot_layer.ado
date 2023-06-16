@@ -1,4 +1,4 @@
-*! version 0.2.4  14jun2023  Ben Jann
+*! version 0.2.5  16jun2023  Ben Jann
 
 /*
     Syntax:
@@ -102,12 +102,12 @@ program _layer
         local TYPE shape
         local hasSHP 1
         local OPTS `OPTS' SIze(str asis) lock wmax WMAX2(numlist max=1 >0)/*
-            */ COORdinates(namelist min=2 max=2)/*
+            */ COORdinates(namelist min=2 max=2) id(name)/*
             */ CENTRoids(varlist numeric min=2 max=2) area(varname numeric)
         local WGT [iw/]
         if `"`plottype'"'=="area" {
             local hasPLV 1
-            local PLVopts FColor(str asis) EColor(str asis)
+            local PLVopts PLevel(name) EColor(str asis) FColor(str asis)
             local Zopts `Zopts' FIntensity(passthru)
             local Zel `Zel' fintensity
         }
@@ -133,6 +133,7 @@ program _layer
         local Zel `Zel' msymbol msize msangle mlwidth mlabsize mlabangle/*
             */ mlabcolor
     }
+    // collect info from syntax, frame and possible shpframe
     frame `frame' {
         // syntax
         qui syntax [varlist(default=none max=1 numeric)] [if] [in] `WGT' [,/*
@@ -178,23 +179,19 @@ program _layer
             else geoframe get coordinates, strict flip local(yx) `typeSHP'
             local ORG `yx'
             local TGT `YX'
-            _get_PLV `hasPLV' `hasZ' `"`color'"' `"`fcolor'"' // => PLV
+            _get_plevel `hasPLV' `hasZ' "`plevel'" `"`color'"' `"`fcolor'"'
             if `hasPLV' {
-                local ORG `ORG' `PLV'
+                local ORG `ORG' `plevel'
                 local TGT `TGT' PLV
             }
-            geoframe get id, local(ID)
-            if "`ID'"!="" {
-                local ORG `ORG' `ID'
-                local TGT `TGT' ID
-            }
+            if "`TYPE'"=="shape" & "`id'"=="" geoframe get id, local(id)
         }
         // handle weights
         local hasWGT = "`weight'"!=""
         if `hasWGT' {
             tempname wvar
             qui gen double `wvar' = abs(`exp') if `touse'
-            markout `touse' `wvar'          // exclude obs with missing weight!
+            markout `touse' `wvar' // excludes obs with missing weight!
             if `"`wmax2'"'=="" {
                 su `wvar' if `touse', meanonly
                 if "`wmax'"!="" local wmax2 = r(max)
@@ -214,23 +211,22 @@ program _layer
         // handle Z
         if `hasZ' {
             local zfmt: format `zvar'
+            tempname ZVAR
             if `hasSHP' {
-                tempname ZVAR
                 local org `org' `zvar'
                 local tgt `tgt' `ZVAR'
+                local Zvar `ZVAR'
             }
-            else local ZVAR `zvar'
+            else local Zvar `zvar'
             local ORG `ORG' `ZVAR'
             local TGT `TGT' Z
             if "`l_wvar'"!="" {
-                tempname L_WVAR
                 if `hasSHP' {
+                    tempname L_WVAR
                     local org `org' `l_wvar'
                     local tgt `tgt' `L_WVAR'
-                    local ORG `ORG' `L_WVAR'
                 }
-                else local ORG `ORG' `l_wvar'
-                local TGT `TGT' `L_WVAR'
+                else local L_WVAR `l_wvar'
            }
         }
         else {
@@ -349,26 +345,43 @@ program _layer
         _process_coloropts options, `options'
         if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
     }
-    // copy data
-    if `hasSHP' {
-        // copy relevant variables from unit frame into shape frame
-        qui frame `shpframe': geoframe copy `frame' `org', target(`tgt')
-        qui frame `shpframe': replace `touse' = 0 if `touse'>=. 
+    // put frames together and categorize zvar
+    frame `shpframe' {
+        if `hasSHP' {
+            // copy relevant variables from unit frame into shpframe
+            qui geoframe copy `frame' `org', target(`tgt')
+            qui replace `touse' = 0 if `touse'>=. 
+        }
+        if "`id'"!="" {
+            // remove units without shape data (i.e. units that only have
+            // a single observation and for which the coordinate variables
+            // are missing)
+            mata: _drop_empty_shapes("`touse'", "`id'", tokens("`YX'"))
+        }
+        // categorize zvar
+        if `hasZ' {
+            if "`id'"!="" {
+                // tag first obs per ID
+                tempname ztouse
+                qui gen byte `ztouse' = `touse'
+                qui replace `ztouse' = 0/*
+                    */ if `id'==`id'[_n-1] & `touse'==`touse'[_n-1]
+            }
+            else local ztouse `touse'
+            tempname CUTS
+            mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`touse'") /* returns
+                CUTS, cuts, levels */
+            if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
+            _z_categorize `CUTS', levels(`levels') zvar(`Zvar') gen(`ZVAR')/*
+                */ touse(`touse') ztouse(`ztouse') `discrete' /* returns
+                    zlevels nobs nmiss discrete */
+        }
     }
+    // copy data into main frame
     local n0 = _N + 1
     qui geoframe append `shpframe' `ORG', target(`TGT') touse(`touse')
     local n1 = _N
-    if "`TYPE'"=="shape" { // only if plottype area or line
-        if !inlist(`"`typeSHP'"', "unit", "pc") { // only if data not unit or pc
-            if "`ID'"!="" { // only if ID variable is available
-                // remove units without shape data (i.e. units that only have
-                // a single observation and for which the coordinate variables
-                // are missing)
-                mata: _drop_empty_shapes(`n0', `n1', "ID", tokens("`YX'"))
-            }
-        }
-    }
-    local n1 = _N
+    //local n1 = _N
     if `n1'<`n0' {
         c_local plot
         c_local p `p'
@@ -399,14 +412,6 @@ program _layer
     // handle Z elements
     local opts
     if `hasZ' {
-        // - categorize Z
-        tempname CUTS
-        mata: _z_cuts("`CUTS'", (`n0', `n1')) // => CUTS, cuts, levels
-        _z_categorize `CUTS' `in', levels(`levels') `discrete' id(`ID')
-            // => zlevels nobs nmiss discrete
-        if `discrete' {
-            frame `frame': _z_labels `zvar' `cuts' // => zlabels
-        }
         // - process options
         if `levels' {
             local ZEL
@@ -699,35 +704,31 @@ program __parse_levels
 end
 
 program _z_categorize
-    syntax anything(name=CUTS) in, levels(str) [ discrete id(str) ]
-    if "`id'"!="" {
-        tempname first
-        qui gen byte `first' = ID!=ID[_n-1] `in'
-        local first & `first'==1
-    }
+    syntax anything(name=CUTS), levels(str) zvar(str) gen(str)/*
+        */ touse(str) ztouse(str) [ discrete ]
     local nobs
     tempname tmp
-    qui gen byte `tmp' = . `in'
+    qui gen byte `tmp' = .
     if "`discrete'"!="" {
         forv i=1/`levels' {
-            qui replace `tmp' = `i' if Z==`CUTS'[1,`i'] `in'
-            qui count if `tmp'==`i' `first' `in'
+            qui replace `tmp' = `i' if `zvar'==`CUTS'[1,`i'] & `touse'
+            qui count if `tmp'==`i' & `ztouse'
             local nobs `nobs' `r(N)'
         }
     }
     else {
         forv i=1/`levels' {
-            if `i'==1 local iff inrange(Z, `CUTS'[1,`i'], `CUTS'[1,`i'+1])
-            else      local iff Z>`CUTS'[1,`i'] & Z<=`CUTS'[1,`i'+1]
-            qui replace `tmp' = `i' if `iff' `in'
-            qui count if `tmp'==`i' `first' `in'
+            if `i'==1 local iff inrange(`zvar', `CUTS'[1,`i'], `CUTS'[1,`i'+1])
+            else      local iff `zvar'>`CUTS'[1,`i'] & `zvar'<=`CUTS'[1,`i'+1]
+            qui replace `tmp' = `i' if `iff' & `touse'
+            qui count if `tmp'==`i' & `ztouse'
             local nobs `nobs' `r(N)'
         }
     }
-    qui count if Z>=. `first' `in'
+    qui count if `zvar'>=. & `ztouse'
     local nmiss = r(N)
     if `nmiss' {
-        qui replace `tmp' = 0 if Z>=. `in' // set missings to 0
+        qui replace `tmp' = 0 if `zvar'>=. & `touse' // set missings to 0
         numlist "0/`levels'"
     }
     else {
@@ -737,22 +738,24 @@ program _z_categorize
     c_local nobs `nobs'
     c_local nmiss `nmiss'
     c_local discrete = "`discrete'"!=""
-    qui replace Z = `tmp' `in'
+    if "`zvar'"=="`gen'" drop `zvar'
+    rename `tmp' `gen'
 end
 
-program _get_PLV
-    args hasPLV hasZ color fcolor
+program _get_plevel
+    args hasPLV hasZ plevel color fcolor
     if !`hasPLV' exit
-    if strtrim(`"`fcolor'"')=="none"    local hasPLV 0
-    else if `hasZ'==0 {
-        if `"`color'`fcolor'"'=="" local hasPLV 0
+    if !`hasZ' {
+        // zvar not specified and no fill color
+        if `"`color'`fcolor'"'==""            local hasPLV 0
+        else if strtrim(`"`fcolor'"')=="none" local hasPLV 0
     }
     if `hasPLV' {
-        geoframe get plevel, l(PLV)
-        if "`PLV'"=="" local hasPLV 0
+        if "`plevel'"=="" geoframe get plevel, l(plevel)
+        if "`plevel'"=="" local hasPLV 0
     }
     c_local hasPLV `hasPLV'
-    c_local PLV `PLV'
+    c_local plevel `plevel'
 end
 
 program _z_labels
@@ -979,23 +982,24 @@ version 17
 mata:
 mata set matastrict on
 
-void _drop_empty_shapes(real scalar n0, real scalar n1, string scalar ID,
-    string rowvector YX)
+void _drop_empty_shapes(string scalar touse, string scalar id,
+    string rowvector yx)
 {
-    real colvector id, p
-    real matrix    yx
+    real colvector TOUSE, ID, p
+    real matrix    YX
     
-    if (n1<n0) return // no data
     // look for units that only have a single obs
-    id = st_data((n0,n1), ID) // assuming data is ordered by ID
-    p = (_mm_unique_tag(id) + _mm_unique_tag(id, 1)):==2 // first = last
+    ID = st_data(., id, touse) // assuming data is ordered by ID
+    p = (_mm_unique_tag(ID) + _mm_unique_tag(ID, 1)):==2 // first = last
     p = selectindex(p)
-    if (!length(p)) return // all units have more than one obs
+    if (!length(p)) return
     // check whether coordinate variables are missing
-    st_view(yx=., (n0,n1), YX)
-    p = select(p, rowmissing(yx[p,]):==cols(yx))
+    st_view(YX=., ., yx, touse)
+    p = select(p, rowmissing(YX[p,]):==cols(YX))
+    if (!length(p)) return
     // remove single-obs units for which all coordinate variables are missing
-    if (length(p)) st_dropobsin((n0-1):+p) // remove empty obs
+    st_view(TOUSE=., ., touse, touse)
+    TOUSE[p] = J(length(p),1,0)
 }
 
 transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
@@ -1007,9 +1011,10 @@ transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
     return(J(1, ceil(k/c), x)[|1\k|])
 }
 
-void _z_cuts(string scalar CUTS, real rowvector range)
+void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
+    string scalar touse)
 {
-    string scalar  cuts, method, wvar
+    string scalar  cuts, method
     real scalar    discrete, k, lb, ub
     real rowvector minmax
     real colvector C, X, w, p
@@ -1025,16 +1030,9 @@ void _z_cuts(string scalar CUTS, real rowvector range)
         st_local("levels", strofreal(k))
         return
     }
-    // tag first obs of each unit (if ID is available)
-    if (st_local("ID")!="") {
-        // assuming data is ordered by ID; assuming Z is constant
-        // within ID
-        p = selectindex(_mm_unique_tag(st_data(range, "ID")))
-    }
-    else p = .
     // CASE 2: discrete
     if (discrete) { // discrete specified
-        C = mm_unique(st_data(range, "Z")[p])
+        C = mm_unique(st_data(., zvar, touse))
         C = select(C, C:<.) // remove missing codes
         st_matrix(CUTS, C')
         st_local("cuts", invtokens(strofreal(C)'))
@@ -1042,7 +1040,7 @@ void _z_cuts(string scalar CUTS, real rowvector range)
         return
     }
     // get data
-    X = st_data(range, "Z")[p]
+    X = st_data(., zvar, touse)
     minmax = minmax(X)
     // SPECIAL CASE 1: no nonmissing data
     if (minmax==J(1,2,.)) {
@@ -1072,9 +1070,8 @@ void _z_cuts(string scalar CUTS, real rowvector range)
         return
     }
     // get weights
-    wvar  = st_local("L_WVAR")
     if (wvar!="") {
-        w = st_data(range, wvar)[p]
+        w = st_data(., wvar, touse)
         _editmissing(w, 0)
     }
     else w = 1

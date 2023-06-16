@@ -1,28 +1,52 @@
-*! version 0.2.4  14jun2023  Ben Jann
+*! version 0.2.5  14jun2023  Ben Jann
 
 program _geoframe_generate_plevel
     version 17
-    syntax [name] [, replace noset ]
+    syntax [name] [, replace noset force ]
     if "`namelist'"=="" local namelist _PLEVEL
-    if "`replace'"=="" {
-        confirm new variable `namelist'
+    
+    local cframe `"`c(frame)'"'
+    geoframe get type, l(type)
+    if "`type'"=="shape" local shpframe `"`cframe'"'
+    else geoframe get shpframe, local(shpframe) strict
+    frame `shpframe' {
+        if "`replace'"=="" {
+            cap n confirm new variable `namelist'
+            if _rc==1 exit 1
+            if _rc {
+                if "`shpframe'"!="`cframe'" {
+                    di as err "in frame {bf:`shpframe'}"
+                }
+                exit _rc
+            }
+        }
+        geoframe get id, l(ID) strict
+        geoframe get coordinates, l(XY) strict
+        geoframe get pid, l(PID)
+        if "`PID'"=="" {
+            tempvar PID
+            qui geoframe gen pid `PID', noset
+        }
+        tempname PL
+        qui gen byte `PL' = .
+        mata: _st_plevel()
+        qui count if `PL'!=0 & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])
+        if r(N)==0 {
+            di as txt "(no nested polygons found" _c
+            if "`force'"=="" {
+                di as txt "; no variable added)"
+                exit
+            }
+            else di as txt ")"
+        }
+        else di as txt "(`r(N)' nested polygons found)"
+        capt confirm new variable `namelist'
+        if _rc==1 exit _rc
+        if _rc drop `namelist'
+        rename `PL' `namelist'
+        if "`set'"=="" geoframe set plevel `namelist'
+        di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
     }
-    geoframe get id, l(ID) strict
-    geoframe get coordinates, l(XY) strict
-    geoframe get pid, l(PID)
-    if "`PID'"=="" {
-        tempvar PID
-        qui geoframe gen pid `PID', noset
-    }
-    tempname PL
-    qui gen byte `PL' = .
-    mata: _st_plevel()
-    capt confirm new variable `namelist'
-    if _rc==1 exit _rc
-    if _rc drop `namelist'
-    rename `PL' `namelist'
-    if "`set'"=="" geoframe set plevel `namelist'
-    di as txt "(variable {bf:`namelist'} generated)"
 end
 
 version 17

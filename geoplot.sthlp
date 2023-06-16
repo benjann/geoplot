@@ -430,7 +430,7 @@
     are as follows.
 
 {phang}
-    {opt sh:ape(spec)} selects or defines the symbol. {it:shape} may be
+    {opt sh:ape(spec)} selects or defines the shape of the symbols. {it:shape} may be
 
 {p2colset 9 25 27 2}{...}
 {p2col:{cmdab:c:ircle}}circle (or oval)
@@ -463,7 +463,7 @@
     {p_end}
 {p2col:{it:matname}}matrix containing shape coordinates
     {p_end}
-{p2col:{it:name} [{it:arg}]}mata function {cmd:__geoplot_symbol_}{it:name}{cmd:()} returning shape coordinates
+{p2col:{it:name} [{it:arg}]}mata function {cmd:_geoplot_symbol_}{it:name}{cmd:()} returning shape coordinates
     {p_end}
 
 {pmore}
@@ -503,7 +503,7 @@
 {pmore}
     and then type {cmd:shape(KITE)}. Furthermore, you may create a custom symbol
     by defining a Mata function
-    {cmd:__geoplot_symbol_}{it:name}{cmd:()} and then call the function
+    {cmd:_geoplot_symbol_}{it:name}{cmd:()} and then call the function
     as {cmd:shape(}{it:name} [{it:arg}]{cmd:)}. Two arguments will be submitted to
     the function, real scalar {it:n} and string scalar {it:arg}. The function must
     return a numeric {it:r} x 2 matrix containing the (Y,X)
@@ -513,10 +513,10 @@
     to create white space by setting the plot level to 0 for
     regular parts and to 1 for white-space parts; more precisely, the parts
     of the symbol will be printed in ascending order of the plot level with
-    even-level parts are treated regular parts and odd-level parts are treated as
+    even-level parts treated as regular parts and odd-level parts treated as
     white space). For example, to create a kite symbol, define function
 
-            {com}real matrix __geoplot_symbol_Kite(real scalar n, string scalar arg)
+            {com}real matrix _geoplot_symbol_Kite(real scalar n, string scalar arg)
             {
                 pragma unused n
                 pragma unused arg
@@ -543,11 +543,12 @@
     is {it:n} = max(4, ceil({it:headsize} * 100)).
 
 {phang}
-    {opt ratio(#)} adjusts the ratio between the height and the width of the symbol. The default
+    {opt ratio(#)} adjusts the ratio between the height and the width of the symbols. The default
     is {cmd:ratio(1)}. For example, type {cmd:ratio(2)} to double the height.
 
 {phang}
-    {opt ang:le(angle)} rotates the symbol by {it:angle} degrees (counterclockwise).
+    {opt ang:le(angle)} rotates the symbols by {it:angle} degrees (counterclockwise). Global
+    option {helpb geoplot##angle:angle()} has no effect on the orientation of the symbols.
 
 {phang}
     {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the symbols. For
@@ -563,7 +564,7 @@
 
 {phang}
     {cmdab:off:set(}{it:offset} [{it:angle}]{cmd:)} offsets the positions of the
-    symbol by {it:offset} percent of {cmd:size()} in the direction of {it:angle}. The
+    symbols by {it:offset} percent of {cmd:size()} in the direction of {it:angle}. The
     default {it:angle} is 0 (east). For example, set {it:angle} to 90 for north, 180
     for west, or -45 for south-east.
 
@@ -646,7 +647,8 @@
     {opt ang:le(angle)} rotates the pies by {it:angle} degrees
     (counterclockwise). The default is {cmd:angle(90)} such that the first
     slice of a pie starts at an angle of 90 degrees (north). For example, type
-    {cmd:angle(0)} place the first slice at 0 degrees (east).
+    {cmd:angle(0)} place the first slice at 0 degrees (east). Global
+    option {helpb geoplot##angle:angle()} has no effect on the orientation of the pies.
 
 {phang}
     {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the
@@ -727,7 +729,8 @@
 {phang}
     {opt ang:le(angle)} rotates the bar charts by {it:angle} degrees
     (counterclockwise). The default is to display upright bar charts. For
-    example, Type {cmd:angle(-90)} for horizontal bar charts (west to east).
+    example, Type {cmd:angle(-90)} for horizontal bar charts (west to east). Global
+    option {helpb geoplot##angle:angle()} has no effect on the orientation of the symbols.
 
 {phang}
     {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the
