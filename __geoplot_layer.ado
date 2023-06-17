@@ -1,4 +1,4 @@
-*! version 0.2.5  16jun2023  Ben Jann
+*! version 1.0.0  17jun2023  Ben Jann
 
 /*
     Syntax:
@@ -149,7 +149,7 @@ program _layer
         geoframe get feature, l(FEATURE)
         if `"`FEATURE'"'=="water" {
             if `"`color'"'==""  local color color("135 206 235") // SkyBlue
-            if `"`lwidth'"'=="" local lwidth lwidth(thin)
+            if `"`lwidth'"'=="" local lwidth lwidth(vthin)
             if `"`plottype'"'=="area" {
                 if "`fintensity'"=="" local fintensity fintensity(50)
             }
@@ -587,15 +587,15 @@ program _layer
             _label_separate `label' // => lab_keys, lab_lbls
             local NOBS: copy local nobs
             local CUTS: copy local cuts
-            gettoken lb CUTS : CUTS
+            gettoken LB CUTS : CUTS
             local i 0
             foreach key of local lkeys {
                 local ++i
                 gettoken Nobs NOBS : NOBS
-                gettoken ub CUTS : CUTS
-                local mid `: di `format' (`ub'+`lb')/2'
-                local lb  `: di `format' `lb''
-                local ub  `: di `format' `ub''
+                gettoken UB CUTS : CUTS
+                local mid `: di `format' (`UB'+`LB')/2'
+                local lb  `: di `format' `LB''
+                local ub  `: di `format' `UB''
                 mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `""(@lb,@ub]""')
                 local lbl: subinstr local lbl "@lab" "`lb'-`ub'", all
                 local lbl: subinstr local lbl "@lb" "`lb'", all
@@ -604,7 +604,7 @@ program _layer
                 local lbl: subinstr local lbl "@n" "`Nobs'", all
                 if `reverse' local legend `legend' `key' `lbl'
                 else         local legend `key' `lbl' `legend'
-                local lb `ub'
+                local LB `UB'
                 local ++lsize
             }
         }

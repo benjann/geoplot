@@ -1,8 +1,6 @@
 # geoplot
 Stata module to draw maps
 
-**This is a beta version that will likely have various issues.**
-
 To install `geoplot` from GitHub, type
 
     . net install geoplot, replace from(https://raw.githubusercontent.com/benjann/geoplot/main/)
@@ -84,6 +82,11 @@ Map with composite legend.
 ---
 
 Main changes:
+
+    17jun2023 (version 1.0.0)
+    - no longer beta version
+    - fixed minor bug related to label()
+    - default lwidth for "water" now vthin
 
     16jun2023 (version 0.2.5)
     geoplot
