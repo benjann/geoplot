@@ -1,5 +1,5 @@
 {smcl}
-{* 19jun2023}{...}
+{* 20jun2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -22,6 +22,8 @@
 {synopt :{helpb geoframe##create:{ul:cr}eate}}load data into geoframe or declare
     current frame as geoframe
     {p_end}
+{p2col :{helpb geoframe##link:{ul:l}ink}}link shape frame to current frame
+    {p_end}
 {p2col :{helpb geoframe##clean:clean}}delete unmatched/empty shapes and units
     {p_end}
 {p2col :{helpb geoframe##select:{ul:sel}ect}}select units and shapes
@@ -42,8 +44,6 @@
     {p_end}
 
 {syntab :Utilities}
-{p2col :{helpb geoframe##link:{ul:l}ink}}link shape frame to current frame
-    {p_end}
 {p2col :{helpb geoframe##relink:{ul:rel}ink}}fix linkage variable after modifying data
     {p_end}
 {p2col :{helpb geoframe##unlink:{ul:unl}ink}}unlink shape frame from current frame
@@ -178,6 +178,27 @@
     are not empty and that have a matching unit in the main frame. A shape is
     considered empty if it contains only a single observation and if the
     coordinates in this observation are missing.
+
+{marker link}{...}
+{dlgtab:geoframe link}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:l:ink} {it:shpframe}
+    [{cmd:,} {cmdab:cl:ean}[{cmd:(}{it:options}{cmd:)}] ]
+
+{pstd}
+    establishes a link between the current frame and {it:shpframe}. The current
+    frame must be an attribute frame (one row per unit) and
+    {it:shpframe} is typically a frame containing shape information on the units
+    represented in the current frame. For each frame only one link to a
+    {it:shpframe} can be registered; calling {cmd:geoframe link} will
+    remove any existing link to another shape frame. {cmd:geoframe link}
+    is an alternative to linking frames automatically when loading them
+    using {cmd:geoframe create}.
+
+{pstd}
+    Option {cmd:clean()} calls {helpb geoframe##clean:geoframe clean} after
+    linking the frames. See below for a description of {it:options}.
 
 {marker clean}{...}
 {dlgtab:geoframe clean}
@@ -446,34 +467,6 @@
 {pstd}
     Option {opt local()} stores the value of the setting in a local called
     {it:lname} instead of displaying it.
-
-{marker link}{...}
-{dlgtab:geoframe link}
-
-{p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:l:ink} {it:shpframe}
-    [{cmd:,} {cmdab:cl:ean}[{cmd:(}{it:arg}{cmd:)}] ]
-
-{pstd}
-    establishes a link between the current frame and {it:shpframe}. The current
-    frame must be an attribute frame (one row per unit) and
-    {it:shpframe} is typically a frame containing shape information on the units
-    represented in the current frame. For each frame only one link to a
-    {it:shpframe} can be registered; calling {cmd:geoframe link} will
-    remove any existing link to another shape frame. {cmd:geoframe link}
-    is an alternative to linking frames automatically when loading them
-    using {cmd:geoframe create}.
-
-{pstd}
-    Option {cmd:clean()} can be used to remove unmatched shapes and
-    units. Option {cmd:clean} without argument deletes both,
-    unmatched or empty shapes in {it:shpframe} as well as unmatched units or
-    units linked to empty shapes in the current frame. Type {cmd:clean({ul:s}hapes)}
-    to only delete unmatched/empty shapes in {it:shpframe}; type
-    {cmd:clean({ul:u}nits)} to only delete unmatched/empty units in the
-    current frame. A shape is
-    considered empty if it contains only a single observation and if the
-    coordinates in this observation are missing.
 
 {marker relink}{...}
 {dlgtab:geoframe relink}
