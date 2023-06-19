@@ -147,23 +147,6 @@ Main changes:
       considered; if applied repeatedly, only plevel will be updated for the
       selected shapes, leaving the other values unchanged; option -force- discarded
 
-    19jun2023 (version 1.0.1)
-    geoplot
-    - legend() now has option -bottom- to align legend keys in multicolumn legends
-      at bottom
-    - composite palette specifications now possible in color() if zvar is specified
-    - categorization of zvar is now faster
-    geoframe
-    - -geoframe link- now creates a permanent linkage variable in shpframe; this
-      makes execution of -geoframe copy- faster
-    - -geoframe relink- added
-    - -geoframe set shpframe- no longer allowed (only -geoframe get shpframe-)
-    - -geoframe get linkname- added
-    - -geoframe create- now has -nocurrent- option
-    - automatic loading of shape file is now only applied by -geoframe create- if
-      (inferred) type is "unit"
-    - -geoframe append- displayed some irrelevant output; this is fixed
-
     17jun2023 (version 1.0.0)
     - geoplot published on SSC
     - fixed minor bug related to label()
