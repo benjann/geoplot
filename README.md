@@ -1,17 +1,27 @@
 # geoplot
 Stata module to draw maps
 
-To install `geoplot` from GitHub, type
+`geoplot` draws maps from shape files and other datasets. The procedure is to
+first create one or several frames containing the source data using command
+`geoframe` and then apply `geoplot` to plot the data from these frames. Multiple
+layers of elements such as regions, borders, lakes, roads, labels, and symbols
+can be freely combined. The look of the elements (e.g. their color) can be
+varied depending on the values of variables.
 
-    . net install geoplot, replace from(https://raw.githubusercontent.com/benjann/geoplot/main/)
+To install `geoplot` from the SSC Archive, type
 
-Stata 17 is required.
+    . ssc install geoplot, replace
 
-The following packages are required:
+in Stata. Stata version 17 or newer is required. Furthermore,
+the following packages need to be installed on the system:
 
     . ssc install palettes, replace
     . ssc install colrspace, replace
     . ssc install moremata, replace
+
+Installation of `geoplot` from GitHub:
+
+    . net install geoplot, replace from(https://raw.githubusercontent.com/benjann/geoplot/main/)
 
 ---
 
@@ -47,7 +57,7 @@ Regions colored by number of fortune tellers (per million population).
 
 Different formatting of legend labels.
 
-    geoplot (area regions fortell, label("@lb-@ub")) (line regions)
+    geoplot (area regions fortell, label("@lb-@ub (N=@n)")) (line regions)
 
 ![example 4](/images/4.png)
 
@@ -79,12 +89,83 @@ Map with composite legend.
 
 ![example 7](/images/7.png)
 
+Map with pie charts.
+
+    geoplot (area regions) (pie regions relig?, label(, reverse))
+
+![example 8](/images/8.png)
+
+Map with polar area diagrams.
+
+    geoplot (area regions) ///
+        (pie regions relig?, polar outline(lc(gs6)) label(, reverse))
+
+![example 9](/images/9.png)
+
+Map with exploded pie charts, scaled by population size.
+
+    geoplot (area regions) ///
+        (pie regions relig? [w=pop98], size(*2) explode(3 = 40) angle(0) ///
+            label(, reverse))
+
+![example 10](/images/10.png)
+
+Map with bar charts.
+
+    geoplot (area regions) (bar regions relig1, asis outline)
+
+![example 11](/images/11.png)
+
 ---
 
 Main changes:
 
+    19jun2023 (version 1.0.1)
+    geoplot
+    - legend() now has option -bottom- to align legend keys in multicolumn legends
+      at bottom
+    - composite palette specifications now possible in color() if zvar is specified
+    - categorization of zvar is now faster
+    - algorithm to remove empty shapes deleted from __geoplot_layer.ado
+    geoframe
+    - -geoframe clean- added
+    - -geoframe select- added
+    - -geoframe create- now drops unmatched and empty shapes in shpframe unless
+      option -nodrop- is specified
+    - -geoframe link- now has option clean() to remove unlinked/empty shapes or units
+    - -geoframe link- now creates a permanent linkage variable in shpframe; this
+      makes execution of -geoframe copy- faster
+    - -geoframe relink- added
+    - -geoframe set shpframe- no longer allowed (only -geoframe get shpframe-)
+    - -geoframe get linkname- added
+    - -geoframe create- now has -nocurrent- option
+    - automatic loading of shape file is now only applied by -geoframe create- if
+      (inferred) type is "unit"
+    - -geoframe append- displayed some irrelevant output; this is fixed
+    - -geoframe generate plevel- now allows if and in; if applied to an attribute
+      frame, only the shapes related to units in the attribute file will be
+      considered; if applied repeatedly, only plevel will be updated for the
+      selected shapes, leaving the other values unchanged; option -force- discarded
+
+    19jun2023 (version 1.0.1)
+    geoplot
+    - legend() now has option -bottom- to align legend keys in multicolumn legends
+      at bottom
+    - composite palette specifications now possible in color() if zvar is specified
+    - categorization of zvar is now faster
+    geoframe
+    - -geoframe link- now creates a permanent linkage variable in shpframe; this
+      makes execution of -geoframe copy- faster
+    - -geoframe relink- added
+    - -geoframe set shpframe- no longer allowed (only -geoframe get shpframe-)
+    - -geoframe get linkname- added
+    - -geoframe create- now has -nocurrent- option
+    - automatic loading of shape file is now only applied by -geoframe create- if
+      (inferred) type is "unit"
+    - -geoframe append- displayed some irrelevant output; this is fixed
+
     17jun2023 (version 1.0.0)
-    - no longer beta version
+    - geoplot published on SSC
     - fixed minor bug related to label()
     - default lwidth for "water" now vthin
 

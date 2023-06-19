@@ -1,5 +1,5 @@
 {smcl}
-{* 17jun2023}{...}
+{* 19jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -1210,6 +1210,10 @@
     {p_end}
 
 {phang2}
+    {opt bot:tom} aligns the legend keys at the bottom (rightmost) if there are multiple
+    columns (rows) in the legend. The default is to align the keys at the top (leftmost).
+
+{phang2}
     {opt hor:izontal} arranges the legend horizontally (i.e., in rows). The default is to
     arrange the legend vertically (in columns).
 
@@ -1528,7 +1532,7 @@
 
 {pmore}
     Jann, B. (2023). geoplot: Stata module to draw maps. Available from
-    {browse "https://github.com/benjann/geoplot/"}.
+    {browse "https://ideas.repec.org/c/boc/bocode/s459211.html"}.
 
 {pstd}
     Various features of {cmd:geoplot} have been inspired by corresponding

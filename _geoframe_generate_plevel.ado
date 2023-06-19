@@ -1,23 +1,41 @@
-*! version 1.0.0  17jun2023  Ben Jann
+*! version 1.0.1  19jun2023  Ben Jann
 
 program _geoframe_generate_plevel
     version 17
-    syntax [name] [, replace noset force ]
+    syntax [name] [if] [in] [, replace noset ]
     if "`namelist'"=="" local namelist _PLEVEL
-    
     local cframe `"`c(frame)'"'
     geoframe get type, l(type)
+    marksample touse
     if "`type'"=="shape" local shpframe `"`cframe'"'
-    else geoframe get shpframe, local(shpframe) strict
+    else {
+        geoframe get shpframe, local(shpframe) strict
+        geoframe get linkname, local(lnkvar) strict
+        frame `shpframe' {
+            qui frget `touse' = `touse', from(`lnkvar')
+            qui replace `touse' = 0 if `touse'>=.
+        }
+    }
     frame `shpframe' {
-        if "`replace'"=="" {
-            cap n confirm new variable `namelist'
-            if _rc==1 exit 1
-            if _rc {
-                if "`shpframe'"!="`cframe'" {
-                    di as err "in frame {bf:`shpframe'}"
-                }
-                exit _rc
+        local newvar 1               // variable does not exist
+        capt confirm new variable `namelist'
+        if _rc==1 exit _rc
+        if _rc {
+            capt confirm numeric variable `namelist'
+            if _rc==1 exit _rc
+            if _rc    local newvar 2 // variables exists and is string
+            else      local newvar 0 // variables exists and is numeric
+        }
+        if "`replace'"!="" {
+            if `newvar'==0 {
+                local newvar 2       // replace variable even if conformable
+            }
+        }
+        else {
+            if `newvar'==2 {
+                di as err "variable {bf:`namelist'} already exists and is"/*
+                    */ " string; cannot update"
+                exit 110
             }
         }
         geoframe get id, l(ID) strict
@@ -28,24 +46,20 @@ program _geoframe_generate_plevel
             qui geoframe gen pid `PID', noset
         }
         tempname PL
-        qui gen byte `PL' = .
-        mata: _st_plevel()
+        qui gen byte `PL' = 0
+        mata: _st_plevel("`touse'")
         qui count if `PL'!=0 & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])
-        if r(N)==0 {
-            di as txt "(no nested polygons found" _c
-            if "`force'"=="" {
-                di as txt "; no variable added)"
-                exit
-            }
-            else di as txt ")"
+        di as txt "(`r(N)' nested polygons found)"
+        if `newvar' {
+            if `newvar'==2 drop `namelist'
+            rename `PL' `namelist'
+            di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
         }
-        else di as txt "(`r(N)' nested polygons found)"
-        capt confirm new variable `namelist'
-        if _rc==1 exit _rc
-        if _rc drop `namelist'
-        rename `PL' `namelist'
+        else {
+            qui replace `namelist' = `PL' if `touse'
+            di as txt "(variable {bf:`namelist'} updated in frame {bf:`shpframe'})"
+        }
         if "`set'"=="" geoframe set plevel `namelist'
-        di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
     }
 end
 
@@ -66,7 +80,7 @@ struct polygon {
     real colvector d    // list of descendants
 }
 
-void _st_plevel()
+void _st_plevel(string scalar touse)
 {
     real scalar    i, j
     real colvector ID, PID, PL
@@ -74,9 +88,9 @@ void _st_plevel()
     pointer (struct unit) vector u
 
     // collect units and polygons
-    st_view(ID=.,  ., st_local("ID"))
-    st_view(PID=., ., st_local("PID"))
-    st_view(XY=.,  ., st_local("XY"))
+    st_view(ID=.,  ., st_local("ID"), touse)
+    st_view(PID=., ., st_local("PID"), touse)
+    st_view(XY=.,  ., st_local("XY"), touse)
     u = _read_units(ID, PID, XY)
     // determine within unit plot levels
     i = length(u)
@@ -87,7 +101,7 @@ void _st_plevel()
         for (j=i-1; j; j--) _plevel_between_u(*u[i], *u[j])
     }
     // store plevel
-    st_view(PL=.,  ., st_local("PL"))
+    st_view(PL=.,  ., st_local("PL"), touse)
     i = length(u)
     for (;i;i--) _write_plevel(PL, *u[i])
 }

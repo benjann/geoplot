@@ -1,4 +1,4 @@
-*! version 1.0.0  17jun2023  Ben Jann
+*! version 1.0.1  19jun2023  Ben Jann
 
 /*
     Syntax:
@@ -349,14 +349,8 @@ program _layer
     frame `shpframe' {
         if `hasSHP' {
             // copy relevant variables from unit frame into shpframe
-            qui geoframe copy `frame' `org', target(`tgt')
+            geoframe copy `frame' `org', target(`tgt') quietly
             qui replace `touse' = 0 if `touse'>=. 
-        }
-        if "`id'"!="" {
-            // remove units without shape data (i.e. units that only have
-            // a single observation and for which the coordinate variables
-            // are missing)
-            mata: _drop_empty_shapes("`touse'", "`id'", tokens("`yx'"))
         }
         // categorize zvar
         if `hasZ' {
@@ -706,40 +700,25 @@ end
 program _z_categorize
     syntax anything(name=CUTS), levels(str) zvar(str) gen(str)/*
         */ touse(str) ztouse(str) [ discrete ]
-    local nobs
+    //local nobs
+    local discrete = "`discrete'"!=""
     tempname tmp
-    qui gen byte `tmp' = .
-    if "`discrete'"!="" {
-        forv i=1/`levels' {
-            qui replace `tmp' = `i' if `zvar'==`CUTS'[1,`i'] & `touse'
-            qui count if `tmp'==`i' & `ztouse'
-            local nobs `nobs' `r(N)'
-        }
+    local dtype byte
+    if      `levels'>32740 local dtype long
+    else if `levels'>100   local dtype int
+    qui gen `dtype' `tmp' = .
+    mata: _z_categorize(`levels', `discrete', "`CUTS'", "`zvar'", "`tmp'",/*
+        */ "`ztouse'")
+    if "`touse'"!="`ztouse'" {
+        // fill in remaining obs of shape units
+        qui replace `tmp' = `tmp'[_n-1] if `touse' & !`ztouse'
     }
-    else {
-        forv i=1/`levels' {
-            if `i'==1 local iff inrange(`zvar', `CUTS'[1,`i'], `CUTS'[1,`i'+1])
-            else      local iff `zvar'>`CUTS'[1,`i'] & `zvar'<=`CUTS'[1,`i'+1]
-            qui replace `tmp' = `i' if `iff' & `touse'
-            qui count if `tmp'==`i' & `ztouse'
-            local nobs `nobs' `r(N)'
-        }
-    }
-    qui count if `zvar'>=. & `ztouse'
-    local nmiss = r(N)
-    if `nmiss' {
-        qui replace `tmp' = 0 if `zvar'>=. & `touse' // set missings to 0
-        numlist "0/`levels'"
-    }
-    else {
-        numlist "1/`levels'"
-    }
-    c_local zlevels `r(numlist)'
-    c_local nobs `nobs'
-    c_local nmiss `nmiss'
-    c_local discrete = "`discrete'"!=""
     if "`zvar'"=="`gen'" drop `zvar'
     rename `tmp' `gen'
+    c_local zlevels `zlevels'
+    c_local nobs `nobs'
+    c_local nmiss `nmiss'
+    c_local discrete `discrete'
 end
 
 program _get_plevel
@@ -782,7 +761,7 @@ program _z_colors
     gettoken nm 0 : 0
     local 0 `", `0'"'
     syntax [, `nm'(str asis) ]
-    _parse comma color 0 : `nm'
+    mata: _z_color_parselastcomma("`nm'") // returns color and 0
     syntax [, NOEXPAND n(passthru) IPolate(passthru)/*
         */ OPacity(passthru) INtensity(passthru) * ]
     if "`noexpand'"=="" local noexpand noexpand
@@ -982,26 +961,6 @@ version 17
 mata:
 mata set matastrict on
 
-void _drop_empty_shapes(string scalar touse, string scalar id,
-    string rowvector yx)
-{
-    real colvector TOUSE, ID, p
-    real matrix    YX
-    
-    // look for units that only have a single obs
-    ID = st_data(., id, touse) // assuming data is ordered by ID
-    p = (_mm_unique_tag(ID) + _mm_unique_tag(ID, 1)):==2 // first = last
-    p = selectindex(p)
-    if (!length(p)) return
-    // check whether coordinate variables are missing
-    st_view(YX=., ., yx, touse)
-    p = select(p, rowmissing(YX[p,]):==cols(YX))
-    if (!length(p)) return
-    // remove single-obs units for which all coordinate variables are missing
-    st_view(TOUSE=., ., touse, touse)
-    TOUSE[p] = J(length(p),1,0)
-}
-
 transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
 {   // x must have at least one element
     real scalar r, c
@@ -1117,6 +1076,76 @@ real colvector _z_cuts_kmeans(real scalar k, real colvector X)
     // return sorted list of upper bounds of clusters
     p = order((C,X), (1,2))
     return(sort(select(X[p], _mm_unique_tag(C[p], 1)), 1))
+}
+
+void _z_categorize(real scalar k, real scalar discrete, string scalar cuts,
+    string scalar zvar, string scalar ztmp, string scalar touse)
+{
+    real scalar    i, n, m, c0, c1
+    real rowvector C, N
+    real colvector Z, T, p
+    
+    C = st_matrix(cuts)
+    N = J(1, k, .)
+    st_view(Z=., ., zvar, touse)
+    st_view(T=., ., ztmp, touse)
+    if (!discrete) c0 = C[k+1]
+    for (i=k;i;i--) {
+        if (discrete) p = selectindex(Z:==C[i])
+        else {
+            c1 = c0; c0 = C[i]
+            if (i==1) p = selectindex(Z:>=c0 :& Z:<=c1)
+            else      p = selectindex(Z:> c0 :& Z:<=c1)
+        }
+        N[i] = n = length(p)
+        if (n) T[p] = J(n,1,i)
+    }
+    p = selectindex(Z:>=.)
+    m = length(p)
+    if (m) {
+        T[p] = J(m,1,0) // set missings to 0
+        st_local("zlevels", invtokens(strofreal(0..k)))
+    }
+    else st_local("zlevels", invtokens(strofreal(1..k)))
+    st_local("nobs", invtokens(strofreal(N)))
+    st_local("nmiss", strofreal(m))
+}
+
+void _z_color_parselastcomma(string scalar nm)
+{
+    real scalar      i, pi
+    real rowvector   p
+    string rowvector T
+    transmorphic     t
+    
+    t = tokeninit("", ("/",","), (`""""', `"`""'"',"()"))
+    tokenset(t, st_local(nm))
+    T = tokengetall(t)
+    p = selectindex(T:=="/")
+    i = length(p)
+    if (i) { // multiple palettes
+        pi = p[i]
+        if (pi==length(T)) pi = 0 // no opts
+        else {
+            p = selectindex(T[|pi+1\.|]:==",")
+            if (length(p)) pi = pi + p[1]
+            else           pi = 0 // no opts
+        }
+    }
+    else { // single palette
+        p = selectindex(T:==",")
+        if (length(p)) pi = p[1]
+        else           pi = 0 // no opts
+    }
+    if (pi) {
+        if (pi==1) st_local("color", "") // nothing before comma
+        else       st_local("color", strtrim(invtokens(T[|1\pi-1|],"")))
+        st_local("0", invtokens(T[|pi\.|],""))
+    }
+    else { // no opts
+        st_local("color", strtrim(invtokens(T,"")))
+        st_local("0", "")
+    }
 }
 
 void _generate_mlabels(string scalar var, string scalar VAR, string scalar fmt, 

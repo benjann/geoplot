@@ -1,4 +1,4 @@
-*! version 1.0.0  17jun2023  Ben Jann
+*! version 1.0.1  19jun2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -148,7 +148,7 @@ program geoplot, rclass
             _scalebar `refsize' `Ymin' `Ymax' `Xmin' `Xmax', `sbar2'
             local plots `plots' `plot'
         }
-    
+        
     // compass
         if `"`compass'`compass2'"'!="" {
             _compass `refsize' `Ymin' `Ymax' `Xmin' `Xmax', `compass2'
@@ -160,14 +160,14 @@ program geoplot, rclass
             _legend, `legend2' // returns legend
         }
         else local legend legend(off)
-    
+        
     // clegend
         if `clegend' {
             _clegend, `clegend2' // returns plot, clegend
             local plots `plots' `plot'
         }
         else local clegend
-    
+        
     // draw graph
          local graph /*
             */ graph twoway `plots',/*
@@ -405,7 +405,7 @@ end
 
 program _legend
     // syntax
-    syntax [, off Layout(str asis) HORizontal OUTside POSition(str)/*
+    syntax [, off Layout(str asis) BOTtom HORizontal OUTside POSition(str)/*
         */ SIze(passthru) SYMYsize(passthru) SYMXsize(passthru)/*
         */ KEYGap(passthru) COLGap(passthru) ROWGap(passthru)/*
         */ BMargin(passthru) REGion(passthru)/*
@@ -445,6 +445,7 @@ program _legend
             else if `"`l'"'=="|" {
                 if !`nkeys' continue // ignore empty columns
                 local ++ncols
+                local nkeys_`ncols' `nkeys'
                 local kmax = max(`kmax', `nkeys')
                 local nkeys 0
                 local LAYOUT `LAYOUT' |
@@ -481,6 +482,7 @@ program _legend
         }
         if `nkeys' { // close last column
             local ++ncols
+            local nkeys_`ncols' `nkeys'
             local kmax = max(`kmax', `nkeys')
             local LAYOUT `LAYOUT' |
         }
@@ -488,10 +490,22 @@ program _legend
             c_local legend legend(off)
             exit
         }
+        // - now compile legend
         local nkeys 0
+        local lcol 1
+        local newcol 1
         while (1) {
             gettoken l LAYOUT : LAYOUT
             if `"`l'"'=="" continue, break
+            if `newcol' {
+                if "`bottom'"!="" {
+                    while (`nkeys'<(`kmax'-`nkeys_`lcol'')) {
+                        local ++nkeys
+                        local order `order' - " "
+                    }
+                }
+                local newcol 0
+            }
             if `"`l'"'=="." {
                 local ++nkeys
                 local order `order' - " "
@@ -502,6 +516,8 @@ program _legend
                     local order `order' - " "
                 }
                 local nkeys 0
+                local ++lcol
+                local newcol 1
             }
             else if `"`l'"'=="-" {
                 gettoken l LAYOUT : LAYOUT
