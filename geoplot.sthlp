@@ -1,5 +1,5 @@
 {smcl}
-{* 19jun2023}{...}
+{* 21jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -566,7 +566,8 @@
 {phang}
     {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the symbols. For
     the predefined symbols, {cmd:size()} sets the length of the
-    radius of the circle enclosing the symbol. For custom symbols, {cmd:size()} sets
+    radius of the circle enclosing the symbol (i.e. the distance between the center
+    and the outermost point). For custom symbols, {cmd:size()} sets
     the unit length of the specified coordinates. Type {opt size(#)} to specify
     an absolute size (i.e. in units of the underlying
     map). Alternatively, specify {cmd:size(*}{it:#}{cmd:)} to multiply the default

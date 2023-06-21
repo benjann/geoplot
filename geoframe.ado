@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.2  21jun2023  Ben Jann
 
 program geoframe
     version 17
@@ -12,19 +12,22 @@ end
 
 program _parse_subcmd
     local l = strlen(`"`0'"')
-    if      `"`0'"'==substr("create", 1, max(2,`l'))    local 0 create
-    else if `"`0'"'==substr("select", 1, max(3,`l'))    local 0 select
-    else if `"`0'"'==substr("describe", 1, max(1,`l'))  local 0 describe
+    if      `"`0'"'=="get"                              local 0 get
     else if `"`0'"'=="set"                              local 0 set
-    else if `"`0'"'=="get"                              local 0 get
     else if `"`0'"'=="flip"                             local 0 flip // undocumented
-    else if `"`0'"'==substr("link", 1, max(1,`l'))      local 0 link
-    else if `"`0'"'==substr("relink", 3, max(1,`l'))    local 0 relink
-    else if `"`0'"'==substr("unlink", 3, max(1,`l'))    local 0 unlink
-    else if `"`0'"'==substr("generate", 1, max(1,`l'))  local 0 generate
-    else if `"`0'"'==substr("attach", 1, max(2,`l'))    local 0 attach
-    else if `"`0'"'==substr("detach", 1, max(3,`l'))    local 0 detach
-    else if `"`0'"'==substr("append", 1, max(2,`l'))    local 0 append
+    else if `"`0'"'==substr("create",    1, max(2,`l')) local 0 create
+    else if `"`0'"'==substr("link",      1, max(1,`l')) local 0 link
+    else if `"`0'"'==substr("clean",     1, max(2,`l')) local 0 clean
+    else if `"`0'"'==substr("select",    1, max(3,`l')) local 0 select
+    else if `"`0'"'==substr("describe",  1, max(1,`l')) local 0 describe
+    else if `"`0'"'==substr("generate",  1, max(1,`l')) local 0 generate
+    else if `"`0'"'==substr("rename",    1, max(3,`l')) local 0 rename
+    else if `"`0'"'==substr("duplicate", 1, max(3,`l')) local 0 duplicate
+    else if `"`0'"'==substr("relink",    1, max(3,`l')) local 0 relink
+    else if `"`0'"'==substr("unlink",    1, max(3,`l')) local 0 unlink
+    else if `"`0'"'==substr("attach",    1, max(2,`l')) local 0 attach
+    else if `"`0'"'==substr("detach",    1, max(3,`l')) local 0 detach
+    else if `"`0'"'==substr("append",    1, max(2,`l')) local 0 append
     capt mata: assert(st_islmname(st_local("0")))
     if _rc==1 exit _rc
     if _rc {
@@ -49,8 +52,8 @@ program _geoframe_create
     syntax [name(id="frame name" name=frame)] [using/] [, replace/*
         */ type(str) id(name) sid(name) pid(name) PLevel(name)/*
         */ COordinates(namelist) CENtroids(namelist) area(name)/*
-        */ FEATure(str asis)/*
-        */ noSHPfile SHPfile2(str asis) nodrop /*
+        */ Feature(str asis)/*
+        */ noShpfile Shpfile2(str asis) nodrop /*
         */ noDEScribe noCURrent _mkfrlink(str) ]
     __geoframe_create_parse_type, `type'
     local isSHPread = `"`_mkfrlink'"'!=""
@@ -179,7 +182,7 @@ end
 
 program __geoframe_create_parse_shpopts
     syntax [, id(name) sid(name) pid(name) PLevel(name)/*
-        */ COordinates(namelist) FEATure(str asis) ]
+        */ COordinates(namelist) Feature(str asis) ]
     c_local SHP_id      `"`id'"'
     c_local SHP_sid     `"`sid'"'
     c_local SHP_pid     `"`pid'"'
@@ -235,6 +238,53 @@ program __geoframe_create_type
     c_local type `type'
 end
 
+program _geoframe_link
+    local frame `"`c(frame)'"'
+    syntax name(id="shape frame" name=shpframe) [, CLean CLean2(str) ]
+    if `"`shpframe'"'==`"`frame'"' {
+        di as err "{it:shpframe} must be different from current frame"
+        exit 498
+    }
+    confirm frame `shpframe'
+    geoframe get shpframe, local(oldshpframe)
+    if `"`oldshpframe'"'!="" geoframe unlink
+    frame `shpframe' {
+        geoframe get id, local(shpid)
+        if `"`shpid'"'=="" {
+            di as err "no ID variable defined in {it:shpframe}"
+            exit 498
+        }
+        // create name for linkage variable
+        local i 1
+        while (1) {
+            local lnkvar _GEOFRAME_lnkvar_`i'
+            capt confirm new variable `lnkvar'
+            if _rc==1 exit _rc
+            if _rc local ++i        // name already exists
+            else   continue, break  // name ok
+        }
+    }
+    geoframe get id, local(id)
+    if `"`id'"'=="" {
+        di as err "no ID variable defined in current frame"
+        exit 498
+    }
+    frame `shpframe': frlink m:1 `shpid', frame(`frame' `id') generate(`lnkvar')
+    __geoframe_set_shpframe `shpframe'
+    __geoframe_set_linkname `lnkvar'
+    if `"`clean'`clean2'"'!="" {
+        geoframe clean, quietly `clean2'
+    }
+    di as txt "(link to frame {cmd:`shpframe'} added)"
+end
+
+program __geoframe_link_parse_clean
+    syntax [, Shapes shp Units ]
+    if "`shp'"!="" local shapes shapes
+    c_local clean_shp  = "`shapes'`shp'"!=""
+    c_local clean_unit = "`units'"!=""
+end
+
 program _geoframe_clean
     local frame `"`c(frame)'"'
     syntax [, Shapes shp Units NOEmpty Emptyonly quietly ] // quietly undocu
@@ -251,6 +301,7 @@ program _geoframe_clean
     geoframe get id, local(id) strict
     geoframe get linkname, local(lnkvar) strict
     frame `shpframe': geoframe get id, local(shpid) strict
+    local lnkupdate 0
     // identify empty shapes (among the linked shapes)
     if "`noempty'"=="" {
         tempvar empty
@@ -299,6 +350,7 @@ program _geoframe_clean
     if "`units'"!="" & "`emptyonly'"=="" {
         qui drop if `tmpframe'>=.
         if r(N_drop) {
+            local lnkupdate 1
             if r(N_drop)==1 local msg observation
             else            local msg observations
             local Ndrop `: di %9.0gc `r(N_drop)''
@@ -330,72 +382,120 @@ program _geoframe_clean
                 di as txt "(dropped `Nempty' empty shape `msg'"/*
                     */ " in frame {bf:`frame'})"
             }
-            qui geoframe link `shpframe'
+            local lnkupdate 1
         }
         else {
             `quietly' di as txt "(no empty shapes)"
         }
     }
+    if `lnkupdate' qui geoframe link `shpframe'
 end
 
 program _geoframe_select
-    syntax [if] [in] [, KEEPshapes into(namelist max=2) replace/*
+    syntax [if] [in] [, into(namelist max=2) NOShp UNLink replace/*
         */ noDEScribe noCURrent ]
-    if "`into'"!="" {
-        gettoken newframe into : into
-        if "`replace"=="" confirm new frame `newframe'
-        if "`keepshapes'"=="" {
-            gettoken newshpframe into : into
-            if "`newshpframe'"=="" local newshpframe `newframe'_shp
-            if "`replace"=="" confirm new frame `newshpframe'
-        }
-    }
+    local hasIF = `"`if'`in'"'!=""
+    // get settings of current frame
     local frame `"`c(frame)'"'
-    if "`newframe'"=="" local newframe `frame'
-    if "`newframe'"!="`frame'" {
-        capt confirm new frame `newframe'
-        if _rc==1 exit 1
-        if _rc frame drop `newframe'
-        frame copy `frame' `newframe'
-    }
     geoframe get shpframe, local(shpframe)
     local hasSHP = "`shpframe'"!=""
-    if `hasSHP' {
-        if "`newshpframe'"=="" local newshpframe `shpframe'
-        if "`keepshapes'"=="" & "`newshpframe'"!="`shpframe'" {
-            capt confirm new frame `newshpframe'
-            if _rc==1 exit 1
-            if _rc frame drop `newshpframe'
-            frame copy `shpframe' `newshpframe'
-        }
-    }
-    frame `newframe' {
-        qui keep `if' `in'
-        if r(N_drop)==1 local msg observation
-        else            local msg observations
-        local Ndrop `: di %9.0gc `r(N_drop)''
-        di as txt "(dropped `Ndrop' `msg')"
+    // parse into()
+    local newFRM 0
+    local newSHP 0
+    if "`into'"!="" {
+        gettoken newname into : into
+        local newFRM = "`newname'"!=`"`frame'"'
+        if "`replace'"=="" confirm new frame `newname'
         if `hasSHP' {
-            qui geoframe link `newshpframe'
-            if "`keepshapes'"=="" {
-                geoframe get linkname, local(lnkvar)
-                frame `newshpframe' {
-                    qui keep if `lnkvar'<.
-                    if r(N_drop)==1 local msg observation
-                    else            local msg observations
-                    local Ndrop `: di %9.0gc `r(N_drop)''
-                    di as txt "(dropped `Ndrop' `msg' in shape frame)"
+            if "`newname'"==`"`shpframe'"' {
+                di as err "{it:newname} must be different from"/*
+                    */ " name of linked shape frame"
+                exit 198
+            }
+            if `"`noshp'`unlink'"'=="" {
+                gettoken newshpname : into
+                if "`newshpname'"=="" local newshpname `newname'_shp
+                local newSHP = "`newshpname'"!=`"`shpframe'"'
+                if "`replace'"=="" confirm new frame `newshpname'
+                if "`newshpname'"==`"`frame'"' {
+                    di as err "{it:newshpname} must be different from"/*
+                        */ " name of current frame"
+                    exit 198
+                }
+                if "`newshpname'"=="`newname'" {
+                    di as err "{it:newshpname} must be different from"/*
+                        */ " {it:newname}"
+                    exit 198
                 }
             }
         }
     }
-    if "`newframe'"!="`frame'" {
-        if "`current'"=="" {
-            frame change `newframe'
-            di as txt "(current frame now {bf:`newframe'})"
+    if `newFRM'==0 local newname `frame'
+    if `newSHP'==0 local newshpname `shpframe'
+    // make copies of frames if necessary
+    if `newFRM' {
+        capt confirm new frame `newname'
+        if _rc==1 exit 1
+        if _rc frame drop `newname'
+        frame copy `frame' `newname'
+        // remove all linkage info in copied frame
+        frame `newname' {
+            __geoframe_set_shpframe
+            __geoframe_set_linkname
+            capt drop _GEOFRAME_lnkvar_*
         }
-        if "`describe'"=="" _geoframe_describe `newframe'
+        di as txt "(new frame {bf:`newname'} created)"
     }
+    if `newSHP' {
+        capt confirm new frame `newshpname'
+        if _rc==1 exit 1
+        if _rc frame drop `newshpname'
+        frame copy `shpframe' `newshpname'
+        // remove all linkage info in copied frame
+        frame `newshpname' {
+            __geoframe_set_shpframe
+            __geoframe_set_linkname
+            capt drop _GEOFRAME_lnkvar_*
+        }
+        di as txt "(new shape frame {bf:`newshpname'} created)"
+    }
+    // apply selection and establish linkage
+    frame `newname' {
+        if `hasIF' {
+            qui keep `if' `in'
+            if r(N_drop)==1 local msg observation
+            else            local msg observations
+            local Ndrop `: di %9.0gc `r(N_drop)''
+            di as txt "(dropped `Ndrop' `msg' in frame {bf:`newname'})"
+        }
+        if `hasSHP' {
+            if "`unlink'"=="" {
+                qui geoframe link `newshpname'
+                if `hasIF' & "`noshp'"=="" {
+                    geoframe get linkname, local(lnkvar)
+                    frame `newshpname' {
+                        qui keep if `lnkvar'<.
+                        if r(N_drop)==1 local msg observation
+                        else            local msg observations
+                        local Ndrop `: di %9.0gc `r(N_drop)''
+                        di as txt "(dropped `Ndrop' `msg' in shape frame"/*
+                            */ " {bf:`newshpname'})"
+                    }
+                }
+            }
+            else if `newFRM'==0 {
+                geoframe unlink `shpframe'
+            }
+        }
+    }
+    // frame change/reporting
+    if `newFRM' {
+        if "`current'"=="" {
+            frame change `newname'
+            di as txt "(current frame now {bf:`newname'})"
+        }
+    }
+    if "`describe'"=="" _geoframe_describe `newname'
 end
 
 program _geoframe_describe
@@ -433,11 +533,15 @@ program _geoframe_describe
         }
         else local `char' `"{bf:``char''}"'
     }
+    // number of obs
+    frame `frame': qui count
+    local nobs `:di %18.0gc r(N)'
     // display
     di
     __geoframe_describe_di "Frame name"             `"{bf:`frame'}"'
     __geoframe_describe_di "Frame type"             `"`type'"'
     __geoframe_describe_di "Feature type"           `"`feat'"'
+    __geoframe_describe_di "Number of obs"          `"{bf:`nobs'}"'
     __geoframe_describe_di "Unit ID"                `"`id'"'
     __geoframe_describe_di "Coordinates"            `"`coord'"'
     __geoframe_describe_di "Centroids"              `"`centr'"'
@@ -653,8 +757,8 @@ program __geoframe_set_char
     else if `"`0'"'==substr("plevel", 1, max(2,`l'))      local 0 var plevel
     else if `"`0'"'==substr("coordinates", 1, max(2,`l')) local 0 coordinates
     else if `"`0'"'==substr("centroids", 1, max(3,`l'))   local 0 centroids
-    else if `"`0'"'==substr("feature", 1, max(4,`l'))     local 0 feature
-    else if `"`0'"'==substr("shpframe", 1, max(3,`l'))    local 0 shpframe
+    else if `"`0'"'==substr("feature", 1, max(1,`l'))     local 0 feature
+    else if `"`0'"'==substr("shpframe", 1, max(1,`l'))    local 0 shpframe
     else if `"`0'"'=="linkname"                           local 0 linkname
     else {
         di as err `"'`0'' not allowed"'
@@ -863,51 +967,70 @@ program _geoframe_flip
     c_local value `"`lhs'"'
 end
 
-program _geoframe_link
-    local frame `"`c(frame)'"'
-    syntax name(id="shape frame" name=shpframe) [, CLean CLean2(str) ]
-    if `"`shpframe'"'==`"`frame'"' {
-        di as err "{it:shpframe} must be different from current frame"
-        exit 498
+program _geoframe_rename
+    local cname `"`c(frame)'"'
+    syntax name(id="newname" name=newname) [, replace ]
+    if "`newname'"=="`cname'" {
+        di as txt "({it:newname} equal to current name; nothing to do)"
+        exit 198
     }
-    confirm frame `shpframe'
-    geoframe get shpframe, local(oldshpframe)
-    if `"`oldshpframe'"'!="" geoframe unlink
-    frame `shpframe' {
-        geoframe get id, local(shpid)
-        if `"`shpid'"'=="" {
-            di as err "no ID variable defined in {it:shpframe}"
-            exit 498
+    if "`replace'"=="" confirm new frame `newname'
+    capt confirm new frame `newname'
+    if _rc==1 exit 1
+    if _rc frame drop `newname'
+    frame rename `cname' `newname'
+    di as txt "(frame {bf:`cname'} renamed to {bf:`newname'})"
+    frame `newname' {
+        // update possible outgoing link
+        geoframe get shpframe, local(shpframe)
+        if `"`shpframe'"'!="" {
+            local rc = `"`shpframe'"'=="`newname'"
+            if `rc'==0 {
+                capt confirm frame `shpframe'
+                if _rc==1 exit 1
+                if _rc local rc 1
+            }
+            if `rc' {
+                __geoframe_set_shpframe
+                __geoframe_set_linkname
+                di as txt "(shape frame {bf:`shpframe'} no longer"/*
+                    */ " exists; link removed)"
+            }
+            else {
+                qui geoframe link `shpframe'
+                di as txt "(link to shape frame {bf:`shpframe'} updated)"
+            }
         }
-        // create name for linkage variable
-        local i 1
-        while (1) {
-            local lnkvar _GEOFRAME_lnkvar_`i'
-            capt confirm new variable `lnkvar'
-            if _rc==1 exit _rc
-            if _rc local ++i        // name already exists
-            else   continue, break  // name ok
+        // update possible incoming links
+        capt unab lnkvars: _GEOFRAME_lnkvar_*
+        foreach lnkvar of local lnkvars {
+            local unitframe: char `lnkvar'[frlink_fname2]
+            local rc = `"`unitframe'"'=="`newname'"
+            if `rc'==0 {
+                capt confirm frame `unitframe'
+                if _rc==1 exit
+                if _rc local rc 1
+            }
+            if `rc' {
+                drop `lnkvar'
+                di as txt "(attribute frame {bf:`unitframe'} no longer"/*
+                    */ " exists; link removed)"
+                continue
+            }
+            frame `unitframe' {
+                geoframe get shpframe, local(shpframe)
+                if `"`shpframe'"'!="`cname'" continue // leaves linkvar in data
+                __geoframe_set_shpframe `newname'
+                __geoframe_set_linkname `lnkvar'
+                di as txt "(link from attribute frame {bf:`unitframe'} updated)"
+            }
         }
     }
-    geoframe get id, local(id)
-    if `"`id'"'=="" {
-        di as err "no ID variable defined in current frame"
-        exit 498
-    }
-    frame `shpframe': frlink m:1 `shpid', frame(`frame' `id') generate(`lnkvar')
-    __geoframe_set_shpframe `shpframe'
-    __geoframe_set_linkname `lnkvar'
-    if `"`clean'`clean2'"'!="" {
-        geoframe clean, quietly `clean2'
-    }
-    di as txt "(link to frame {cmd:`shpframe'} added)"
 end
 
-program __geoframe_link_parse_clean
-    syntax [, Shapes shp Units ]
-    if "`shp'"!="" local shapes shapes
-    c_local clean_shp  = "`shapes'`shp'"!=""
-    c_local clean_unit = "`units'"!=""
+program _geoframe_duplicate
+    syntax namelist(id="newname" name=newname) [, * ]
+    _geoframe_select, into(`newname') `options'
 end
 
 program _geoframe_relink
@@ -930,7 +1053,7 @@ program _geoframe_unlink
         capt confirm frame `shpframe'
         if _rc==1 exit 1
         if _rc==0 {
-            frame `shpframe': drop `lnkvar'
+            frame `shpframe': capt drop `lnkvar'
         }
     }
     __geoframe_set_shpframe

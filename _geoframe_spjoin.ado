@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.2  21jun2023  Ben Jann
 
 program _geoframe_spjoin
     version 17
@@ -6,7 +6,7 @@ program _geoframe_spjoin
         */ replace noset ]
     gettoken shpframe namelist : namelist
     gettoken id       namelist : namelist
-    if "`id'"=="" local id _id
+    if "`id'"=="" local id _ID
     if "`replace'"=="" confirm new variable `id'
     if `"`coordinates'"'!="" local xy `coordinates'
     else geoframe get coordinates, l(xy) strict
@@ -50,7 +50,9 @@ program _geoframe_spjoin
     }
     qui count if `tmp'>=.
     if `r(N)' {
-        di as txt "({bf:`r(N)'} points not matched)"
+        if r(N)==1 local msg point
+        else       local msg points
+        di as txt "({bf:`r(N)'} `msg' not matched)"
     }
     capt confirm new variable `id'
     if _rc==1 exit _rc
@@ -58,7 +60,7 @@ program _geoframe_spjoin
     rename `tmp' `id'
     if "`set'"=="" {
         geoframe set id `id'
-        if "`coordinates'"!="" geoframe set coordinates `yx'
+        if "`coordinates'"!="" geoframe set coordinates `xy'
     }
     di as txt "(variable {bf:`id'} added to frame {bf:`frame'})"
 end

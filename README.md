@@ -120,6 +120,16 @@ Map with bar charts.
 
 Main changes:
 
+    21jun2023
+    geoframe (version 1.0.2):
+    - -geoframe select- had several issues that are now fixed
+    - option -keepshapes- in -geoframe select- now called -noshp-
+    - option -unlink- added in -geoframe select-
+    - -geoframe duplicate- added
+    - -geoframe rename- added
+    - -geoframe describe- now reports number of observations
+    - -geograme clean- broke link in some situations; this is fixed
+
     19jun2023 (version 1.0.1)
     geoplot
     - legend() now has option -bottom- to align legend keys in multicolumn legends

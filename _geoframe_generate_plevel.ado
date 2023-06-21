@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.2  21jun2023  Ben Jann
 
 program _geoframe_generate_plevel
     version 17
@@ -49,7 +49,9 @@ program _geoframe_generate_plevel
         qui gen byte `PL' = 0
         mata: _st_plevel("`touse'")
         qui count if `PL'!=0 & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])
-        di as txt "(`r(N)' nested polygons found)"
+        if r(N)==1 local msg polygon
+        else       local msg polygons
+        di as txt "(`r(N)' nested `msg' found)"
         if `newvar' {
             if `newvar'==2 drop `namelist'
             rename `PL' `namelist'
