@@ -126,7 +126,7 @@ Zoom.
         (area bbox            if id==1, fc(gs14) lc(gray))           /// 3
         (area regions         if id==1, fc(Coral) lc(gray))          /// 4
         (pie regions relig1 relig2 relig3 if id==1, lab(, reverse))  /// 5
-        , tight legend(pos(se) rowgap(1)) zoom(4/6: 6 90 210)
+        , legend(pos(se) rowgap(1)) zoom(4/6: 6 90 210)
 
 ![example 12](/images/12.png)
 
