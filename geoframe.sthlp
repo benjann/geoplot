@@ -1,5 +1,5 @@
 {smcl}
-{* 21jun2023}{...}
+{* 29jun2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -34,7 +34,9 @@
 {syntab :Manipulation}
 {p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variable in current frame
     {p_end}
-{p2col :{helpb geoframe##spjoin:spjoin}}spatial join of points in current frame to shape frame
+{p2col :{helpb geoframe##spjoin:spjoin}}spatially join points in current frame to shapes from other frame
+    {p_end}
+{p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box or minimum enclosing circle in new frame
     {p_end}
 
 {syntab :Settings}
@@ -319,29 +321,40 @@
 
 {pstd}
     generates variables containing the coordinates of the centroids
-    of the shapes. {it:CX} and {it:CY} specify the names of the generated
+    of the shapes. The command can be applied both to a shape frame (in which case the centroids
+    will be stored in the shape frame) or to an attribute frame that has a linked shape
+    frame (in which case the centroids will be stored in the attribute frame). {it:CX}
+    and {it:CY} specify the names of the generated
     variables; {cmd:_CX} and {cmd:_CY} are used as default variable names. Option
     {cmd:replace} allows overwriting existing variables. The created variables
     will be registered using {helpb geoframe##set:geoframe set centroids}
     unless option {cmd:noset} is specified.
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt replace} {opt noset} ]
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt s:cale(exp)} {opt replace} {opt noset} ]
 
 {pstd}
     generates a variable containing the size of the area enclosed in each
-    shape. {it:AREA} specifies a name for the generated variable; {cmd:_AREA}
-    is used as default variable name. Option {cmd:replace} allows overwriting
+    shape. The command can be applied both to a shape frame (in which case the variable
+    will be stored in the shape frame) or to an attribute frame that has a linked shape
+    frame (in which case the variable will be stored in the attribute frame). {it:AREA}
+    specifies a name for the generated variable; {cmd:_AREA}
+    is used as default variable name. Option {cmd:scale()} multiplies the resulting
+    areas by {it:exp}; for example, type {cmd:scale(1/10000)} if the coordinates
+    are in meters and you want the areas to be in hectares. Option
+    {cmd:replace} allows overwriting
     an existing variable. The created variable will be registered using
-    {helpb geoframe##set:geoframe set area} unless option {cmd:noset} is specified.
+    {helpb geoframe##set:geoframe set area} unless option {cmd:noset} is
+    specified.
 
 {p 8 15 2}
     {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} {opt noset} ]
 
 {pstd}
     generates a variable identifying the different polygons within each unit
-    represented in the frame. If {cmd:geoframe generate pid} is applied to an attribute
-    frame, the operations will be performed on the linked shape frame (if available). {it:PID}
+    represented in the frame. If {cmd:geoframe generate pid} is applied to an
+    attribute frame that has a linked shape frame, the variable will be added to
+    the shape frame (considering all observations of the shape frame). {it:PID}
     specifies a name for the generated variable; {cmd:_PID} is used as default
     variable name. Option {cmd:replace} allows overwriting an existing
     variable. The created variable will be registered in the shape frame using
@@ -351,26 +364,35 @@
 {marker gen_plevel}{...}
 {p 8 15 2}
     {cmd:geoframe} {cmdab:g:enerate} {cmdab:pl:evel} [{it:PLEVEL}] {ifin}
-    [{cmd:,} {opt replace} {opt noset} ]
+    [{cmd:,} {cmd:by(}{help varname:{it:byvar}}{cmd:)} {opt replace} {opt noset} ]
 
 {pstd}
     generates (or updates) a variable identifying the plot order of the different polygons
-    represented in the frame. If {cmd:geoframe generate plevel} is applied to an attribute
-    frame, the operations will be performed on the linked shape frame (if available).
+    represented in the frame. If {cmd:geoframe generate plevel} is applied to an
+    attribute frame that has a linked shape frame, the variable will be added to
+    or updated in the shape frame.
 
 {pstd}
     {it:PLEVEL} specifies a name for the generated variable; {cmd:_PLEVEL} is used as default
     variable name. If variable {it:PLEVEL} already exists and is numeric, the
     values of the selected observations will be updated; the existing values of
     the other observations will not be changed. If variable {it:PLEVEL} does not
-    exist, a new variable will be created, which will be set to zero for all
+    exist, a new variable will be created, which will be set to missing for all
     other observations. If variable {it:PLEVEL} already exists and is not
     numeric, an error will be displayed. Specify option {cmd:replace} to allow
     overwriting the variable in this case. You can also use {cmd:replace}
     to replace an existing numeric variable rather then updating it. Variable
     {it:PLEVEL} will be registered in the shape frame using
     {helpb geoframe##set:geoframe set plevel} unless option {cmd:noset} is
-    specified. 
+    specified.
+
+{pstd}
+    By default, {cmd:geoframe generate plevel} will do a search for nested polygons
+    across all units in the data. Use option {cmd:by()} to stratify the search, for example,
+    if the data contain separate regions without overlap or if the data contain units
+    from different aggregation levels that should not be compared. If {cmd:by()}
+    is specified, a separate search will be done within each group of units defined by the
+    levels of {it:byvar}.
 
 {pstd}
     {cmd:geoframe generate plevel} is useful to identify enclaves and exclaves
@@ -389,8 +411,9 @@
 {pstd}
     {cmd:geoframe generate plevel} can be slow in larger datasets. Make sure to
     apply {cmd:geoframe generate plevel} only to shapes at the same
-    unit level (e.g. regions or countries, but not regions and countries
-    simultaneously). Furthermore, it is generally a good idea to restrict the
+    level of aggregation (e.g. regions or countries, but not regions and countries
+    simultaneously); if relevant, use option {cmd:by()} to stratify by level. Furthermore,
+    it is generally a good idea to restrict the
     data to the geographic region you want to include in your
     graph (e.g. using {helpb geoframe##select:geoframe select}) before applying
     {cmd:geoframe generate plevel}.
@@ -399,23 +422,65 @@
 {dlgtab:geoframe spjoin}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:spjoin} {it:shpframe} [{it:ID}]
-    [{cmd:,} {opt co:ordinates(X Y)} {opt replace} {opt noset} ]
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:spjoin} {it:frame2} [{it:ID}]
+    {ifin} [{cmd:,} {opt co:ordinates(X Y)} {opt replace} {opt noset} ]
 
 {pstd}
     finds the positions of the points provided by the current frame in the shapes
-    defined by {it:shpframe}. The IDs of the matched shapes will be stored in
+    defined by {it:frame2}. Only points satisfying the {it:if} and {it:in}
+    qualifiers will be considered. {it:frame2} can be a shape frame or an attribute frame
+    that is linked to a shape frame.
+
+{pstd}
+    The IDs of the matched shapes will be stored in
     variable {it:ID} in the current frame; {cmd:_ID} is used as default
     variable name. Option {cmd:replace} allows overwriting an existing
     variable. The created variable will be registered in the current frame using
     {helpb geoframe##set:geoframe set id} unless option {cmd:noset} is
     specified. Option {opt coordinates()} specifies custom coordinate variables
     in the current frame; the default is to use the variables returned by
-    {helpb geoframe##set:geoframe get coordinates}. The spacial join algorithm assumes
-    that shapes do not
-    overlap (no crossings). It also assumes that nested shapes in {it:shpframe}
-    have been tagged using {helpb geoframe##gen_plevel:geoframe generate plevel}
+    {helpb geoframe##set:geoframe get coordinates}.
+
+{pstd}
+    The spacial join algorithm assumes that shapes do not overlap (no
+    crossings). It also assumes that nested shapes in
+    {it:frame2} (or its linked shape frame) have been tagged using
+    {helpb geoframe##gen_plevel:geoframe generate plevel}
     (if there are nested shapes).
+
+{marker bbox}{...}
+{dlgtab:geoframe bbox}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:bb:ox} {it:newname}
+    {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    computes the bounding box of the selected shapes in the current
+    frame and stores its coordinates in a new frame called {it:newname}. The current
+    frame may be a shape frame or an attribute frame that has been linked to a
+    shape frame. {it:options} are as follows.
+
+{phang}
+    {cmd:by(}{help varname:{it:byvar}}{cmd:)} computes a separate bounding box
+    for each group of units defined by the levels of {it:byvar}. In the new
+    frame, the levels of {it:byvar} will be used as values of the ID variable.
+
+{phang}
+    {opt cir:cle} computes the minimum enclosing circle (MEC) rather than the
+    bounding box.
+
+{phang}
+    {opt n(n)} sets the number of points used to construct a circle. This is only
+    relevant if {cmd:circle} has been specified. The default is {cmd:n(100)}.
+
+{phang}
+    {opt pad:ding(#)} adds padding to the bounding box or MEC. Argument {it:#}
+    is in percent of the radius of the (unpadded) bounding box or MEC. For example,
+    type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
+
+{phang}
+    {opt replace} allows overwriting an existing frame.
 
 {marker set}{...}
 {dlgtab:geoframe set}
@@ -501,7 +566,7 @@
 
 {pstd}
     renames the current frame to {it:newname}. If the current frame has been linked
-    to a shape frame by {helpb geoframe##create:geoframe create} or 
+    to a shape frame by {helpb geoframe##create:geoframe create} or
     {helpb geoframe##link:geoframe link}, the link will
     be updated. If the current frame is a shape
     frame containing links from attribute frames created by
@@ -537,7 +602,7 @@
     new frame.
 
 {phang}
-    {opt unl:ink} does not establish a link to a shape frame in the new frame 
+    {opt unl:ink} does not establish a link to a shape frame in the new frame
     even if the current frame contains a link to a shape frame. {cmd:unlink}
     implies {cmd:noshp}.
 

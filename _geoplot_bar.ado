@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.3  29jun2023  Ben Jann
 
 program _geoplot_bar
     version 17
@@ -18,19 +18,7 @@ program _geoplot_bar
             */ * ]
         if `"`outline'`outline2'"'!="" _parse_sym, `outline2'
         else                           local sym 0
-        // parse size
-        local scale .
-        if `"`size'"'=="" local size .
-        else if substr(`"`size'"',1,1)=="*" {
-            local scale = substr(`"`size'"',2,.)
-            local size .
-        }
-        capt n numlist `"`size' `scale'"', max(2) range(>=0) miss
-        if _rc==1 exit 1
-        if _rc {
-            di as err "(error in size())"
-            exit _rc
-        }
+        // parse offset
         gettoken offset oangle : offset
         gettoken oangle: oangle
         if "`offset'"=="" local offset 0
@@ -56,6 +44,19 @@ program _geoplot_bar
             }
         }
         markout `touse' `coord' // include nonmissing coordinates only
+        // size
+        local scale 0
+        if `"`size'"'=="" {
+            local size 1
+            local scale 1
+        }
+        else if substr(`"`size'"',1,1)=="*" {
+            local size = substr(`"`size'"',2,.)
+            local scale 1
+        }
+        tempvar SIZE
+        qui gen double `SIZE' = (`size') if `touse'
+        markout `touse' `SIZE'
         // collect labels
         local lbls
         local i 0
@@ -67,7 +68,7 @@ program _geoplot_bar
             local lbls `lbls' `i' `"`lbl'"'
         }
     }
-    if `size'>=. {
+    if `scale' {
         // get reference size of existing map
         su Y, meanonly
         local refsize = r(max) - r(min)
@@ -76,9 +77,9 @@ program _geoplot_bar
     }
     frame `frame' {
         // compute slices of bars and post coordinates into temporary frame
-        tempname frame1 SIZE
+        tempname frame1
         frame create `frame1'
-        mata: _compute_bars("`frame1'", "`touse'", `size', `scale',/*
+        mata: _compute_bars("`frame1'", "`touse'", `scale',/*
             */ `angle', `ratio', `offset', `oangle', "`asis'"!="")
             // => makes frame1 the current frame
         // add labels
@@ -114,17 +115,8 @@ program _geoplot_bar
                 local sym_ratio ratio(`ratio')
             }
         }
-        if substr(`"`sym_size'"',1,1)=="*" {
-            local sym_size = substr(`"`sym_size'"',2,.)
-            capt n numlist `"`sym_size'"', max(1) range(>=0)
-            if _rc==1 exit 1
-            if _rc {
-                di as err "(error in size())"
-                exit _rc
-            }
-           local sym_size = `SIZE' * `sym_size'
-        }
-        else if `"`sym_size'"'=="" local sym_size = `SIZE'
+        if substr(`"`sym_size'"',1,1)=="*" local sym_size `"`SIZE' `sym_size'"'
+        else if `"`sym_size'"'==""         local sym_size `SIZE'
         local sym_size size(`sym_size')
         if !`sym_hascol' {
             // use first color from main plot
@@ -174,7 +166,7 @@ mata:
 mata set matastrict on
 
 void _compute_bars(string scalar frame, string scalar touse, 
-    real scalar size, real scalar scale, real scalar angle, real scalar ratio,
+    real scalar scale, real scalar angle, real scalar ratio,
     real scalar off, real scalar oang, real scalar asis)
 {
     real scalar    i, r, s, a
@@ -188,15 +180,14 @@ void _compute_bars(string scalar frame, string scalar touse,
     w  = st_data(., st_local("wvar"), touse)
     r  = rows(YX)
     // determine size
-    if (size<.)  s = size
-    else {
+    st_view(S=., ., st_local("SIZE"), touse)
+    if (scale) {
         s = min(mm_coldiff(colminmax(YX)))
         s = max((s,strtoreal(st_local("refsize"))))
         s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
     }
-    s = s / sqrt(2)
-    if (scale<.) s = s * scale
-    st_numscalar(st_local("SIZE"), s)
+    else s = 1
+    S[.] = S * (s / sqrt(2)) // (write back to data for use by outline())
     // apply offset
     if (off) YX = YX :+ s * (off/100) * (sin(oang*pi()/180), cos(oang*pi()/180))
     // prepare frame
@@ -205,7 +196,7 @@ void _compute_bars(string scalar frame, string scalar touse,
     // generate coordinates of pies
     a = angle * pi() / 180
     for (i=1;i<=r;i++)
-        _compute_bar(s, a, ratio, asis, v, Z[i,], YX[i,], w[i])
+        _compute_bar(S[i], a, ratio, asis, v, Z[i,], YX[i,], w[i])
 } 
 
 void _compute_bar(real scalar s, real scalar a,

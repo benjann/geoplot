@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.3  29jun2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -28,15 +28,27 @@ if `rc_colorpalette' | `rc_colrspace' | `rc_moremata' {
     exit 499
 }
 
-program geoplot, rclass
+program geoplot
     version 17
+    nobreak {
+        capture noisily break {
+            mata: _GEOPLOT_ColrSpace_S = ColrSpace() // add global object
+            _geoplot `0'
+        }
+        local rc = _rc
+        capt mata mata drop _GEOPLOT_ColrSpace_S     // remove global object
+        exit `rc'
+    }
+end
+
+program _geoplot, rclass
     _parse comma lhs 0 : 0
     syntax [, /*
         */ LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
         */ SBAR SBAR2(str asis) COMPass COMPass2(str asis) /*
         */ ANGle(real 0) tight Margin(str) REFdim(str) ASPECTratio(str) /* 
         */ YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
-        */ frame(str) * ]
+        */ frame(str) NOGRAPH * ]
     local legend  = `"`legend'`legend2'"'!=""
     local clegend = `"`clegend'`clegend2'"'!=""
     if !`legend' & !`clegend' local legend 1
@@ -44,7 +56,7 @@ program geoplot, rclass
     if "`margin'"=="" local margin 0 0 0 0
     else              _parse_margin `margin'
     _parse_refdim `refdim'
-    _parse_frame `frame' // returns frame, replace
+    _parse_frame `frame' // returns frame, replace, nocurrent
     
     // parse layers
     _parse expand layer lg : lhs
@@ -90,40 +102,32 @@ program geoplot, rclass
     // process layers
         local p 0
         local plots
-        nobreak {
-            capture noisily break {
-                mata: _GEOPLOT_ColrSpace_S = ColrSpace() // global object
-                forv i = 1/`layer_n' {
-                    local ii `i' // for error message
-                    gettoken plottype layer : layer_`i', parse(" ,")
-                    _parse_plottype `plottype'
-                    gettoken lframe : layer, parse(" ,[")
-                    if `"`lframe'"'=="" {
-                        // frame may have been specified as ""
-                        gettoken lframe layer : layer, parse(" ,[")
-                        local lframe `"`cframe'"'
-                    }
-                    else if inlist(`"`lframe'"', ",", "if", "in", "[") {
-                        // leave layer as is
-                        local lframe `"`cframe'"'
-                    }
-                    else {
-                        // remove frame from layer
-                        gettoken lframe layer : layer, parse(" ,[")
-                        if `"`lframe'"'=="." local lframe `"`cframe'"'
-                    }
-                    _geoplot_`plottype' `i' `p' `lframe' `layer' // => plot, p
-                    local plots `plots' `plot'
-                }
+        forv i = 1/`layer_n' {
+            local ii `i' // for error message
+            gettoken plottype layer : layer_`i', parse(" ,")
+            _parse_plottype `plottype'
+            gettoken lframe : layer, parse(" ,[")
+            if `"`lframe'"'=="" {
+                // frame may have been specified as ""
+                gettoken lframe layer : layer, parse(" ,[")
+                local lframe `"`cframe'"'
             }
-            local rc = _rc
-            capt mata mata drop _GEOPLOT_ColrSpace_S // remove global object
-            if `rc' {
-                if `rc'!=1 {
-                    di as err "(error in layer `ii': `plottype' ...)"
-                }
-                exit `rc'
+            else if inlist(`"`lframe'"', ",", "if", "in", "[") {
+                // leave layer as is
+                local lframe `"`cframe'"'
             }
+            else {
+                // remove frame from layer
+                gettoken lframe layer : layer, parse(" ,[")
+                if `"`lframe'"'=="." local lframe `"`cframe'"'
+            }
+            capt n _geoplot_`plottype' `i' `p' `lframe' `layer' // => plot, p
+            if _rc==1 exit 1
+            if _rc {
+                di as err "(error in layer `ii': `plottype' ...)"
+                exit _rc
+            }
+            local plots `plots' `plot'
         }
         if !`p' {
             di as txt "(nothing to plot)"
@@ -133,6 +137,10 @@ program geoplot, rclass
     // rotate map
         _rotate `angle'
         capt drop cY cX
+        
+    // zoom
+        _zoom `p' `layer_n' `options' // updates options
+        local plots `plots' `plot'
         
     // graph dimensions
         _grdim "`margin'" "`refdim'" `aspectratio' /* returns refsize 
@@ -169,33 +177,38 @@ program geoplot, rclass
         else local clegend
         
     // draw graph
-         local graph /*
+        local graph /*
             */ graph twoway `plots',/*
             */ `legend' `clegend' /*
             */ graphregion(margin(small) style(none) istyle(none))/*
             */ plotregion(margin(zero) style(none) istyle(none))/*
             */ bgcolor(white) `scheme'/*
             */ `yrange' `xrange' `aspectratio' `ysize' `xsize' `options'
-        `graph'
+        if "`nograph'"=="" {
+            `graph'
+        }
     }
     
     // returns
     return local graph `graph'
     if "`frame'"!="" {
         local cframe `"`c(frame)'"'
-        qui _frame dir
-        local framelist = r(contents)
-        if `:list frame in framelist' {
+        capt confirm new frame `frame'
+        if _rc==1 exit 1
+        if _rc {
             if "`frame'"==`"`cframe'"' { // cannot drop current frame
                 frame change `main'
+                local cframe `frame'
             }
             frame drop `frame'
         }
         frame rename `main' `frame'
         di as txt "(graph data stored as frame {bf:`frame'})"
-        if "`frame'"!=`"`cframe'"' {
-            frame change `frame'
-            di as txt "(current frame now {bf:`frame'})"
+        if "`nocurrent'"=="" {
+            if "`frame'"!=`"`cframe'"' {
+                frame change `frame'
+                di as txt "(current frame now {bf:`frame'})"
+            }
         }
     }
 end
@@ -204,7 +217,7 @@ program _parse_plottype
     local l = strlen(`"`0'"')
     if      `"`0'"'==substr("scatter", 1, max(2,`l'))   local 0 scatter
     else if `"`0'"'==substr("labels", 1, max(3,`l'))    local 0 label
-    else if `"`0'"'==substr("sym:bol", 1, max(2,`l'))   local 0 symbol
+    else if `"`0'"'==substr("symbol", 1, max(3,`l'))    local 0 symbol
     capt mata: assert(st_islmname(st_local("0")))
     if _rc==1 exit _rc
     if _rc {
@@ -276,7 +289,7 @@ program _parse_refdim
 end
 
 program _parse_frame
-    syntax [name(name=frame)] [, replace ]
+    syntax [name(name=frame)] [, replace NOCURrent ]
     if "`frame'"=="" exit
     if "`replace'"=="" {
         qui _frame dir
@@ -288,26 +301,30 @@ program _parse_frame
     }
     c_local frame `frame'
     c_local replace `replace'
+    c_local nocurrent `nocurrent'
 end
 
 program _rotate
     if `0'==0 exit
     local r = `0' * _pi / 180
+    capt confirm variable Y2, exact
+    if _rc==1 exit 1
+    local hasXY2 = _rc==0
     tempname min max
     foreach v in Y X {
         su `v', mean
         scalar `min' = r(min)
         scalar `max' = r(max)
-        capt confirm variable `v'2, exact
-        if _rc==0 {
+        if `hasXY2' {
             su `v'2, mean
             scalar `min' = min(`min', r(min))
             scalar `max' = max(`max', r(max))
         }
         tempname `v'mid
-        scalar ``v'mid' = (`max'-`min') / 2
+        scalar ``v'mid' = (`max'+`min') / 2
     }
     capt confirm variable cY, exact
+    if _rc==1 exit 1
     if _rc==0 { // lock non-rotating shapes
         tempvar dY dX
         qui gen double `dY' = Y - cY if cY<.
@@ -320,8 +337,7 @@ program _rotate
     qui gen double `x' = X - `Xmid'
     qui replace Y = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid'
     qui replace X = (`x' * cos(`r') - `y' * sin(`r')) + `Xmid'
-    capt confirm variable Y2, exact
-    if _rc==0 {
+    if `hasXY2' {
         qui replace `y' = Y2 - `Ymid'
         qui replace `x' = X2 - `Xmid'
         qui replace Y2 = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid'
@@ -331,6 +347,210 @@ program _rotate
         qui replace Y = Y + `dY' if cY<.
         qui replace X = X + `dX' if cX<.
     }
+end
+
+program _zoom
+    gettoken p 0 : 0
+    gettoken n options : 0
+    numlist "1/`n'"
+    local layers `r(numlist)'
+    while (1) {
+        capt n __zoom `p' `layers', `options' // p plot done options layers
+        if _rc==1 exit 1
+        if _rc {
+            di as err "error in zoom()"
+            exit _rc
+        }
+        if `done' continue, break
+        local plots `plots' `plot'
+    }
+    c_local options `options'
+    c_local plot `plots'
+    c_local p `p'
+end
+
+program __zoom
+    // look for zoom() option
+    gettoken p 0 : 0
+    _parse comma LAYERS 0 : 0
+    syntax [, zoom(passthru) * ]
+    c_local options `options'
+    if `"`zoom'"'=="" {
+        c_local done 1
+        exit                // no (more) zoom() option
+    }
+    c_local done 0
+    syntax [, zoom(str) * ]
+    if `"`zoom'"'=="" exit // zoom() specified, but empty
+    // syntax: <layers>: scale [offset angle] [, options]
+    // - parse <layers>
+    _on_colon_parse `zoom'
+    local args `"`s(after)'"'
+    numlist `"`s(before)'"', int range(>0)
+    local layers `r(numlist)'
+    local layers: list layers & LAYERS
+    if "`layers'"=="" exit // no (available) layers selected
+    c_local LAYERS: list LAYERS - layers // update list of remaining layers
+    // - parse rest
+    _parse comma args 0 : args
+    numlist `"`args'"', max(3)
+    local args `r(numlist)'
+    gettoken scale  args : args
+    gettoken offset args : args
+    gettoken angle  args : args
+    if "`scale'"==""  local scale 1
+    if "`offset'"=="" local offset 0
+    if "`angle'"==""  local angle 0
+    local r = mod(`angle', 360) * _pi / 180
+    if `"`args'"'!="" exit 198
+    syntax [, ABSolute box BOX2(str) CIRcle CIRcle2(str) PADding(real 0) /*
+        */ NOCONnect CONnect CONnect2(str)/*
+        */ LPattern(passthru) LWidth(passthru) LColor(passthru)/*
+        */ LAlign(passthru) LSTYle(passthru) PSTYle(passthru) * ]
+    if `"`connect2'"'!="" local connect connect
+    if `"`circle2'"'!=""  local circle circle
+    if `"`box2'"'!=""     local box box
+    if "`box'"!="" & "`circle'"!="" {
+        di as err "zoom(): only one of {bf:box} and {bf:circle} allowed"
+        exit 198
+    }
+    _zoom_parse_box, `box2' `circle2'
+    if "`box_none'"!="" & "`connect'"=="" local noconnect noconnect
+    // mark sample
+    tempvar touse
+    gen byte `touse' = 0
+    foreach l of local layers {
+        qui replace `touse' = 1 if LAYER==`l'
+    }
+    qui replace `touse' = 0 if X>=. | Y>=.
+    // obtain bounding box / minimum enclosing circle
+    if "`circle'"!="" {
+        mata: _st_welzl() // returns local Xmid Ymid R
+    }
+    else {
+        su X if `touse', mean
+        local Xmin = r(min)
+        local Xmax = r(max)
+        local Xmid = (`Xmin' + `Xmax') / 2
+        su Y if `touse', mean
+        local Ymin = r(min)
+        local Ymax = r(max)
+        local Ymid = (`Ymin' + `Ymax') / 2
+        local R = sqrt((`Xmax'-`Xmid')^2 + (`Ymax'-`Ymid')^2) // half diagonal
+    }
+    // compute offset (if necessary) as a percentage of the diameter
+    if "`absolute'"=="" local offset =/*
+        */ `offset'/100 * `R' * `scale' * (1 + `padding'/100)
+    // new midpoint
+    local YMID = `Ymid' + `offset' * sin(`r')
+    local XMID = `Xmid' + `offset' * cos(`r')
+    // new position and size
+    qui replace Y = (Y - `Ymid') * `scale' + `YMID' if `touse'
+    qui replace X = (X - `Xmid') * `scale' + `XMID' if `touse'
+    // also transform Y2, X2 if present
+    capt confirm variable Y2, exact
+    if _rc==1 exit 1
+    if _rc==0 {
+        qui replace Y2 = (Y2 - `Ymid') * `scale' + `YMID' if `touse'
+        qui replace X2 = (X2 - `Xmid') * `scale' + `XMID' if `touse'
+    }
+    // plot box or MEC
+    local plots
+    if `"`lwidth'"'=="" local lwidth lwidth(thin)
+    if `"`lcolor'"'=="" local lcolor lcolor(gray)
+    foreach opt in lpattern lwidth lcolor lalign lstyle pstyle {
+        local options ``opt'' `options'
+        local opt_`opt' ``opt''
+    }
+    if "`circle'"!="" {
+        local s = `R' * (1 + `padding'/100)
+        local S = `s' * `scale'
+        if "`box_none'"=="" {
+            if "`box_destination'`box_origin'"=="" {
+                local box_destination box_destination
+                local box_origin box_origin
+            }
+            if "`box_origin'"!="" {
+                _geoplot_symboli . `p' `Ymid' `Xmid', size(`s')  `options'
+                local plots `plots' `plot'
+            }
+            if "`box_destination'"!="" {
+                _geoplot_symboli . `p' `YMID' `XMID', size(`S') `options'
+                local plots `plots' `plot'
+            }
+        }
+    }
+    else {
+        local s  = (`Xmax' - `Xmin')
+        if `s' local hr = (`Ymax' - `Ymin') / (`Xmax' - `Xmin')
+        else { // x-size 0
+            local s  = (`Ymax' - `Ymin')
+            if `s' {
+                local hr = (`Xmax' - `Xmin') / (`Ymax' - `Ymin')
+                local options angle(90) `options'
+            }
+            else local hr 1 // x-size and y-size zero 
+        }
+        local options shape(square) ratio(`hr') `options'
+        local s = `s' / 2 * sqrt(2) * (1 + `padding'/100)
+        local S = `s' * `scale'
+        local Ymax = `Ymid' + `s' * sin( .25*_pi) * `hr'
+        local Ymin = `Ymid' + `s' * sin(-.25*_pi) * `hr'
+        local Xmax = `Xmid' + `s' * cos( .25*_pi)
+        local Xmin = `Xmid' + `s' * cos( .75*_pi)
+        local YMAX = `YMID' + `S' * sin( .25*_pi) * `hr'
+        local YMIN = `YMID' + `S' * sin(-.25*_pi) * `hr'
+        local XMAX = `XMID' + `S' * cos( .25*_pi)
+        local XMIN = `XMID' + `S' * cos( .75*_pi)
+        if "`box'"!="" {
+            if "`box_none'"=="" {
+                if "`box_destination'`box_origin'"=="" {
+                    local box_destination box_destination
+                    local box_origin box_origin
+                }
+                if "`box_origin'"!="" {
+                    _geoplot_symboli . `p' `Ymid' `Xmid', size(`s') `options'
+                    local plots `plots' `plot'
+                }
+                if "`box_destination'"!="" {
+                    _geoplot_symboli . `p' `YMID' `XMID', size(`S') `options'
+                    local plots `plots' `plot'
+                }
+            }
+        }
+    }
+    // plot tangents
+    if "`noconnect'"=="" & "`connect'`box'`circle'"!="" {
+        local 0 `", `connect2'"'
+        syntax [, LPattern(passthru) LWidth(passthru) LColor(passthru)/*
+            */ LAlign(passthru) LSTYle(passthru) PSTYle(passthru) ]
+        local options
+        foreach opt in lpattern lwidth lcolor lalign lstyle pstyle {
+            if `"``opt''"'=="" local `opt' `opt_`opt''
+            local options `options' ``opt''
+        }
+        if "`circle'"!="" {
+            mata: _st_circle_tangents(`Xmid', `Ymid', `s', `XMID',/*
+                */ `YMID', `S')
+        }
+        else {
+            mata: _zoom_boxconnect(`Xmax',`Xmin',`Ymax',`Ymin',/*
+                */`XMAX',`XMIN',`YMAX',`YMIN')
+        }
+        if `"`YX'"'!="" {
+            _geoplot_pci . `p' `YX', `options'
+            local plots `plots' `plot'
+        }
+    }
+    c_local plot `plots'
+    c_local p `p'
+end
+
+program _zoom_parse_box
+    syntax [, Destination Origin NONE ]
+    c_local box_destination `destination'
+    c_local box_origin `origin'
+    c_local box_none `none'
 end
 
 program _grdim
@@ -374,10 +594,11 @@ program _grdim_tight
          local unit = substr(`"`ysize'"',-2,.)
          if inlist(`"`unit'"', "in", "pt", "cm") {
              local ysize = strtrim(substr(`"`ysize'"',1,strlen(`"`ysize'"')-2))
+             if      "`unit'"=="pt" local ysize = `ysize' / 72
+             else if "`unit'"=="cm" local ysize = `ysize' / 2.54
          }
-         else local unit
-         local xsize = `ysize' / `aratio'
-         c_local xsize xsize(`xsize'`unit')
+         local xsize = min(100,max(1,`ysize' / `aratio'))
+         c_local xsize xsize(`xsize')
          exit
      }
      // xsize specified
@@ -385,10 +606,11 @@ program _grdim_tight
          local unit = substr(`"`xsize'"',-2,.)
          if inlist(`"`unit'"', "in", "pt", "cm") {
              local xsize = strtrim(substr(`"`xsize'"',1,strlen(`"`xsize'"')-2))
+             if      "`unit'"=="pt" local xsize = `xsize' / 72
+             else if "`unit'"=="cm" local xsize = `xsize' / 2.54
          }
-         else local unit
-         local ysize = `xsize' * `aratio'
-         c_local ysize ysize(`ysize'`unit')
+         local ysize = min(100,max(1,`xsize' * `aratio'))
+         c_local ysize ysize(`ysize')
          exit
      }
      // get ysize from scheme
@@ -398,7 +620,7 @@ program _grdim_tight
      }
      local ysize `.__SCHEME.graphsize.y'
      if `"`ysize'"'=="" local ysize 4.5
-     local xsize = `ysize' / `aratio'
+     local xsize = min(100,max(1,`ysize' / `aratio'))
      c_local ysize ysize(`ysize')
      c_local xsize xsize(`xsize')
 end
@@ -1163,6 +1385,75 @@ version 17
 mata:
 mata set matastrict on
 
+void _st_welzl()
+{
+    real rowvector C
+    
+    C = geo_welzl(st_data(., "X Y", st_local("touse")))
+    st_local("Xmid", strofreal(C[1]))
+    st_local("Ymid", strofreal(C[2]))
+    st_local("R",    strofreal(C[3]))
+}
+
+void _st_circle_tangents(
+    real scalar x1, real scalar y1, real scalar r1,
+    real scalar x2, real scalar y2, real scalar r2)
+{
+    real matrix R
+    
+    R = geo_circle_tangents((x1,y1,r1), (x2,y2,r2))
+    if (length(R)) st_local("YX", invtokens(strofreal(vec(R[,(2,1)]')')))
+    else           st_local("YX", "")
+}
+
+void _zoom_boxconnect(real scalar Xmax, real scalar Xmin, real scalar Ymax,
+    real scalar Ymin, real scalar XMAX, real scalar XMIN, real scalar YMAX,
+    real scalar YMIN)
+{
+    real scalar    i
+    real matrix    yx, YX, p, P
+    
+    yx = (Ymin,Xmax) \ (Ymax,Xmax) \ (Ymax,Xmin) \ (Ymin,Xmin)
+    YX = (YMIN,XMAX) \ (YMAX,XMAX) \ (YMAX,XMIN) \ (YMIN,XMIN)
+    yx = yx :- (YMIN, YMAX) // for sake of precision
+    YX = YX :- (YMIN, YMAX)
+    P = J(0,2,.)
+    for (i=1;i<=4;i++) {
+        // handle edge connecting lower right corner
+        p = __zoom_boxconnect(i, yx:-YX[i,], YX:-YX[i,]) :+ YX[i,]
+        if (length(p)) {
+            _geo_rotate(p, -(i-1)*90) // undo rotation
+            P = P \ p
+        }
+        // tilt by -90 degree so that next edge is in lower right corner 
+        yx = geo_rotate(yx, 90) 
+        YX = geo_rotate(YX, 90)
+    }
+    P = P :+ (YMIN, YMAX)
+    st_local("YX", invtokens(strofreal(vec(P')')))
+}
+
+real matrix __zoom_boxconnect(real scalar i, real matrix yx, real matrix YX)
+{
+    real scalar y, x, Y, X, Ymax, Xmin
+    
+    y = yx[i,1]
+    x = yx[i,2]
+    if (y<0 | x>0) return((y,x) \ (0,0)) // no crossing
+    Ymax = YX[mod(i,4)+1,1]
+    Xmin = YX[mod(i+1,4)+1,2]
+    if (y<=Ymax & x>=Xmin) return(J(0,2,.)) // inside box
+    if (((x*Ymax - y*Xmin) / sqrt(Xmin^2 + Ymax^2))>0) { // above diagonal
+        Y = Ymax
+        X = x * Ymax / y
+    }
+    else { // below diagonal
+        Y = y * Xmin / x
+        X = Xmin
+    }
+    return((y,x) \ (Y,X))
+}
+
 void _compass_store(real colvector X, real colvector Y, real colvector A)
 {
     real scalar    a, b
@@ -1224,3 +1515,4 @@ void _compass_spike3(real scalar angle, real scalar dir)
 }
 
 end
+

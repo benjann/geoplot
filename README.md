@@ -116,9 +116,52 @@ Map with bar charts.
 
 ![example 11](/images/11.png)
 
+Zoom.
+
+    geoframe bbox bbox, by(id) circle pad(5)
+    frame bbox: rename _ID id
+    geoplot (area regions)                                           /// 1
+        (area regions         if id==1, fc(Coral*.5) lc(gray))       /// 2
+        (label regions region if id==1, color(black))                /// 3
+        (area bbox            if id==1, fc(gs14) lc(gray))           /// 3
+        (area regions         if id==1, fc(Coral) lc(gray))          /// 4
+        (pie regions relig1 relig2 relig3 if id==1, lab(, reverse))  /// 5
+        , tight legend(pos(se) rowgap(1)) zoom(4/6: 6 90 210)
+
+![example 12](/images/12.png)
+
 ---
 
 Main changes:
+
+    27jun2023 (version 1.0.3):
+    general:
+    - geoplot now has a Mata library for common functions (lgeoplot.mlib;
+      source code in lgeoplot_source.sthlp)
+    geoplot:
+    - option zoom() added
+    - option feature() added
+    - option frame() now has suboption -nocurrent-
+    - option -nograph- added
+    - layertypes symbol/pie/bar now allow expressions involving variables in size()
+    - layertype symbol:
+      o numlist and matrix in shape() are now interpreted as (X,Y), not (Y,X)
+      o orientation was affected by global angle(); this is fixed
+    - global option angle() had an error that did not affect the look, but
+      shifted the underlying numeric values of the coordinates; this is fixed
+    - categorization of zvar returned error if there were no observations in the
+      layer; this is fixed
+    - ysize()/xsize() computed by -tight- are now restricted to [1,100] inch
+    geoframe:
+    - -geoframe bbox- added
+    - -geoframe generate plevel- now has option by(); unselected obs are no longer
+       set to 0
+    - -geoframe spjopin- now supports -if- and -in- and can now be used with an
+       attribute frame that is linked to a shape frame
+    - -geoframe generate area- and -geoframe generate centroids- falsely took into
+      account the plot level (if a plot level variable was available); this is fixed
+    - _geoframe_generate_plevel.ado and geoframe_spjoin.ado now integrated into
+      geoframe.ado
 
     21jun2023
     geoframe (version 1.0.2):

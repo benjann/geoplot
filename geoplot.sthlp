@@ -1,5 +1,5 @@
 {smcl}
-{* 21jun2023}{...}
+{* 29jun2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -170,8 +170,15 @@
     compass
     {p_end}
 
+{syntab :Zoom}
+{synopt :{helpb geoplot##zoom:zoom({it:spec})}}zoom in on specific layers;
+    can be repeated
+    {p_end}
+
 {syntab :Data}
 {synopt :{helpb geoplot##frame:frame({it:spec})}}store ploted data in new frame
+    {p_end}
+{synopt :{helpb nograph}}do not generate a graph
     {p_end}
 {synoptline}
 
@@ -188,6 +195,11 @@
     Multiple layers of elements such as regions, borders, lakes, roads, labels,
     etc., can be freely combined. The look of the elements can be varied
     depending on the values of variables.
+
+{pstd}
+    Some of the functions used by {cmd:geoplot} and {helpb geoframe} are provided
+    in Mata library lgeoplot.mlib. See {helpb lgeoplot_source} for source and
+    minimal documentation of these functions.
 
 {pstd}
     {cmd:geoplot} requires {helpb colorpalette}, {helpb colrspace}, and
@@ -267,38 +279,40 @@
     {helpb geoplot##angle:angle()} will rotate only positions only.
 
 {phang}
+    {opt f:eature(string)} specifies the type of feature represented in the
+    layer. The default is to use the setting returned by
+    {helpb geoframe##get:geoframe get feature}.
+
+{phang}
     {opt coor:dinates(X Y)} specifies custom coordinate variables. The default
     is to use the variables returned by
     {helpb geoframe##get:geoframe get coordinates}.
-
-{phang}
-    {opt id(ID)} specifies a custom ID variable. The default is
-    to use the variable returned by {helpb geoframe##get:geoframe get id}.
 
 {phang}
     {opt pl:evel(PLEVEL)} specifies a custom plot level variable. The default is
     to use the variable returned by {helpb geoframe##get:geoframe get plevel}.
 
 {phang}
-    {opt centr:oids(X Y)} specifies custom centroid variables. The default is
-    to use the variables returned by
-    {helpb geoframe##get:geoframe get centroids}. 
+    {opt id(ID)} specifies a custom ID variable. The default is
+    to use the variable returned by {helpb geoframe##get:geoframe get id}. An ID
+    variable is not strictly needed, but if available it will be taken into
+    account when categorizing {help geoplot##zvar:{it:zvar}}.
 
 {phang}
     {opt centr:oids(X Y)} specifies custom centroid variables. The default is
     to use the variables returned by
-    {helpb geoframe##get:geoframe get centroids}. If no centroid variables are
-    found, the centroids are computed on the fly using
+    {helpb geoframe##get:geoframe get centroids}. If centroids are needed and
+    no centroid variables are found, the centroids are computed on the fly using
     {helpb geoframe##generate:geoframe generate centroids}. The centroids are
     needed if weights, option {cmd:size()}, or option {cmd:lock} is specified.
 
 {phang}
     {opt area(AREA)} specifies a custom shape size variable. The default is to
     use the variable returned by
-    {helpb geoframe##get:geoframe get area}. If no shape size variable is found,
-    the sizes are computed on the fly using
-    {helpb geoframe##generate:geoframe generate area}. A shape size
-    variable is only needed if option {cmd:size()} is specified.
+    {helpb geoframe##get:geoframe get area}. If shape sizes are needed and no
+    shape size variable is found, the sizes are computed on the fly using
+    {helpb geoframe##generate:geoframe generate area}. Shape sizes
+    are only needed if option {cmd:size()} is specified.
 
 {pstd}
     By default, the shapes do not have a fill color. Specify
@@ -326,7 +340,7 @@
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()},
-    {cmd:lock}, {opt coordinates()}, {opt id()}, {opt centroids()}, and {cmd:area()} are
+    {cmd:lock}, {opt feature()}, {opt coordinates()}, {opt id()}, {opt centroids()}, and {cmd:area()} are
     options as described for layer type {helpb geoplot##area:area}.
 
 {phang}
@@ -476,7 +490,7 @@
     {p_end}
 {p2col:{it:matname}}matrix containing shape coordinates
     {p_end}
-{p2col:{it:name} [{it:arg}]}mata function {cmd:_geoplot_symbol_}{it:name}{cmd:()} returning shape coordinates
+{p2col:{it:name} [{it:arg}]}mata function {cmd:_geo_symbol_}{it:name}{cmd:()} returning shape coordinates
     {p_end}
 
 {pmore}
@@ -493,33 +507,33 @@
     create a custom symbol. {it:{help numlist}} is a list of shape coordinates specified
     as
 
-            {it:y1} {it:x1} [{it:y2} {it:x2} ...]
+            {it:x1} {it:y1} [{it:x2} {it:y2} ...]
 
 {pmore}
     {it:matname} is the name of a matrix containing the shape coordinates. The matrix may
     contain a single row or column of consecutive points or it may contain two
-    rows or two columns, one for Y and one for X. For example, to create a
+    rows or two columns, one for X and one for Y. For example, to create a
     kite symbol, you could type
 
-            {cmd:shape(-1 0 0 .5 .5 0 0 -.5 -1 0)}
+            {cmd:shape(0 -1 .5 0 0 .5 -.5 0 0 -1)}
 
 {pmore}
     or you could define a matrix such as
 
-            {cmd:KITE = (-1, 0, 0, .5, .5, 0, 0, -.5, -1, 0)}
+            {cmd:matrix KITE = (0, -1, .5, 0, 0, .5, -.5, 0, 0, -1)}
 
 {pmore}
     or
 
-            {cmd:KITE = (-1, 0, .5, 0, -1)', (0, .5, 0, -.5, 0)'}
+            {cmd:matrix KITE = (0, .5, 0, -.5, 0)', (-1, 0, .5, 0, -1)'}
 
 {pmore}
     and then type {cmd:shape(KITE)}. Furthermore, you may create a custom symbol
     by defining a Mata function
-    {cmd:_geoplot_symbol_}{it:name}{cmd:()} and then call the function
+    {cmd:_geo_symbol_}{it:name}{cmd:()} and then call the function
     as {cmd:shape(}{it:name} [{it:arg}]{cmd:)}. Two arguments will be submitted to
     the function, real scalar {it:n} and string scalar {it:arg}. The function must
-    return a numeric {it:r} x 2 matrix containing the (Y,X)
+    return a numeric {it:r} x 2 matrix containing the (X,Y)
     coordinates of the symbol (or a {it:r} x 3 matrix containing the
     coordinates in the first two columns and a plot level indicator in the
     third column; use the plot level indicator in multi-part symbols
@@ -529,12 +543,12 @@
     even-level parts treated as regular parts and odd-level parts treated as
     white space). For example, to create a kite symbol, define function
 
-            {com}real matrix _geoplot_symbol_Kite(real scalar n, string scalar arg)
+            {com}real matrix _geo_symbol_Kite(real scalar n, string scalar arg)
             {
                 pragma unused n
                 pragma unused arg
 
-                return(((-1, 0, .5, 0, -1)', (0, .5, 0, -.5, 0)'))
+                return(((0, .5, 0, -.5, 0)',(-1, 0, .5, 0, -1)'))
             }{txt}
 
 {pmore}
@@ -564,14 +578,14 @@
     option {helpb geoplot##angle:angle()} has no effect on the orientation of the symbols.
 
 {phang}
-    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the symbols. For
+    {cmdab:si:ze(}[{cmd:*}]{it:exp}{cmd:)} sets or adjusts the size of the symbols. For
     the predefined symbols, {cmd:size()} sets the length of the
     radius of the circle enclosing the symbol (i.e. the distance between the center
     and the outermost point). For custom symbols, {cmd:size()} sets
-    the unit length of the specified coordinates. Type {opt size(#)} to specify
+    the unit length of the specified coordinates. Type {opt size(exp)} to specify
     an absolute size (i.e. in units of the underlying
-    map). Alternatively, specify {cmd:size(*}{it:#}{cmd:)} to multiply the default
-    size by {it:#}. The default size is set to 3% of the minimum of the horizontal
+    map). Alternatively, specify {cmd:size(*}{it:exp}{cmd:)} to multiply the default
+    size by {it:exp}. The default size is set to 3% of the minimum of the horizontal
     and vertical size of the underlying map (as it exists at the point when the
     symbols are added, including the positions of the symbols; the smallest possible
     default size is 1).
@@ -599,8 +613,8 @@
     {helpb colorpalette##colorlist:colorpalette}.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:ecolor()}, and
-    {opt coordinates()} are options as described for layer type
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:ecolor()},
+    {opt feature()}, and {opt coordinates()} are options as described for layer type
     {helpb geoplot##area:area}.
 
 {marker pie}{...}
@@ -665,10 +679,10 @@
     option {helpb geoplot##angle:angle()} has no effect on the orientation of the pies.
 
 {phang}
-    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the
-    pies. Type {opt size(#)} to specify an absolute size (i.e. in units of the underlying
-    map) for the radius of the pie. Alternatively, specify {cmd:size(*}{it:#}{cmd:)}
-    to multiply the default radius by {it:#}. The default radius is set to 3% of the minimum
+    {cmdab:si:ze(}[{cmd:*}]{it:exp}{cmd:)} sets or adjusts the size of the
+    pies. Type {opt size(exp)} to specify an absolute size (i.e. in units of the underlying
+    map) for the radius of the pie. Alternatively, specify {cmd:size(*}{it:exp}{cmd:)}
+    to multiply the default radius by {it:exp}. The default radius is set to 3% of the minimum
     of the horizontal and vertical size of the underlying map (as it exists at the point when the
     symbols are added, including the positions of the pies; the smallest possible
     default radius is 1).
@@ -747,10 +761,10 @@
     option {helpb geoplot##angle:angle()} has no effect on the orientation of the symbols.
 
 {phang}
-    {cmdab:si:ze(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the size of the
-    bar charts. Type {opt size(#)} to specify an absolute size (i.e. in units of
-    the underlying map) for the width of the bars. Alternatively, specify {cmd:size(*}{it:#}{cmd:)} to
-    multiply the default width by {it:#}. The default width is set to 3% of the minimum
+    {cmdab:si:ze(}[{cmd:*}]{it:exp}{cmd:)} sets or adjusts the size of the
+    bar charts. Type {opt size(exp)} to specify an absolute size (i.e. in units of
+    the underlying map) for the width of the bars. Alternatively, specify {cmd:size(*}{it:exp}{cmd:)} to
+    multiply the default width by {it:exp}. The default width is set to 3% of the minimum
     of the horizontal and vertical size of the underlying map (as it exists at the
     point when the symbols are added, including the positions of the bar charts;
     the smallest possible default width is 1).
@@ -1405,12 +1419,98 @@
     compass, such as {cmdab:c:olor()} or {cmdab:lw:idth()}. Defaults are
     {cmd:color(black)}, {cmd:fintensity(100)}, and {cmd:lwidth(vthin)}.
 
+{marker zoom}{...}
+{phang}
+    {opt zoom(spec)} magnifies the objects from selected layers. Option {cmd:zoom()}
+    can be repeated to magnify multiple sets of objects. The syntax of
+    {it:spec} is
+
+            {it:layers}{cmd::} {it:scale} [{it:offset} [{it:angle}]] [{cmd:,} {it:options}]
+
+{pmore}
+    where {help numlist:{it:layers}} is a list of layer numbers and {it:scale} is a scaling
+    factor. For example, type {cmd:zoom(2/4: 2.5)} to magnify the objects in layers 2 through 4
+    by factor 2.5. Argument {it:offset} specifies the distance by which the objects be moved
+    and {it:angle} specifies the direction of the move in degrees. The default {it:offset}
+    is 0 (no move) and the default {it:angle} is 0 (east). For example, type
+    {cmd:zoom(2/4: 2.5 100 90)} to move the objects by 100 percent (1 radius)
+    in northward direction. {it:options} are as follows.
+
+{phang2}
+    {opt abs:olute} specifies that {it:offset} is in absolute units of the map. The default
+    is to interpret {it:offset} as a percentage of the radius (half-diagonal) of the bounding box
+    (or enclosing circle) of the objects (including padding).
+
+{phang2}
+    {cmd:box}[{cmd:(}{it:which}{cmd:)}] displays the origin bounding box and
+    the destination bounding box of the objects. Argument {it:what} can be
+    {cmdab:d:estination} (print destination  box only) or
+    {cmdab:o:rigin} (print origin box only). Only one of {cmd:box} and
+    {cmd:circle} is allowed.
+
+{phang2}
+    {cmdab:cir:cle}[{cmd:(}{it:which}{cmd:)}] displays the origin MEC (minimum
+    enclosing circle) and the destination MEC of the objects. Argument
+    {it:what} can be {cmdab:d:estination} (print destination circle only) or
+    {cmdab:o:rigin} (print origin circle only). Only
+    one of {cmd:circle} and {cmd:box} is allowed.
+
+{pmore2}
+    By default, the positioning of the magnified objects is
+    based on the midpoint and radius of the (rectangular)
+    bounding box. However, if {cmd:circle()} is specified, the positioning is based on the
+    midpoint and radius of the MEC. To use the MEC as basis without displaying
+    the circles, you can type {cmd:circle(none)}.
+
+{phang2}
+    {opt pad:ding(#)} adds padding to the bounding box or MEC so that it does
+    not touch the objects. Argument {it:#}
+    is in percent of the radius of the (unpadded) bounding box or MEC. For example,
+    type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
+
+{phang2}
+    {opt nocon:nect} suppresses the connecting lines between origin and destination
+    bounding boxes or MECs that are typically printed if {cmd:box}
+    or {cmd:circle} is specified.
+
+{phang2}
+    {cmdab:con:nect}[{cmd:(}{it:{help line_options}}{cmd:)}] enforces printing the
+    connecting lines even if no bounding boxes or MECs are printed. Specify
+    {it:{help line_options}} to affect the rendering of the connecting lines. For
+    example, type {cmd:connect(lpattern(dash))} to use dashed lines.
+
+{phang2}
+    {it:{help area_options}} are options that affect the look of the bounding boxes
+    or MECs. For example, type {cmd:lcolor(cranberry)} to use red lines. The specified
+    options also affect the connecting lines unless the options are overridden by options
+    specified in {cmd:connect()}.
+
+{pmore2}
+    Note that bounding boxes and MECs generated by {cmd:zoom()}
+    are printed on top of the map (i.e. in front of the existing
+    objects). Adding fill to a bounding box or MEC will cover the
+    objects lying behind it. To include a filled box or MEC that does not
+    cover the objects, you may use {helpb geoframe##bbox:geoframe bbox} to
+    generate a frame containing the coordinates of the box or MEC and then
+    add tit to the graph as regular layer using {it:layertype}
+    {helpb geoplot##area:area}.
+
 {marker frame}{...}
 {phang}
-    {cmd:frame(}{it:name}[{cmd:, replace}]{cmd:)} stores the compiled data of
-    the plot in a {helpb frame} called {it:name}. Option {cmd:replace} allows overwriting
-    an existing frame. Applying the command in {cmd:r(graph)} to the frame
-    will reproduce the map.
+    {cmd:frame(}{it:name}[{cmd:,} {cmd:replace} {cmdab:nocur:rent}]{cmd:)}
+    stores the compiled data of the plot in a {helpb frame} called
+    {it:name}. Applying the command in {cmd:r(graph)} to the frame
+    will reproduce the map. Option {cmd:replace} allows overwriting
+    an existing frame. Option {cmd:nocurrent} does not make the created frame
+    the current frame.
+
+{marker nograph}{...}
+{phang}
+    {opt nograph} suppresses the graph. The graph command will still be
+    returned in {cmd:r(graph)}, but the command will not be executed. Use option
+    {cmd:nograph} if you are only interested in obtaining the compiled data
+    using option {helpb geoplot##frame:frame()} and do not want to waste
+    computer time on rendering the graph.
 
 
 {title:Examples}

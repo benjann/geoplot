@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.3  29jun2023  Ben Jann
 
 program _geoplot_pie
     version 17
@@ -21,19 +21,7 @@ program _geoplot_pie
         _parse_explode `: list sizeof varlist' `explode'
         if `"`outline'`outline2'"'!="" _parse_sym, `outline2'
         else                           local sym 0
-        // parse size
-        local scale .
-        if `"`size'"'=="" local size .
-        else if substr(`"`size'"',1,1)=="*" {
-            local scale = substr(`"`size'"',2,.)
-            local size .
-        }
-        capt n numlist `"`size' `scale'"', max(2) range(>=0) miss
-        if _rc==1 exit 1
-        if _rc {
-            di as err "(error in size())"
-            exit _rc
-        }
+        // parse offset
         gettoken offset oangle : offset
         gettoken oangle: oangle
         if "`offset'"=="" local offset 0
@@ -69,6 +57,19 @@ program _geoplot_pie
                 local wmaxopt wmax(1)
             }
         }
+        // size
+        local scale 0
+        if `"`size'"'=="" {
+            local size 1
+            local scale 1
+        }
+        else if substr(`"`size'"',1,1)=="*" {
+            local size = substr(`"`size'"',2,.)
+            local scale 1
+        }
+        tempvar SIZE
+        qui gen double `SIZE' = (`size') if `touse'
+        markout `touse' `SIZE'
         // collect labels
         local lbls
         local i 0
@@ -80,7 +81,7 @@ program _geoplot_pie
             local lbls `lbls' `i' `"`lbl'"'
         }
     }
-    if `size'>=. {
+    if `scale' {
         // get reference size of existing map
         su Y, meanonly
         local refsize = r(max) - r(min)
@@ -89,9 +90,9 @@ program _geoplot_pie
     }
     frame `frame' {
         // compute slices of pies and post coordinates into temporary frame
-        tempname frame1 SIZE
+        tempname frame1
         frame create `frame1'
-        mata: _compute_pies("`frame1'", "`touse'", "`polar'"!="", `size',/*
+        mata: _compute_pies("`frame1'", "`touse'", "`polar'"!="",/*
             */ `scale', `angle', `n', `offset', `oangle',/*
             */ "`asis'"!="", "`reverse'"!="", "`mid'"!="")
             // => makes frame1 the current frame
@@ -119,17 +120,8 @@ program _geoplot_pie
         if `offset' {
             if `"`sym_offset'"'=="" local sym_offset offset(`offset' `oangle')
         }
-        if substr(`"`sym_size'"',1,1)=="*" {
-            local sym_size = substr(`"`sym_size'"',2,.)
-            capt n numlist `"`sym_size'"', max(1) range(>=0)
-            if _rc==1 exit 1
-            if _rc {
-                di as err "(error in size())"
-                exit _rc
-            }
-           local sym_size = `SIZE' * `sym_size'
-        }
-        else if `"`sym_size'"'=="" local sym_size = `SIZE'
+        if substr(`"`sym_size'"',1,1)=="*" local sym_size `"`SIZE' `sym_size'"'
+        else if `"`sym_size'"'==""         local sym_size `SIZE'
         local sym_size size(`sym_size')
         if !`sym_hascol' {
             // use first color from main plot
@@ -211,9 +203,8 @@ mata:
 mata set matastrict on
 
 void _compute_pies(string scalar frame, string scalar touse, real scalar polar,
-    real scalar size, real scalar scale, real scalar a, real scalar n,
-    real scalar off, real scalar oang, real scalar asis, real scalar rev,
-    real scalar mid)
+    real scalar scale, real scalar a, real scalar n, real scalar off,
+    real scalar oang, real scalar asis, real scalar rev, real scalar mid)
 {
     real scalar    i, r, s
     real rowvector v, e
@@ -227,22 +218,21 @@ void _compute_pies(string scalar frame, string scalar touse, real scalar polar,
     w  = st_data(., st_local("wvar"), touse)
     r  = rows(YX)
     // determine size
-    if (size<.) s = size
-    else {
+    st_view(S=., ., st_local("SIZE"), touse)
+    if (scale) {
         s = min(mm_coldiff(colminmax(YX)))
         s = max((s,strtoreal(st_local("refsize"))))
         s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
+        S[.] = S * s // (write back to data for use by outline())
     }
-    if (scale<.) s = s * scale
-    st_numscalar(st_local("SIZE"), s)
     // apply offset
     if (off) YX = YX :+ s * (off/100) * (sin(oang*pi()/180), cos(oang*pi()/180))
     // prepare frame
     st_framecurrent(frame)
     v = st_addvar("double", ("_Y","_X","_CY","_CX", "Z", "W"))
     // generate coordinates of pies
-    for (i=1;i<=r;i++)
-        _compute_pie(polar, s, a, n, asis, rev, mid, e, v, Z[i,], YX[i,], w[i])
+    for (i=1;i<=r;i++) _compute_pie(polar, S[i], a, n, asis, rev, mid, e, v,
+        Z[i,], YX[i,], w[i])
 } 
 
 void _compute_pie(real scalar polar, real scalar s, real scalar a,

@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.3  29jun2023  Ben Jann
 
 program _geoplot_symbol
     version 17
@@ -21,24 +21,12 @@ program _geoplot_symbol
         else            local plottype area
         // parse shape() and n()
          _parse_shape, `n' `shape' // returns shape, arg, n
-        // parse size etc.
-        local scale .
-        if `"`size'"'=="" local size .
-        else if substr(`"`size'"',1,1)=="*" {
-            local scale = substr(`"`size'"',2,.)
-            local size .
-        }
-        capt n numlist `"`size' `scale'"', max(2) range(>=0) miss
-        if _rc==1 exit 1
-        if _rc {
-            di as err "(error in size())"
-            exit _rc
-        }
+        // parse offset
         gettoken offset oangle : offset
         gettoken oangle: oangle
         if "`offset'"=="" local offset 0
         if "`oangle'"=="" local oangle 0
-        // sample
+        // sample and weights
         marksample touse
         tempname wvar
         if "`weight'"!="" {
@@ -56,6 +44,23 @@ program _geoplot_symbol
             }
         }
         markout `touse' `coord' // include nonmissing coordinates only
+        // size
+        local scale 0
+        if `"`size'"'=="" {
+            local size 1
+            local scale 1
+        }
+        else if substr(`"`size'"',1,1)=="*" {
+            local size = substr(`"`size'"',2,.)
+            local scale 1
+        }
+        capt unab SIZE: `size', max(1) // check whether single variable
+        if _rc==1 exit 1
+        if _rc {
+            tempvar SIZE
+            qui gen double `SIZE' = (`size') if `touse'
+        }
+        markout `touse' `SIZE'
         // extra variables to be copied
         local ORG `wvar'
         local TGT W
@@ -76,7 +81,7 @@ program _geoplot_symbol
             }
         }
     }
-    if `size'>=. {
+    if `scale' {
         // get reference size of existing map
         su Y, meanonly
         local refsize = r(max) - r(min)
@@ -88,11 +93,11 @@ program _geoplot_symbol
         tempname frame1
         frame create `frame1'
         mata: _compute_symbols("`frame1'", "`touse'", "`shape'",/*
-            */ st_local("arg"), `n', `size', `scale', `angle', `ratio',/*
+            */ st_local("arg"), `n', `scale', `angle', `ratio',/*
             */ `offset', `oangle')
     }
     ***
-    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `wgt', `options'
+    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `wgt', lock `options'
     c_local plot `plot'
     c_local p `p'
 end
@@ -175,12 +180,12 @@ mata set matastrict on
 
 void _compute_symbols(string scalar frame, string scalar touse,
     string scalar shape, string scalar arg, real scalar n,
-    real scalar size, real scalar scale, real scalar angle, real scalar ratio,
+    real scalar scale, real scalar angle, real scalar ratio,
     real scalar off, real scalar oang)
 {
     real scalar      i, a, b, s, haspl
     real matrix      YX, Z, yx, V
-    real colvector   pl, PL
+    real colvector   pl, PL, S
     string rowvector ORG, TGT
     pointer matrix   INFO
     pointer(real matrix function) scalar f
@@ -212,36 +217,29 @@ void _compute_symbols(string scalar frame, string scalar touse,
         if (cols(yx)!=2) yx = colshape(yx', 2)
     }
     else {
-        f = findexternal("_geoplot_symbol_"+shape+"()")
-        if (f==NULL) {
-            errprintf("function for symbol '%s' not found; error in shape()\n",
-                shape)
-            exit(111)
-        }
-        yx = (*f)(n, arg)
+        yx = geo_symbol(shape, n, arg)
         if (cols(yx)>2) {
             haspl = 1
             pl = yx[,3]
             pl = pl[1] \ pl // duplicate 1st element
-            yx = yx[,(1,2)]
         }
     }
+    yx = yx[,(2,1)] // since input is (X,Y), not (Y,X)
     n = rows(yx)
-    // determine size and apply to shape
-    if (size<.) s = size
-    else {
+    // determine size
+    S = st_data(., st_local("SIZE"), touse)
+    if (scale) {
         s = min(mm_coldiff(colminmax(YX)))
         s = max((s,strtoreal(st_local("refsize"))))
         s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
+        S = S * s
     }
-    if (scale<.) s = s * scale
-    yx = yx * s
     // apply ratio to shape
     if (ratio!=1) yx = yx[,1]*ratio, yx[,2]
     // apply angle to shape
-    _rotate(yx, angle)
+    _geo_rotate(yx, -angle) // (_geo_rotate() expects XY, not YX)
     // apply offset to centroids
-    if (off) YX = YX :+ s*(off/100)*(sin(oang*pi()/180), cos(oang*pi()/180))
+    if (off) YX = YX :+ S:*((off/100)*(sin(oang*pi()/180), cos(oang*pi()/180)))
     // prepare destination data
     st_framecurrent(frame)
     TGT = tokens(st_local("TGT"))
@@ -255,7 +253,7 @@ void _compute_symbols(string scalar frame, string scalar touse,
         b = a - 1
         a = b - n
         V[|a,1 \ b,.|] =
-            (J(1,2,.) \ (YX[i,] :+ yx)), J(n+1, 1, (YX[i,], Z[i,]))
+            (J(1,2,.) \ (YX[i,] :+ yx*S[i])), J(n+1, 1, (YX[i,], Z[i,]))
         if (haspl) PL[|a \ b|] = pl
     }
 }
@@ -293,136 +291,6 @@ pointer matrix _fmtvl(string rowvector V, | pointer matrix INFO)
     }
     return(INFO)
 }
-
-void _rotate(yx, angle)
-{
-    real scalar r
-    
-    if (angle==0) return
-    r  = angle * pi() / 180
-    yx = yx[,2] * sin(r) + yx[,1] * cos(r), yx[,2] * cos(r) - yx[,1] * sin(r)
-}
-
-
-real matrix _geoplot_symbol_circle(real scalar n, | string scalar arg)
-{
-    real colvector r
-    pragma unused arg
-    
-    if (n>=.) n = 100
-    r = .25 - .5/n // set angle such that shape has horizontal edge at bottom
-    r = rangen(-r, 1-r, n+1) * (2 * pi())
-    return((sin(r), cos(r)))
-}
-
-real matrix _geoplot_symbol_slice(real scalar n, string scalar arg)
-{
-    return((0,0) \ _geoplot_symbol_arc(n, arg) \ (0,0))
-}
-
-real matrix _geoplot_symbol_arc(real scalar n, string scalar arg)
-{
-    real scalar    angle
-    real colvector r
-    
-    if (arg=="") angle = 180 // default
-    else {
-        angle = strtoreal(arg)
-        if (angle<-360 | angle>360) {
-            errprintf("{it:angle} must be in [-360,360]; error in shape()\n")
-            exit(125)
-        }
-    }
-    if (n>=.) n = max((2, ceil(abs(angle)/360 * 100)))
-    r = rangen(0, angle/180, n) * pi()
-    return((sin(r), cos(r)))
-}
-
-real matrix _geoplot_symbol_pentagram(real scalar n, string scalar arg)
-{
-    real matrix YX, yx
-    pragma unused n
-    pragma unused arg
-    
-    // outer pentagon
-    YX = _geoplot_symbol_circle(5)
-    // inner pentagon
-    yx = _geoplot_symbol_circle(5) / (.5*(1+sqrt(5)))^2
-    _rotate(yx, 180)
-    // merge
-    YX = colshape((YX[1::5,], (yx[4::5,] \ yx[1::3,])), 2)
-    YX = YX \ YX[1,] // last point = first point
-    return(YX)
-}
-
-real matrix _geoplot_symbol_hexagram(real scalar n, string scalar arg)
-{
-    real matrix YX, yx
-    pragma unused n
-    pragma unused arg
-    
-    // outer hexagon
-    YX = _geoplot_symbol_circle(6)
-    _rotate(YX, 90)
-    // inner hexagon
-    yx = _geoplot_symbol_circle(6) * sqrt(1/3)
-    // merge
-    YX = colshape(((YX[5::6,] \ YX[1::4,]), yx[1::6,]), 2)
-    YX = YX \ YX[1,] // last point = first point
-    return(YX)
-}
-
-real matrix _geoplot_symbol_pin(real scalar n, string scalar arg)
-{
-    real colvector r, h
-    real matrix    yx
-    
-    if (arg=="") h = 1/3 // default
-    else {
-        h = strtoreal(arg)
-        if (h<0 | h>1) {
-            errprintf("{it:headsize} must be in [0,1]; error in shape()\n")
-            exit(125)
-        }
-    }
-    if (n>=.) n = max((4, ceil(h * 100)))
-    r = rangen(-.25, .75, n+1) * (2 * pi())
-    yx = h * (sin(r), cos(r))
-    yx[,1] = yx[,1] :+ (2-h)
-    yx = yx \ (0,0) \ (2-2*h,0)
-    return(yx)
-}
-
-real matrix _geoplot_symbol_pin2(real scalar n, string scalar arg)
-{
-    real colvector r, a, c
-    real matrix    yx0, yx1
-    
-    if (arg=="") a = .6 // default
-    else {
-        a = strtoreal(arg)
-        if (a<0 | a>1) {
-            errprintf("{it:headsize} must be in [0,1]; error in shape()\n")
-            exit(125)
-        }
-    }
-    if (n>=.) n = max((4, ceil(a * 100)))
-    // outer polygon
-    c = 2 - a
-    r = rangen(-asin(a/c), pi()+asin(a/c), n+1)
-    yx0 = a * (sin(r), cos(r))
-    yx0[,1] = yx0[,1] :+ c
-    yx0 = yx0 \ (0,0) \ yx0[1,] 
-    yx0 = yx0, J(rows(yx0),1,0) // plevel=0
-    // inner polygon
-    r = rangen(0, 1, n+1) * (2 * pi())
-    yx1 = (0.5*a) * (sin(r), cos(r))
-    yx1[,1] = yx1[,1] :+ c
-    yx1 = (.,.) \ yx1
-    yx1 = yx1, J(rows(yx1),1,1) // plevel=1
-    return(yx0 \ yx1)
-}
-
 
 end
 

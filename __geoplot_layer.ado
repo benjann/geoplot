@@ -1,4 +1,4 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.0.3  29jun2023  Ben Jann
 
 /*
     Syntax:
@@ -88,7 +88,7 @@ program _layer
     gettoken frame 0 : 0, parse(" ,")
     local hasSHP 0
     local TYPE
-    local OPTS LABel(str asis)
+    local OPTS LABel(str asis) Feature(passthru)
     local hasPLV 0
     local PLVopts
     local WGT
@@ -146,8 +146,9 @@ program _layer
         if `"`fcolor'"'!="" mata: _get_colors("fcolor")
         marksample touse, novarlist
         // feature
-        geoframe get feature, l(FEATURE)
-        if `"`FEATURE'"'=="water" {
+        if `"`feature'"'=="" geoframe get feature, l(feature)
+        else                 _parse_feature, `feature'
+        if `"`feature'"'=="water" {
             if `"`color'"'==""  local color color("135 206 235") // SkyBlue
             if `"`lwidth'"'=="" local lwidth lwidth(vthin)
             if `"`plottype'"'=="area" {
@@ -365,10 +366,12 @@ program _layer
             tempname CUTS
             mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`touse'") /* returns
                 CUTS, cuts, levels */
-            if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
-            _z_categorize `CUTS', levels(`levels') zvar(`Zvar') gen(`ZVAR')/*
-                */ touse(`touse') ztouse(`ztouse') `discrete' /* returns
-                    zlevels nobs nmiss discrete */
+            if `levels' {
+                if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
+                _z_categorize `CUTS', levels(`levels') zvar(`Zvar')/*
+                    */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
+                    /* returns zlevels nobs nmiss discrete */
+            }
         }
     }
     // copy data into main frame
@@ -644,6 +647,11 @@ program _layer
     }
     c_local plot `plot'
     c_local p `p'
+end
+
+program _parse_feature
+    syntax [, feature(str) ]
+    c_local feature `"`feature'"'
 end
 
 program _parse_size

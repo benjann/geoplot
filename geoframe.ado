@@ -1,4 +1,4 @@
-*! version 1.0.2  21jun2023  Ben Jann
+*! version 1.0.3  29jun2023  Ben Jann
 
 program geoframe
     version 17
@@ -21,6 +21,7 @@ program _parse_subcmd
     else if `"`0'"'==substr("select",    1, max(3,`l')) local 0 select
     else if `"`0'"'==substr("describe",  1, max(1,`l')) local 0 describe
     else if `"`0'"'==substr("generate",  1, max(1,`l')) local 0 generate
+    else if `"`0'"'==substr("bbox",      1, max(2,`l')) local 0 bbox
     else if `"`0'"'==substr("rename",    1, max(3,`l')) local 0 rename
     else if `"`0'"'==substr("duplicate", 1, max(3,`l')) local 0 duplicate
     else if `"`0'"'==substr("relink",    1, max(3,`l')) local 0 relink
@@ -583,19 +584,32 @@ program _geoframe_generate_centroids
     }
     geoframe get type, l(type)
     local cframe `"`c(frame)'"'
-    if "`type'"=="shape" local shpframe `"`cframe'"'
-    else geoframe get shpframe, local(shpframe) strict
-    geoframe get id, l(ID0) strict
+    if "`type'"=="shape" {
+        geoframe get id, l(ID0)
+        if `"`ID0'"'=="" {
+            di as txt "(ID not available;"/*
+                */ " assuming all polygons belong to same unit)"
+            tempname ID0
+            qui gen byte `ID0' = 1
+        }
+        local shpframe `"`cframe'"'
+    }
+    else {
+        geoframe get shpframe, local(shpframe) strict
+        geoframe get id, l(ID0) strict
+    }
     frame `shpframe' {
         if "`shpframe'"=="`cframe'" local ID `ID0'
         else geoframe get id, l(ID) strict
+        geoframe get coordinates, l(XY) strict
         tempvar CX CY
-        qui __geoframe_generate_centroids `ID' `CX' `CY'
+        qui gen double `CX' = .
+        qui gen double `CY' = .
+        mata: _centroid(("`CX'","`CY'"), `"`ID'"', `"`XY'"')
         if "`shpframe'"!="`cframe'" {
-            mata: _copy_by_ID("`cframe'", "`ID0'", "`ID'", "`CX' `CY'")
+            mata: _copy_by_ID("`cframe'", `"`ID0'"', `"`ID'"', "`CX' `CY'")
         }
     }
-    // post result
     local TMP `CX' `CY'
     foreach var of local namelist {
         capt confirm new variable `var'
@@ -608,49 +622,41 @@ program _geoframe_generate_centroids
     di as txt "(variables {bf:`namelist'} added to frame {bf:`cframe'})"
 end
 
-program __geoframe_generate_centroids, sortpreserve
-    // https://en.wikipedia.org/wiki/Centroid
-    // assuming (1) that the polygons belonging to a shape are separated by
-    // a row or missing coordinates, (2) that the coordinates of each polygon
-    // are in order (clockwise or counter-clockwise), (3) that the polygons
-    // wrap around (first coordinate = last coordinate) 
-    args ID CX CY
-    geoframe get coordinates, l(XY) strict
-    gettoken X XY : XY
-    gettoken Y XY : XY
-    geoframe get plevel, l(PLV)
-    if `"`PLV'"'!="" local PLV * (1-2*mod(`PLV',2))
-    sort `ID' `_sortindex'
-    tempvar DET
-    by `ID': gen double `DET' = (`X' * `Y'[_n+1] - `X'[_n+1] * `Y') `PLV'
-    by `ID': gen double `CX'  = (`X' + `X'[_n+1]) * `DET'
-    by `ID': gen double `CY'  = (`Y' + `Y'[_n+1]) * `DET'
-    by `ID': replace `DET'    = sum(`DET')
-    by `ID': replace `CX'     = sum(`CX')
-    by `ID': replace `CY'     = sum(`CY')
-    by `ID': replace `CX'     = `CX'[_N] / (3 * `DET'[_N])
-    by `ID': replace `CY'     = `CY'[_N] / (3 * `DET'[_N])
-end
-
 program _geoframe_generate_area
-    syntax [name] [, replace noset ]
+    syntax [name] [, replace noset Scale(str) ]
     if "`namelist'"=="" local namelist _AREA
     if "`replace'"=="" {
         confirm new variable `namelist'
     }
     geoframe get type, l(type)
     local cframe `"`c(frame)'"'
-    if "`type'"=="shape" local shpframe `"`cframe'"'
-    else geoframe get shpframe, local(shpframe) strict
-    geoframe get id, l(ID0) strict
+    if "`type'"=="shape" {
+        geoframe get id, l(ID0)
+        if `"`ID0'"'=="" {
+            di as txt "(ID not available;"/*
+                */ " assuming all polygons belong to same unit)"
+            tempname ID0
+            qui gen byte `ID0' = 1
+        }
+        local shpframe `"`cframe'"'
+    }
+    else {
+        geoframe get shpframe, local(shpframe) strict
+        geoframe get id, l(ID0) strict
+    }
     frame `shpframe' {
         if "`shpframe'"=="`cframe'" local ID `ID0'
         else geoframe get id, l(ID) strict
+        geoframe get coordinates, l(XY) strict
         tempvar AREA
-        qui __geoframe_generate_area `ID' `AREA'
+        qui gen double `AREA' = .
+        mata: _area("`AREA'", `"`ID'"', `"`XY'"')
         if "`shpframe'"!="`cframe'" {
-            mata: _copy_by_ID("`cframe'", "`ID0'", "`ID'", "`AREA'")
+            mata: _copy_by_ID("`cframe'", `"`ID0'"', `"`ID'"', "`AREA'")
         }
+    }
+    if `"`scale'"'!="" {
+        qui replace `AREA' = `AREA' * (`scale')
     }
     capt confirm new variable `namelist'
     if _rc==1 exit _rc
@@ -658,24 +664,6 @@ program _geoframe_generate_area
     rename `AREA' `namelist'
     if "`set'"=="" _geoframe_set area `namelist'
     di as txt "(variable {bf:`namelist'} added to frame {bf:`cframe'})"
-end
-
-program __geoframe_generate_area, sortpreserve
-    // https://en.wikipedia.org/wiki/Shoelace_formula
-    // assuming (1) that the polygons belonging to a shape are separated by
-    // a row or missing coordinates, (2) that the coordinates of each polygon
-    // are in order (clockwise or counter-clockwise), (3) that the polygons
-    // wrap around (first coordinate = last coordinate) 
-    args ID AREA
-    geoframe get coordinates, l(XY) strict
-    gettoken X XY : XY
-    gettoken Y XY : XY
-    geoframe get plevel, l(PLV)
-    if `"`PLV'"'!="" local PLV * (1-2*mod(`PLV',2))
-    sort `ID' `_sortindex'
-    by `ID': gen double `AREA' = (`X' * `Y'[_n+1] - `X'[_n+1] * `Y') `PLV'
-    by `ID': replace `AREA' = sum(`AREA')
-    by `ID': replace `AREA' =  abs(`AREA'[_N] / 2)
 end
 
 program _geoframe_generate_pid
@@ -696,25 +684,257 @@ program _geoframe_generate_pid
                 exit _rc
             }
         }
-        geoframe get id, l(ID) strict
-        geoframe get coordinates, l(X) strict
-        gettoken X : X
-        tempvar tmp
-        if (`X'[1]>=.) {
-            // first coordinate missing: assuming polygons start with missing
-            qui gen byte `tmp' = `X'>=. | `ID'!=`ID'[_n-1]
+        geoframe get id, l(ID)
+        if `"`ID'"'=="" {
+            di as txt "(ID not available;"/*
+                */ " assuming all polygons belong to same unit)"
+            tempname ID
+            qui gen byte `ID' = 1
         }
-        else {
-            // first coordinate non-missing: assuming polygons end with missing
-            qui gen byte `tmp' = `X'[_n-1]>=. | `ID'!=`ID'[_n-1]
-        }
-        qui replace `tmp' = `tmp' + `tmp'[_n-1] if `ID'==`ID'[_n-1]
+        geoframe get coordinates, l(XY) strict
+        tempvar PID
+        qui gen double `PID' = .
+        mata: _pid("`PID'", `"`ID'"', `"`XY'"')
+        qui compress `PID'
         capt confirm new variable `namelist'
         if _rc==1 exit _rc
         if _rc drop `namelist'
-        rename `tmp' `namelist'
+        rename `PID' `namelist'
         if "`set'"=="" _geoframe_set pid `namelist'
         di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
+    }
+end
+
+program _geoframe_generate_plevel
+    syntax [name] [if] [in] [, by(varname numeric) replace noset ]
+    if "`namelist'"=="" local namelist _PLEVEL
+    local cframe `"`c(frame)'"'
+    geoframe get type, l(type)
+    marksample touse
+    if "`by'"!="" markout `touse' `by'
+    if "`type'"=="shape" {
+        local shpframe `"`cframe'"'
+        local BY `by'
+    }
+    else {
+        geoframe get shpframe, local(shpframe) strict
+        geoframe get linkname, local(lnkvar) strict
+        frame `shpframe' {
+            qui frget `touse' = `touse', from(`lnkvar')
+            qui replace `touse' = 0 if `touse'>=.
+            if "`by'"!="" {
+                tempvar BY
+                qui frget `BY' = `by', from(`lnkvar')
+            }
+        }
+    }
+    frame `shpframe' {
+        local newvar 1               // variable does not exist
+        capt confirm new variable `namelist'
+        if _rc==1 exit _rc
+        if _rc {
+            capt confirm numeric variable `namelist'
+            if _rc==1 exit _rc
+            if _rc    local newvar 2 // variables exists and is string
+            else      local newvar 0 // variables exists and is numeric
+        }
+        if "`replace'"!="" {
+            if `newvar'==0 {
+                local newvar 2       // replace variable even if conformable
+            }
+        }
+        else {
+            if `newvar'==2 {
+                di as err "variable {bf:`namelist'} already exists and is"/*
+                    */ " string; cannot update"
+                exit 110
+            }
+        }
+        geoframe get id, l(ID)
+        if `"`ID'"'=="" {
+            di as txt "(ID not available;"/*
+                */ " assuming all polygons belong to same unit)"
+            tempname ID
+            qui gen byte `ID' = 1
+        }
+        geoframe get coordinates, l(XY) strict
+        geoframe get pid, l(PID)
+        if `"`PID'"'=="" {
+            tempvar PID
+            qui geoframe gen pid `PID', noset
+        }
+        tempname PL
+        qui gen double `PL' = .
+        if "`BY'"!="" {
+            tempvar TOUSE
+            qui gen byte `TOUSE' = 0
+            qui levelsof `BY' if `touse', local(bylvls)
+            foreach lvl of local bylvls {
+                qui replace `TOUSE' = `BY'==`lvl' if `touse'
+                mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"', "`TOUSE'")
+                qui count if `PL' & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])/*
+                    */ & `TOUSE'
+                if `r(N)'==1 local msg polygon
+                else         local msg polygons
+                di as txt "(`by'=`lvl': `r(N)' nested `msg' found)"
+            }
+        }
+        else {
+            mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"', "`touse'")
+            qui count if `PL' & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])/*
+                */ & `touse'
+            if `r(N)'==1 local msg polygon
+            else         local msg polygons
+            di as txt "(`r(N)' nested `msg' found)"
+        }
+        qui compress `PL'
+        if `newvar' {
+            if `newvar'==2 drop `namelist'
+            rename `PL' `namelist'
+            di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
+        }
+        else {
+            qui replace `namelist' = `PL' if `touse'
+            di as txt "(variable {bf:`namelist'} updated in frame {bf:`shpframe'})"
+        }
+        if "`set'"=="" geoframe set plevel `namelist'
+    }
+end
+
+program _geoframe_spjoin
+    syntax [namelist(min=1 max=2)] [if] [in] [,/*
+        */ COordinates(varlist min=2 max=2) replace noset ]
+    marksample touse
+    gettoken shpframe namelist : namelist
+    gettoken id       namelist : namelist
+    if "`id'"=="" local id _ID
+    if "`replace'"=="" confirm new variable `id'
+    if `"`coordinates'"'!="" local xy `coordinates'
+    else geoframe get coordinates, l(xy) strict
+    markout `touse' `coordinates'
+    local frame `"`c(frame)'"'
+    local TOUSE
+    frame `shpframe' {
+        // check whether shpframe is an attribute frame linked to a shape frame
+        geoframe get type, l(type)
+        if "`type'"!="shape" {
+            geoframe get shpframe, local(shpframe2)
+            if `"`shpframe2'"'!="" {
+                tempvar TOUSE
+                qui gen `TOUSE' = 1
+                geoframe get linkname, local(lnkvar) strict
+                frame `shpframe2' {
+                    qui frget `TOUSE' = `TOUSE', from(`lnkvar')
+                    qui replace `TOUSE' = 0 if `TOUSE'>=.
+                }
+                local shpframe `shpframe2'
+            }
+        }
+    }
+    frame `shpframe' {
+        geoframe get ID, l(ID) strict
+        local type: type `ID'
+        geoframe get coordinates, l(XY) strict
+        geoframe get pid, l(PID)
+        if "`PID'"=="" {
+            tempvar PID
+            qui geoframe gen pid `PID', noset
+        }
+        geoframe get pl, l(PL)
+        if "`PL'"=="" {
+            di as txt "({helpb geoframe##gen_plevel:plevel} not set;"/*
+                */ " assuming that there are no nested polygons)"
+        }
+    }
+    tempvar Id
+    qui gen `type' `Id' = .
+    frame `shpframe': mata: _spjoin("`frame'", "`Id'", "`xy'", "`touse'",/*
+        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'")
+    qui count if `Id'>=. & `touse'
+    if `r(N)' {
+        if r(N)==1 local msg point
+        else       local msg points
+        di as txt "({bf:`r(N)'} `msg' not matched)"
+    }
+    capt confirm new variable `id'
+    if _rc==1 exit _rc
+    if _rc drop `id'
+    rename `Id' `id'
+    if "`set'"=="" {
+        geoframe set id `id'
+        if "`coordinates'"!="" geoframe set coordinates `xy'
+    }
+    di as txt "(variable {bf:`id'} added to frame {bf:`frame'})"
+end
+
+program _geoframe_bbox
+    syntax name(id="newname" name=newname) [if] [in] [, by(varname numeric)/*
+        */ CIRcle n(numlist int max=1 >0) PADding(real 0) replace ]
+    if "`n'"=="" local n 100
+    local mec = "`circle'"!=""
+    if "`replace'"=="" confirm new frame `newname'
+    // mark sample
+    marksample touse
+    if "`by'"!="" markout `touse' `by'
+    // find shapes
+    local cframe `"`c(frame)'"'
+    geoframe get type, l(type)
+    if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+    if `"`shpframe'"'=="" {
+        geoframe get coordinates, l(XY) strict
+        markout `touse' `XY'
+        local shpframe `"`cframe'"'
+        local BY `by'
+    }
+    else {
+        geoframe get linkname, local(lnkvar) strict
+        frame `shpframe' {
+            qui frget `touse' = `touse', from(`lnkvar')
+            qui replace `touse' = 0 if `touse'>=.
+            geoframe get coordinates, l(XY) strict
+            markout `touse' `XY'
+            if "`by'"!="" {
+                tempvar BY
+                qui frget `BY' = `by', from(`lnkvar')
+            }
+        }
+    }
+    // prepare new frame
+    tempname newframe
+    frame create `newframe'
+    frame `newframe' {
+        qui gen double _ID = .
+        qui gen double _X  = .
+        qui gen double _Y  = .
+    }
+    // obtain boxes/MECs
+    frame `shpframe' {
+        if "`BY'"!="" {
+            tempvar TOUSE
+            qui gen byte `TOUSE' = 0
+            qui levelsof `BY' if `touse', local(bylvls)
+            foreach lvl of local bylvls {
+                qui replace `TOUSE' = `BY'==`lvl' if `touse'
+                mata: _bbox("`newframe'", `"`XY'"', "`TOUSE'", `lvl',/*
+                     */ `mec', `n', `padding')
+            }
+        }
+        else {
+            mata: _bbox("`newframe'", `"`XY'"', "`touse'", .,/*
+                 */ `mec', `n', `padding')
+        }
+    }
+    // cleanup
+    frame `newframe' {
+        qui compress _ID
+        __geoframe_set_type shape
+        capt confirm new frame `newname'
+        if _rc==1 exit 1
+        if _rc frame drop `newname'
+        frame rename `newframe' `newname'
+        di as txt "(new frame "/*
+            */ `"{stata geoframe describe `newname':{bf:`newname'}}"'/*
+            */ " created)"
     }
 end
 
@@ -1388,7 +1608,7 @@ void _copy_by_ID(string scalar frame, string scalar ID0,
     id = st_data(., ID)
     p  = selectindex(_mm_unique_tag(id, 1))
     id = id[p]
-    x  = st_data(., tokens(X))[p,]
+    st_view(x=., p, tokens(X))
     // post data into asarray
     A = asarray_create("real")
     asarray_notfound(A, J(1,cols(x),.))
@@ -1400,6 +1620,116 @@ void _copy_by_ID(string scalar frame, string scalar ID0,
     st_view(x, ., st_addvar("double", tokens(X)))
     for (i=rows(id); i; i--) x[i,] = asarray(A, id[i])
     st_framecurrent(cframe)
+}
+
+void _centroid(string rowvector centr, string scalar id, string scalar xy)
+{
+    real colvector ID
+    real matrix    XY
+    
+    st_view(ID=., ., id)
+    st_view(XY=., ., xy)
+    st_store(., centr, geo_centroid(1, ID, XY))
+}
+
+void _area(string scalar area, string scalar id, string scalar xy)
+{
+    real colvector ID
+    real matrix    XY
+    
+    st_view(ID=., ., id)
+    st_view(XY=., ., xy)
+    st_store(., area, geo_area(1, ID, XY))
+}
+
+void _pid(string scalar pid, string scalar id, string scalar xy)
+{
+    real colvector ID
+    real matrix    XY
+    
+    st_view(ID=., ., id)
+    st_view(XY=., ., xy)
+    st_store(., pid, geo_pid(ID, XY))
+}
+
+void _plevel(string scalar pl, string scalar id, string scalar pid,
+    string scalar xy, string scalar touse)
+{
+    real colvector ID, PID
+    real matrix    XY
+    
+    st_view(ID=.,  ., id,  touse)
+    st_view(PID=., ., pid, touse)
+    st_view(XY=.,  ., xy,  touse)
+    st_store(., pl, touse, geo_plevel(1, ID, PID, XY))
+}
+
+void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
+    string scalar touse1, string scalar id, string scalar pid, string scalar xy,
+    string scalar pl, string scalar touse)
+{
+    real colvector ID, PID, PL
+    real matrix    XY, XY1
+    
+    st_view(ID=.,  ., id, touse)
+    st_view(PID=., ., pid, touse)
+    st_view(XY=.,  ., xy, touse)
+    if (pl!="") st_view(PL=., ., pl, touse)
+    else        PL = J(0,1,.)
+    st_framecurrent(frame)
+    st_view(XY1=., ., xy1, touse1)
+    st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL))
+}
+
+void _bbox(string scalar frame, string scalar xy, string scalar touse,
+     real scalar id, real scalar mec, real scalar k, real scalar pad)
+{
+    string scalar  cframe
+    real scalar    n, n0, n1
+    real matrix    XY, PT
+    
+    // generate shape
+    st_view(XY=.,  ., xy, touse)
+    if (mec) PT = __bbox_mec(XY, k, pad)
+    else     PT = __bbox(XY, pad)
+    // store shape
+    cframe = st_framecurrent()
+    st_framecurrent(frame)
+    n = rows(PT)
+    n0 = st_nobs()
+    st_addobs(n)
+    n1 = n0 + n; n0 = n0 + 1
+    st_store((n0,n1), "_ID", J(n, 1, id))
+    st_store((n0,n1), ("_X","_Y"), PT)
+    st_framecurrent(cframe)
+}
+
+real matrix __bbox_mec(real matrix XY, real scalar n, real scalar pad)
+{
+    real rowvector c
+    
+    c = geo_welzl(XY)
+    if (pad) c[3] = c[3] * (1 + pad/100)
+    return((.,.) \ c[(1,2)] :+ c[3] * _geo_symbol_circle(n))
+}
+
+real matrix __bbox(real matrix XY, real scalar pad)
+{
+    real scalar xmid, ymid
+    real matrix xy
+    
+    xy = colminmax(XY)
+    if (pad) {
+        xmid = (xy[2,1] + xy[1,1]) / 2
+        ymid = (xy[2,2] + xy[1,2]) / 2
+        xy = (xy :- (xmid,ymid)) * (1 + pad/100) :+  (xmid,ymid)
+    }
+    return((.,.) \
+        (xy[2,1],xy[1,2]) \ // xmax,ymin
+        (xy[2,1],xy[2,2]) \ // xmax,ymax
+        (xy[1,1],xy[2,2]) \ // xmin,ymax
+        (xy[1,1],xy[1,2]) \ // xmin,ymin
+        (xy[2,1],xy[1,2]))  // xmax,ymin
 }
 
 void _append(string scalar frame, string scalar touse, string rowvector vars,
