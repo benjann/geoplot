@@ -3,7 +3,7 @@ d geoplot: Stata module to draw maps
 d 
 d Author: Ben Jann, University of Bern, ben.jann@unibe.ch
 d
-d Distribution-Date: 20230629
+d Distribution-Date: 20230630
 f geoframe.ado
 f geoplot.ado
 f lgeoplot_source.sthlp

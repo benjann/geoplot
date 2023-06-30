@@ -134,6 +134,13 @@ Zoom.
 
 Main changes:
 
+    30jun2023
+    geoframe (version 1.0.4)
+    - option -hull- added to -geoframe bbox-
+    lgeoplot.mlib
+    - geo_hull() added to lgeoplot.mlib
+    - ID can now be scalar in geo_area() and geo_centroid()
+
     27jun2023 (version 1.0.3):
     general:
     - geoplot now has a Mata library for common functions (lgeoplot.mlib;

@@ -1,4 +1,4 @@
-*! version 1.0.3  29jun2023  Ben Jann
+*! version 1.0.4  30jun2023  Ben Jann
 
 program geoframe
     version 17
@@ -869,9 +869,15 @@ end
 
 program _geoframe_bbox
     syntax name(id="newname" name=newname) [if] [in] [, by(varname numeric)/*
-        */ CIRcle n(numlist int max=1 >0) PADding(real 0) replace ]
+        */ CIRcle n(numlist int max=1 >0) hull PADding(real 0) replace ]
+    if "`hull'"!="" & "`circle'"!="" {
+        di as err "only one of {bf:circle} and {bf:hull} allowed"
+        exit 198
+    }
+    if "`hull'"!=""        local btype 2
+    else if "`circle'"!="" local btype 1
+    else                   local btype 0
     if "`n'"=="" local n 100
-    local mec = "`circle'"!=""
     if "`replace'"=="" confirm new frame `newname'
     // mark sample
     marksample touse
@@ -916,12 +922,12 @@ program _geoframe_bbox
             foreach lvl of local bylvls {
                 qui replace `TOUSE' = `BY'==`lvl' if `touse'
                 mata: _bbox("`newframe'", `"`XY'"', "`TOUSE'", `lvl',/*
-                     */ `mec', `n', `padding')
+                     */ `btype', `n', `padding')
             }
         }
         else {
             mata: _bbox("`newframe'", `"`XY'"', "`touse'", .,/*
-                 */ `mec', `n', `padding')
+                 */ `btype', `n', `padding')
         }
     }
     // cleanup
@@ -1682,7 +1688,7 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
 }
 
 void _bbox(string scalar frame, string scalar xy, string scalar touse,
-     real scalar id, real scalar mec, real scalar k, real scalar pad)
+     real scalar id, real scalar btype, real scalar k, real scalar pad)
 {
     string scalar  cframe
     real scalar    n, n0, n1
@@ -1690,8 +1696,9 @@ void _bbox(string scalar frame, string scalar xy, string scalar touse,
     
     // generate shape
     st_view(XY=.,  ., xy, touse)
-    if (mec) PT = __bbox_mec(XY, k, pad)
-    else     PT = __bbox(XY, pad)
+    if      (btype==2) PT = __bbox_hull(XY, pad)
+    else if (btype==1) PT = __bbox_mec(XY, k, pad)
+    else               PT = __bbox(XY, pad)
     // store shape
     cframe = st_framecurrent()
     st_framecurrent(frame)
@@ -1702,6 +1709,19 @@ void _bbox(string scalar frame, string scalar xy, string scalar touse,
     st_store((n0,n1), "_ID", J(n, 1, id))
     st_store((n0,n1), ("_X","_Y"), PT)
     st_framecurrent(cframe)
+}
+
+real matrix __bbox_hull(real matrix XY, real scalar pad)
+{
+    real rowvector c
+    real matrix    xy
+    
+    xy = geo_hull(XY)
+    if (pad) {
+        c = _geo_centroid(xy)
+        xy = (xy :- c) * (1 + pad/100) :+ c
+    }
+    return((.,.) \ xy)
 }
 
 real matrix __bbox_mec(real matrix XY, real scalar n, real scalar pad)

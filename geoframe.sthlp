@@ -1,5 +1,5 @@
 {smcl}
-{* 29jun2023}{...}
+{* 30jun2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -36,7 +36,7 @@
     {p_end}
 {p2col :{helpb geoframe##spjoin:spjoin}}spatially join points in current frame to shapes from other frame
     {p_end}
-{p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box or minimum enclosing circle in new frame
+{p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box, enclosing circle, or convex hull in new frame
     {p_end}
 
 {syntab :Settings}
@@ -467,17 +467,21 @@
     frame, the levels of {it:byvar} will be used as values of the ID variable.
 
 {phang}
-    {opt cir:cle} computes the minimum enclosing circle (MEC) rather than the
-    bounding box.
+    {opt cir:cle} computes the minimum enclosing circle (MEC) rather than a
+    rectangular bounding box. Only one of {cmd:circle} and {cmd:hull} is allowed.
+
+{phang}
+    {opt hull} computes the convex hull rather than a rectangular bounding
+    box. Only one of {cmd:hull} and {cmd:circle} is allowed.
+
+{phang}
+    {opt pad:ding(#)} adds padding to the bounding box. Argument {it:#}
+    is in percent of the size in each dimension. For example,
+    type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
 
 {phang}
     {opt n(n)} sets the number of points used to construct a circle. This is only
     relevant if {cmd:circle} has been specified. The default is {cmd:n(100)}.
-
-{phang}
-    {opt pad:ding(#)} adds padding to the bounding box or MEC. Argument {it:#}
-    is in percent of the radius of the (unpadded) bounding box or MEC. For example,
-    type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
 
 {phang}
     {opt replace} allows overwriting an existing frame.

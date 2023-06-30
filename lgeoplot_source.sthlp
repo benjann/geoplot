@@ -3,6 +3,7 @@
 *!     {helpb lgeoplot_source##geo_area:geo_area()}
 *!     {helpb lgeoplot_source##geo_centroid:geo_centroid()}
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
+*!     {helpb lgeoplot_source##geo_hull:geo_hull()}
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
 *!     {helpb lgeoplot_source##geo_pointinpolygon:geo_pointinpolygon()}
@@ -16,7 +17,7 @@ version 17
 
 *! {smcl}
 *! {marker geo_area}{bf:geo_area()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  30jun2023  Ben Jann
 *!
 *! Computes area of each unit using the Shoelace formula
 *! See https://en.wikipedia.org/wiki/Shoelace_formula
@@ -27,27 +28,38 @@ version 17
 *! unit ID, (5) that nested polygons within a unit switch orientation (so that
 *! "holes" will be deducted from the total area of the unit)
 *!
-*! Syntax:
+*! Syntax 1:
 *!
 *!      result = geo_area(rtype, ID, XY)
 *!
 *!  rtype   results type: if rtype!=0 the result is a real colvector of length
 *!          n containing repeated area values, else the result is a r x 2 matrix
 *!          with ID in 1st row and area in 2nd row, where r is the number of units
-*!  ID      real colvector of unit IDs
+*!  ID      real colvector of unit IDs; can also specify ID as real scalar if
+*!          there is only a single unit
+*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!
+*! Syntax 2:
+*!
+*!      result = _geo_area(XY)
+*!
+*!  result  real scalar containing area
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
 *!
 
 mata:
 mata set matastrict on
 
-real matrix geo_area(real scalar rtype, real colvector ID, real matrix XY)
+real matrix geo_area(real scalar rtype, real colvector id, real matrix XY)
 {
     real scalar    n, i, ai, bi
     real colvector a, b, A
+    pointer scalar ID
     
     n = rows(XY)
-    a = selectindex(_mm_unique_tag(ID))
+    if (length(id)==1) ID = &J(n,1,id)
+    else               ID = &id
+    a = selectindex(_mm_unique_tag(*ID))
     i = rows(a)
     if (i<=1) b = n
     else      b = a[|2 \. |] :- 1 \ n
@@ -61,7 +73,7 @@ real matrix geo_area(real scalar rtype, real colvector ID, real matrix XY)
     }
     A = J(i,1,.)
     for (;i;i--) A[i] = _geo_area(XY[|a[i],1 \ b[i],.|])
-    return((ID[a],A))
+    return(((*ID)[a],A))
 }
 
 real scalar _geo_area(real matrix XY)
@@ -79,7 +91,7 @@ end
 
 *! {smcl}
 *! {marker geo_centroid}{bf:geo_centroid()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  30jun2023  Ben Jann
 *!
 *! Computes centroid of each unit; see https://en.wikipedia.org/wiki/Centroid
 *! assuming (1) that the polygons belonging to a unit are separated by a row
@@ -89,7 +101,7 @@ end
 *! unit ID, (5) that nested polygons within a unit switch orientation (so that
 *! "holes" will be deducted from the total area of the unit)
 *!
-*! Syntax:
+*! Syntax 1:
 *!
 *!      result = geo_centroid(rtype, ID, XY)
 *!
@@ -97,21 +109,32 @@ end
 *!          repeated centroids, else the result is a r x 3 matrix with ID in
 *!          1st row, X of centroid in 2nd row, and Y of centroid in 3rd row,
 *!          where r is the number of units
-*!  ID      real colvector of unit IDs
+*!  ID      real colvector of unit IDs; can also specify ID as real scalar if
+*!          there is only a single unit
+*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!
+*! Syntax 2:
+*!
+*!      result = _geo_centroid(XY)
+*!
+*!  result  1 x 2 real vector containing centroid
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
 *!
 
 mata:
 mata set matastrict on
 
-real matrix geo_centroid(real scalar rtype, real colvector ID, real matrix XY)
+real matrix geo_centroid(real scalar rtype, real colvector id, real matrix XY)
 {
     real scalar    n, i, ai, bi
     real colvector a, b
     real matrix    C
+    pointer scalar ID
     
     n = rows(XY)
-    a = selectindex(_mm_unique_tag(ID))
+    if (length(id)==1) ID = &J(n,1,id)
+    else               ID = &id
+    a = selectindex(_mm_unique_tag(*ID))
     i = rows(a)
     if (i<=1) b = n
     else      b = a[|2 \. |] :- 1 \ n
@@ -125,7 +148,7 @@ real matrix geo_centroid(real scalar rtype, real colvector ID, real matrix XY)
     }
     C = J(i,2,.)
     for (;i;i--) C[i,] = _geo_centroid(XY[|a[i],1 \ b[i],.|])
-    return((ID[a],C))
+    return(((*ID)[a],C))
 }
 
 real rowvector _geo_centroid(real matrix XY)
@@ -187,6 +210,106 @@ mata set matastrict on
              (c1[1] - c1[3] * sin(alpha2), c1[2] - c1[3] * cos(alpha2)) \
              (c2[1] - c2[3] * sin(alpha2), c2[2] - c2[3] * cos(alpha2))
     return(P)
+}
+
+end
+
+*! {smcl}
+*! {marker geo_hull}{bf:geo_hull()}{asis}
+*! version 1.0.0  30jun2023  Ben Jann
+*!
+*! Determine convex hull around cloud of points using Graham scan; based on
+*! https://en.wikipedia.org/wiki/Graham_scan and
+*! https://www.geeksforgeeks.org/convex-hull-using-graham-scan/
+*!
+*! Syntax:
+*!
+*!      result = geo_hull(XY)
+*!
+*!  result  real matrix containing (X,Y) of convex hull (counterclockwise)
+*!  XY      n x 2 real matrix containing points; X in col 1, Y in col 2;
+*!             should not contain missing values
+*!
+
+mata
+mata set matastrict on
+
+real matrix geo_hull(real matrix XY)
+{
+    real scalar    i0, i, j, n
+    real colvector p, s
+    
+    n  = rows(XY)
+    if (n==0) return(J(0,2,.))     // no data
+    if (n==1) return(XY[,(1,2)])   // only one point
+    // get reference point
+    i0 = _geo_hull_refpoint(XY)
+    // obtain counterclockwise order of remaining points along half-circle
+    p  = _geo_hull_order(XY, i0)
+    // obtain convex hull
+    n  = length(p)
+    if (n<3) return(XY[(i0\p\i0),(1,2)]) // 3 points or less
+    s = J(n+1,1,.) // initialize stack
+    s[(1,2,3)] = i0 \ p[1] \p[2]; j = 3 // first three points
+    for (i=3;i<=n;i++) {
+        while (1) {
+            if (j<2) break
+            if (_geo_hull_leftturn(XY[s[j-1],], XY[s[j],], XY[p[i],])) break
+            j--
+        }
+        j++
+        s[j] = p[i]
+    }
+    p = s[|1\j|] \ i0
+    return(XY[p,(1,2)])
+}
+
+real scalar _geo_hull_refpoint(real matrix XY)
+{   // get index of point with lowest X (and lowest Y within ties)
+    real colvector i, j
+    real matrix    w
+    
+    i = j = w = .
+    minindex(XY[,2] , 1, i, w)
+    if (length(i)==1) return(i)
+    minindex(XY[i,1], 1, j, w)
+    return(i[j[1]])
+}
+
+real colvector _geo_hull_order(real matrix XY, real scalar i0)
+{
+    real colvector p, dx, dy, q, a, d
+    
+    p = 1::rows(XY) // initialize permutation vector
+    dx = XY[,1] :- XY[i0,1] // X distance to point i0
+    dy = XY[,2] :- XY[i0,2] // Y distance to point i0
+    p = select(p, !(dx:==0 :& dy:==0)) // remove point i0 and its duplicates
+    if (length(p)==0) return(J(0,1,.)) // no remaining points
+    q = sign(dx) // 1 = 1st quadrant, -1 = 2nd quadrant, 0 = on vertical edge
+    a = dy :/ dx // order of "angle"; positive in 1st, negative in 2nd quadrant
+    _geo_hull_editmin(a, q) // replace missing in 2nd quadrant by mindouble()
+    d = dx:^2 + dy:^2 // (squared) distance from point i0
+    // sort points by angle and distance with respect to point i0
+    _collate(p, order((q,a,d)[p,], (-1,2,3)))
+    // ties in angle: keep point with largest distance to point i0
+    return(p[selectindex(_mm_uniqrows_tag((q,a)[p,], 1))])
+}
+
+void _geo_hull_editmin(real colvector a, real colvector q)
+{
+    real colvector p
+    
+    p = selectindex(a:>=. :& q:<0)
+    if (length(p)) a[p] = J(length(p), 1, mindouble())
+}
+
+real scalar _geo_hull_leftturn(real rowvector p1, real rowvector p2,
+    real rowvector p3)
+{
+    real scalar d
+    
+    d = (p2[2] - p1[2]) * (p3[1] - p2[1]) - (p2[1] - p1[1]) * (p3[2] - p2[2])
+    return(d<0)
 }
 
 end
