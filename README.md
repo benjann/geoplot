@@ -136,6 +136,8 @@ Main changes:
 
 
     01jul2023
+    geoplot (version 1.0.5)
+    - default linewidth now everywhere .15
     geoframe (version 1.0.5)
     - option -rotate- added to -geoframe bbox- (minimum-area bounding box)
     lgeoplot.mlib
