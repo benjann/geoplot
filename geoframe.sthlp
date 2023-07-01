@@ -1,5 +1,5 @@
 {smcl}
-{* 30jun2023}{...}
+{* 01jul2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -465,6 +465,11 @@
     {cmd:by(}{help varname:{it:byvar}}{cmd:)} computes a separate bounding box
     for each group of units defined by the levels of {it:byvar}. In the new
     frame, the levels of {it:byvar} will be used as values of the ID variable.
+
+{phang}
+    {opt rot:ate} allows rotation of the bounding box such that the minimum-area
+    bounding box will be found. {cmd:rotate} has no effect if {cmd:circle} or
+    {cmd:hull} is specified.
 
 {phang}
     {opt cir:cle} computes the minimum enclosing circle (MEC) rather than a

@@ -1,4 +1,4 @@
-*! version 1.0.4  30jun2023  Ben Jann
+*! version 1.0.5  01jul2023  Ben Jann
 
 program geoframe
     version 17
@@ -869,13 +869,14 @@ end
 
 program _geoframe_bbox
     syntax name(id="newname" name=newname) [if] [in] [, by(varname numeric)/*
-        */ CIRcle n(numlist int max=1 >0) hull PADding(real 0) replace ]
+        */ ROTate CIRcle n(numlist int max=1 >0) hull PADding(real 0) replace ]
     if "`hull'"!="" & "`circle'"!="" {
         di as err "only one of {bf:circle} and {bf:hull} allowed"
         exit 198
     }
-    if "`hull'"!=""        local btype 2
-    else if "`circle'"!="" local btype 1
+    if "`hull'"!=""        local btype 3
+    else if "`circle'"!="" local btype 2
+    else if "`rotate'"!="" local btype 1
     else                   local btype 0
     if "`n'"=="" local n 100
     if "`replace'"=="" confirm new frame `newname'
@@ -1696,9 +1697,9 @@ void _bbox(string scalar frame, string scalar xy, string scalar touse,
     
     // generate shape
     st_view(XY=.,  ., xy, touse)
-    if      (btype==2) PT = __bbox_hull(XY, pad)
-    else if (btype==1) PT = __bbox_mec(XY, k, pad)
-    else               PT = __bbox(XY, pad)
+    if      (btype==3) PT = __bbox_hull(XY, pad)
+    else if (btype==2) PT = __bbox_mec(XY, k, pad)
+    else               PT = __bbox(XY, btype, pad)
     // store shape
     cframe = st_framecurrent()
     st_framecurrent(frame)
@@ -1733,23 +1734,18 @@ real matrix __bbox_mec(real matrix XY, real scalar n, real scalar pad)
     return((.,.) \ c[(1,2)] :+ c[3] * _geo_symbol_circle(n))
 }
 
-real matrix __bbox(real matrix XY, real scalar pad)
+real matrix __bbox(real matrix XY, real scalar type, real scalar pad)
 {
     real scalar xmid, ymid
     real matrix xy
     
-    xy = colminmax(XY)
+    xy = geo_bbox(XY, type)
     if (pad) {
-        xmid = (xy[2,1] + xy[1,1]) / 2
-        ymid = (xy[2,2] + xy[1,2]) / 2
+        xmid = sum(minmax(xy[,1])) / 2
+        ymid = sum(minmax(xy[,2])) / 2
         xy = (xy :- (xmid,ymid)) * (1 + pad/100) :+  (xmid,ymid)
     }
-    return((.,.) \
-        (xy[2,1],xy[1,2]) \ // xmax,ymin
-        (xy[2,1],xy[2,2]) \ // xmax,ymax
-        (xy[1,1],xy[2,2]) \ // xmin,ymax
-        (xy[1,1],xy[1,2]) \ // xmin,ymin
-        (xy[2,1],xy[1,2]))  // xmax,ymin
+    return((.,.) \ xy)
 }
 
 void _append(string scalar frame, string scalar touse, string rowvector vars,

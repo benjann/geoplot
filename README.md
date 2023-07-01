@@ -134,6 +134,13 @@ Zoom.
 
 Main changes:
 
+
+    01jul2023
+    geoframe (version 1.0.5)
+    - option -rotate- added to -geoframe bbox- (minimum-area bounding box)
+    lgeoplot.mlib
+    - geo_bbox() added to lgeoplot.mlib
+
     30jun2023
     geoframe (version 1.0.4)
     - option -hull- added to -geoframe bbox-

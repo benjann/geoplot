@@ -90,6 +90,179 @@ real scalar _geo_area(real matrix XY)
 end
 
 *! {smcl}
+*! {marker geo_bbox}{bf:geo_bbox()}{asis}
+*! version 1.0.0  30jun2023  Ben Jann
+*!
+*! Determine (minimum) bounding box around cloud of points
+*! minimum bounding box algorithm loosely based on
+*! https://en.wikipedia.org/wiki/Minimum_bounding_box_algorithms
+*!
+*! Syntax:
+*!
+*!      result = geo_bbox(XY [, type])
+*!
+*!  result  real matrix containing (X,Y) of bounding box (counterclockwise)
+*!  XY      n x 2 real matrix containing points; X in col 1, Y in col 2;
+*!             should not contain missing values
+*!  type    real scalar selecting type of box and algorithm
+*!           0 = regular (unrotated) bounding box (the default)
+*!           1 = minimum-area bounding box using rotating calipers algorithm
+*!           2 = minimum-perimeter bounding box using rotating calipers alg.
+*!          -1 = minimum-area bounding box using tilting algorithm
+*!          -2 = minimum-perimeter bounding box using tilting algorithm
+*!
+
+mata
+mata set matastrict on
+
+real matrix geo_bbox(real matrix XY, | real scalar type)
+{
+    if (type==1)  return(_geo_bbox_rc(XY))
+    if (type==2)  return(_geo_bbox_rc(XY, 1))
+    if (type==-1) return(_geo_bbox_tilt(XY))
+    if (type==-2) return(_geo_bbox_tilt(XY,1))
+    return(_geo_bbox(XY))
+}
+
+real matrix _geo_bbox(real matrix XY)
+{
+    real matrix xy
+    
+    xy = colminmax(XY)
+    return((xy[2,1],xy[1,2]) \ // xmax,ymin
+           (xy[2,1],xy[2,2]) \ // xmax,ymax
+           (xy[1,1],xy[2,2]) \ // xmin,ymax
+           (xy[1,1],xy[1,2]) \ // xmin,ymin
+           (xy[2,1],xy[1,2]))  // xmax,ymin
+}
+
+real matrix _geo_bbox_rc(real matrix XY, | real scalar perim)
+{
+    real scalar    b, r, t, l, a, n, xmin, xmax, ymax
+    real matrix    xy, xy1
+    real scalar    size, Size
+    real matrix    box, Box
+    
+    if (args()<2) perim = 0
+    // get convex hull
+    xy = geo_hull(XY)
+    n = rows(xy)
+    if (n==0) return(J(5,2,.))
+    if (n==1) return(J(5,1,xy[1,]))
+    n = n - 1 // omit last point (which is equal to first point)
+    // determine minimal box using rotating calipers
+    Size = .
+    b = r = t = l = 1
+    for (; b<=n; b++) {
+        // find/update calipers, one on each side (bottom, right, top, left)
+        a = _geo_bbox_rc_angle(xy,n, b)
+        r = _geo_bbox_rc_update(xy,n, r, a, 1)
+        t = _geo_bbox_rc_update(xy,n, t, a, 2)
+        l = _geo_bbox_rc_update(xy,n, l, a, 3)
+        // compute size of box
+        xy1  = xy[mod(b-1,n)+1,] // reference point
+        box  = _geo_bbox_rc_rotate(xy[mod((r,t,l):-1,n):+1,]:-xy1, -a)
+        xmin = box[3,1]; xmax = box[1,1]; ymax = box[2,2] // ymin is 0
+        if (perim) size = (xmax-xmin) + (ymax)
+        else       size = (xmax-xmin) * (ymax)
+        // store box if smaller than pervious smallest box
+        if (size < Size) {
+            Size = size
+            box = (xmax,0) \ (xmax,ymax) \ (xmin,ymax) \ (xmin,0)
+            Box = _geo_bbox_rc_rotate(box, a) :+ xy1
+        }
+    }
+    // rearrange so that start is at bottom right
+    _geo_bbox_rearrange(Box)
+    return(Box \ Box[1,])
+}
+
+real scalar _geo_bbox_rc_angle(real matrix XY, real scalar n, real scalar i0)
+{   // returns counterclockwise angle of edge
+    real scalar    i, j, a
+    real rowvector xy
+    
+    i = mod(i0-1,n) + 1
+    j = mod(i0, n) + 1
+    xy = XY[j,] - XY[i,]
+    a = acos(xy[1] / sqrt(sum(xy:^2)))
+    if (xy[2]<0) a = 2*pi() - a
+    return(a + floor((i0-1)/n)*2*pi())
+}
+
+real scalar _geo_bbox_rc_update(real matrix XY, real scalar n,
+    real scalar i, real scalar r, real scalar side)
+{
+    real scalar j
+    
+    j = i
+    while (_geo_bbox_rc_angle(XY,n, j) < (side/2*pi() + r)) j++
+    return(j)
+}
+
+real matrix _geo_bbox_rc_rotate(real matrix XY, real scalar r)
+{
+    real scalar s, c
+    
+    s = sin(r); c = cos(r)
+    return((XY[,1] * c - XY[,2] * s, XY[,1] * s + XY[,2] * c))
+}
+
+real matrix _geo_bbox_tilt(real matrix XY, | real scalar perim)
+{
+    real scalar i, n, a, s, S
+    real matrix xy, xy0, b, B
+    
+    if (args()<2) perim = 0
+    xy = geo_hull(XY)
+    n = rows(xy)
+    if (n==0) return(J(5,2,.))
+    if (n==1) return(J(5,1,xy[1,]))
+    S = .
+    for (i=2;i<=n;i++) {
+        xy0 = xy :- xy[i-1,]
+        a   = _geo_bbox_tilt_angle(xy0[i,])
+        b   = colminmax(geo_rotate(xy0, -a))
+        if (perim) s = (b[2,1]-b[1,1]) + (b[2,2]-b[1,2])
+        else       s = (b[2,1]-b[1,1]) * (b[2,2]-b[1,2])
+        if (s<S) {
+            S = s
+            b = (b[2,1],b[1,2]) \ (b[2,1],b[2,2]) \
+                (b[1,1],b[2,2]) \ (b[1,1],b[1,2])
+            B = geo_rotate(b, a) :+ xy[i-1,]
+        }
+    }
+    _geo_bbox_rearrange(B)
+    return(B \ B[1,])
+}
+
+real scalar _geo_bbox_tilt_angle(real rowvector xy)
+{
+    real scalar r
+    
+    r = sqrt(sum(xy:^2))
+    return(sign(xy[2]) * acos(xy[1]/r) / pi() * 180)
+}
+
+void _geo_bbox_rearrange(real matrix XY)
+{
+    real colvector i, j
+    real matrix    w
+    
+    i = j = w = .
+    minindex(XY[,2], 1, i, w)
+    if (length(i)>1) {
+        maxindex(XY[i,1], 1, j, w)
+        i = i[j[1]]
+    }
+    if (i==1) return
+    if (i==rows(XY)) XY = XY[i,] \ XY[|1,1 \ i-1,.|]
+    else             XY = XY[|i,1 \ .,.|] \ XY[|1,1 \ i-1,.|]
+}
+
+end
+
+*! {smcl}
 *! {marker geo_centroid}{bf:geo_centroid()}{asis}
 *! version 1.0.1  30jun2023  Ben Jann
 *!
@@ -270,7 +443,7 @@ real scalar _geo_hull_refpoint(real matrix XY)
     real matrix    w
     
     i = j = w = .
-    minindex(XY[,2] , 1, i, w)
+    minindex(XY[,2], 1, i, w)
     if (length(i)==1) return(i)
     minindex(XY[i,1], 1, j, w)
     return(i[j[1]])
@@ -783,7 +956,7 @@ end
 
 *! {smcl}
 *! {marker geo_symbol}{bf:symbol()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  01jul2023  Ben Jann
 *!
 *! Returns the coordinates of a selected symbol
 *!
@@ -828,13 +1001,16 @@ real matrix geo_symbol(string scalar sym, | real scalar n, string scalar arg)
 real matrix _geo_symbol_circle(| real scalar n0, string scalar arg)
 {
     real colvector r, n
+    real matrix    xy
     pragma unused arg
     
     if (n0>=.) n = 100
     else       n = n0
     r = .25 - .5/n // set angle such that shape has horizontal edge at bottom
     r = rangen(-r, 1-r, n+1) * (2 * pi())
-    return((cos(r), sin(r)))
+    xy = (cos(r), sin(r))
+    xy[n+1,] = xy[1,] // for sake of precision
+    return(xy)
 }
 
 real matrix _geo_symbol_slice(| real scalar n, string scalar arg)
