@@ -1,4 +1,4 @@
-*! version 1.0.3  29jun2023  Ben Jann
+*! version 1.0.5  01jul2023  Ben Jann
 
 /*
     Syntax:
@@ -150,7 +150,6 @@ program _layer
         else                 _parse_feature, `feature'
         if `"`feature'"'=="water" {
             if `"`color'"'==""  local color color("135 206 235") // SkyBlue
-            if `"`lwidth'"'=="" local lwidth lwidth(vthin)
             if `"`plottype'"'=="area" {
                 if "`fintensity'"=="" local fintensity fintensity(50)
             }
@@ -461,7 +460,7 @@ program _layer
         }
         if "`FINTENSITY'"=="" local opts finten(100) `opts'
         if "`LWIDTH'"=="" {
-            local opts lwidth(thin) `opts'
+            local opts lwidth(.15) `opts'
             if `hasZ' & `"`fcolor'"'=="" local opts lcolor(%0) `opts'
         }
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
@@ -469,7 +468,7 @@ program _layer
     else if "`plottype'"'=="line" {
         local opts `opts' cmissing(n)
         if "`COLOR'"=="" local opts lcolor(gray) `opts'
-        if "`LWIDTH'"==""   local opts lwidth(thin) `opts'
+        if "`LWIDTH'"==""   local opts lwidth(.15) `opts'
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
     if `hasMLAB' {
@@ -868,10 +867,10 @@ program _z_parse_missing
     local options color(`color') `options'
     if `"`plottype'"'=="area" {
         local options cmissing(n) nodropbase lalign(center) finten(100)/*
-            */ lwidth(thin) lpattern(solid) lcolor(%0) `options'
+            */ lwidth(.15) lpattern(solid) lcolor(%0) `options'
     }
     else if "`plottype'"'=="line" {
-        local options cmissing(n) lwidth(thin) lpattern(solid) `options'
+        local options cmissing(n) lwidth(.15) lpattern(solid) `options'
     }
     c_local missing `options'
     c_local missing_color `"`color'"'

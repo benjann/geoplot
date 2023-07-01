@@ -1,4 +1,4 @@
-*! version 1.0.3  29jun2023  Ben Jann
+*! version 1.0.5  01jul2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -456,7 +456,7 @@ program __zoom
     }
     // plot box or MEC
     local plots
-    if `"`lwidth'"'=="" local lwidth lwidth(thin)
+    if `"`lwidth'"'=="" local lwidth lwidth(.15)
     if `"`lcolor'"'=="" local lcolor lcolor(gray)
     foreach opt in lpattern lwidth lcolor lalign lstyle pstyle {
         local options ``opt'' `options'
@@ -947,7 +947,7 @@ program _scalebar
     _parse_scalerbar_title `title'
     if `"`color'"'==""       local color color(black)
     if `"`fintensity'"'==""  local fintensity finten(100)
-    if `"`lwidth'"'==""      local lwidth lwidth(vthin)
+    if `"`lwidth'"'==""      local lwidth lwidth(.15)
     local options `color' `fintensity' `lwidth' `options'
     if `"`position'"'=="" local position 7
     else                  _parse_position `position' // compass => clock
@@ -1117,7 +1117,7 @@ program _compass
     gettoken Xmax    anything : anything // (includes margin)
     if `"`size'"'==""   local size 5
     if `"`color'"'==""  local color color(black)
-    if `"`lwidth'"'=="" local lwidth lwidth(vthin)
+    if `"`lwidth'"'=="" local lwidth lwidth(.15)
     local options `color' `lwidth' `options'
     if `"`fintensity'"'=="" local fintensity finten(100)
     local aoptions lalign(center) `fintensity' `options' cmissing(n) nodropbase
