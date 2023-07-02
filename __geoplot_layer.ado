@@ -1,4 +1,4 @@
-*! version 1.0.5  01jul2023  Ben Jann
+*! version 1.0.5  02jul2023  Ben Jann
 
 /*
     Syntax:
@@ -365,12 +365,10 @@ program _layer
             tempname CUTS
             mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`touse'") /* returns
                 CUTS, cuts, levels */
-            if `levels' {
-                if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
-                _z_categorize `CUTS', levels(`levels') zvar(`Zvar')/*
-                    */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
-                    /* returns zlevels nobs nmiss discrete */
-            }
+            if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
+            _z_categorize `CUTS', levels(`levels') zvar(`Zvar')/*
+                */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
+                /* returns zlevels nobs nmiss discrete */
         }
     }
     // copy data into main frame
@@ -1000,6 +998,7 @@ void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
     if (discrete) { // discrete specified
         C = mm_unique(st_data(., zvar, touse))
         C = select(C, C:<.) // remove missing codes
+        if (length(C)==0) C = J(0,1,.) // select() may return 0x0
         st_matrix(CUTS, C')
         st_local("cuts", invtokens(strofreal(C)'))
         st_local("levels", strofreal(length(C)))
@@ -1096,16 +1095,18 @@ void _z_categorize(real scalar k, real scalar discrete, string scalar cuts,
     N = J(1, k, .)
     st_view(Z=., ., zvar, touse)
     st_view(T=., ., ztmp, touse)
-    if (!discrete) c0 = C[k+1]
-    for (i=k;i;i--) {
-        if (discrete) p = selectindex(Z:==C[i])
-        else {
-            c1 = c0; c0 = C[i]
-            if (i==1) p = selectindex(Z:>=c0 :& Z:<=c1)
-            else      p = selectindex(Z:> c0 :& Z:<=c1)
+    if (k) {
+        if (!discrete) c0 = C[k+1]
+        for (i=k;i;i--) {
+            if (discrete) p = selectindex(Z:==C[i])
+            else {
+                c1 = c0; c0 = C[i]
+                if (i==1) p = selectindex(Z:>=c0 :& Z:<=c1)
+                else      p = selectindex(Z:> c0 :& Z:<=c1)
+            }
+            N[i] = n = length(p)
+            if (n) T[p] = J(n,1,i)
         }
-        N[i] = n = length(p)
-        if (n) T[p] = J(n,1,i)
     }
     p = selectindex(Z:>=.)
     m = length(p)
@@ -1113,7 +1114,8 @@ void _z_categorize(real scalar k, real scalar discrete, string scalar cuts,
         T[p] = J(m,1,0) // set missings to 0
         st_local("zlevels", invtokens(strofreal(0..k)))
     }
-    else st_local("zlevels", invtokens(strofreal(1..k)))
+    else if (k) st_local("zlevels", invtokens(strofreal(1..k)))
+    else        st_local("zlevels", "")
     st_local("nobs", invtokens(strofreal(N)))
     st_local("nmiss", strofreal(m))
 }

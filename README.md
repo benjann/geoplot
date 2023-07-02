@@ -135,9 +135,10 @@ Zoom.
 Main changes:
 
 
-    01jul2023
+    02jul2023
     geoplot (version 1.0.5)
     - default linewidth now everywhere .15
+    - geoplot failed if zvar was all missing; this is fixed
     geoframe (version 1.0.5)
     - option -rotate- added to -geoframe bbox- (minimum-area bounding box)
     lgeoplot.mlib

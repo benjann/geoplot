@@ -1,4 +1,4 @@
-*! version 1.0.5  01jul2023  Ben Jann
+*! version 1.0.5  02jul2023  Ben Jann
 
 program geoframe
     version 17
@@ -766,26 +766,20 @@ program _geoframe_generate_plevel
         tempname PL
         qui gen double `PL' = .
         if "`BY'"!="" {
-            tempvar TOUSE
-            qui gen byte `TOUSE' = 0
             qui levelsof `BY' if `touse', local(bylvls)
             foreach lvl of local bylvls {
-                qui replace `TOUSE' = `BY'==`lvl' if `touse'
-                mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"', "`TOUSE'")
-                qui count if `PL' & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])/*
-                    */ & `TOUSE'
-                if `r(N)'==1 local msg polygon
-                else         local msg polygons
-                di as txt "(`by'=`lvl': `r(N)' nested `msg' found)"
+                mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"',/*
+                    */ "`touse'", "`BY'", `lvl') // returns N
+                if `N'==1 local msg polygon
+                else      local msg polygons
+                di as txt "(`by'=`lvl': `N' nested `msg' found)"
             }
         }
         else {
             mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"', "`touse'")
-            qui count if `PL' & (`ID'!=`ID'[_n-1] | `PID'!=`PID'[_n-1])/*
-                */ & `touse'
-            if `r(N)'==1 local msg polygon
-            else         local msg polygons
-            di as txt "(`r(N)' nested `msg' found)"
+            if `N'==1 local msg polygon
+            else      local msg polygons
+            di as txt "(`N' nested `msg' found)"
         }
         qui compress `PL'
         if `newvar' {
@@ -917,13 +911,10 @@ program _geoframe_bbox
     // obtain boxes/MECs
     frame `shpframe' {
         if "`BY'"!="" {
-            tempvar TOUSE
-            qui gen byte `TOUSE' = 0
             qui levelsof `BY' if `touse', local(bylvls)
             foreach lvl of local bylvls {
-                qui replace `TOUSE' = `BY'==`lvl' if `touse'
-                mata: _bbox("`newframe'", `"`XY'"', "`TOUSE'", `lvl',/*
-                     */ `btype', `n', `padding')
+                mata: _bbox("`newframe'", `"`XY'"', "`touse'", `lvl',/*
+                     */ `btype', `n', `padding', "`BY'")
             }
         }
         else {
@@ -1660,15 +1651,28 @@ void _pid(string scalar pid, string scalar id, string scalar xy)
 }
 
 void _plevel(string scalar pl, string scalar id, string scalar pid,
-    string scalar xy, string scalar touse)
+    string scalar xy, string scalar touse, | string scalar BY, real scalar lvl)
 {
-    real colvector ID, PID
+    real colvector ID, PID, PL, p, L
     real matrix    XY
     
-    st_view(ID=.,  ., id,  touse)
-    st_view(PID=., ., pid, touse)
-    st_view(XY=.,  ., xy,  touse)
-    st_store(., pl, touse, geo_plevel(1, ID, PID, XY))
+    if (BY!="") {
+        p   = selectindex(st_data(., BY, touse):==lvl)
+        ID  = st_data(., id,  touse)[p]
+        PID = st_data(., pid, touse)[p]
+        XY  = st_data(., xy,  touse)[p,]
+        L = geo_plevel(1, ID, PID, XY)
+        st_view(PL=., ., pl,  touse)
+        PL[p,] = L
+    }
+    else {
+        st_view(ID=.,  ., id,  touse)
+        st_view(PID=., ., pid, touse)
+        st_view(XY=.,  ., xy,  touse)
+        L = geo_plevel(1, ID, PID, XY)
+        st_store(., pl, touse, L)
+    }
+    st_local("N", strofreal(sum(L:!=0 :& _mm_uniqrows_tag((ID,PID)))))
 }
 
 void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
@@ -1689,14 +1693,16 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
 }
 
 void _bbox(string scalar frame, string scalar xy, string scalar touse,
-     real scalar id, real scalar btype, real scalar k, real scalar pad)
+     real scalar id, real scalar btype, real scalar k, real scalar pad,
+     | string scalar BY)
 {
     string scalar  cframe
     real scalar    n, n0, n1
     real matrix    XY, PT
     
     // generate shape
-    st_view(XY=.,  ., xy, touse)
+    if (BY!="") XY = select(st_data(., xy, touse), st_data(., BY, touse):==id)
+    else        st_view(XY=., ., xy, touse)
     if      (btype==3) PT = __bbox_hull(XY, pad)
     else if (btype==2) PT = __bbox_mec(XY, k, pad)
     else               PT = __bbox(XY, btype, pad)
