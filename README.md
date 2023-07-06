@@ -133,6 +133,13 @@ Zoom.
 
 Main changes:
 
+    06jul2023
+    geoplot (version 1.0.7)
+    - compiled legend option now returned in r(legend)
+    - geoplot now parses graph options such as xscale(range()) or ylabel() and
+      adjust computation of aspect ratio accordingly
+    - clegend() sometimes displayed funny colors at the top if zscale(range())
+      or zlabel() was specified; this should now be fixed
 
     06jul2023
     geoplot (version 1.0.6)

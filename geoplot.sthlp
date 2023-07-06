@@ -1650,7 +1650,9 @@
 
 {pstd}
     {cmd:geoplot} returns a copy of the called graph command in macro
-    {cmd:r(graph)}.
+    {cmd:r(graph)}. Furthermore, the legend option of the command is
+    returned in {cmd:r(legend)} (so that the legend can be preserved when
+    modifying the graph using comman {helpb addplot}; see {stata ssc describe addplot}).
 
 
 {title:Author}

@@ -1,4 +1,4 @@
-*! version 1.0.6  06jul2023  Ben Jann
+*! version 1.0.7  06jul2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -44,9 +44,9 @@ end
 program _geoplot, rclass
     _parse comma lhs 0 : 0
     syntax [, /*
-        */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
-        */ SBAR SBAR2(str asis) COMPass COMPass2(str asis) /*
-        */ ANGle(real 0) tight Margin(str) REFdim(str) ASPECTratio(str) /* 
+        */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis)/*
+        */ SBAR SBAR2(str asis) COMPass COMPass2(str asis)/*
+        */ ANGle(real 0) tight Margin(str) REFdim(str) ASPECTratio(str)/*
         */ YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
         */ frame(str) NOGRAPH * ]
     local legend  = `"`legend'`legend2'"'!=""
@@ -143,12 +143,12 @@ program _geoplot, rclass
         local plots `plots' `plot'
         
     // graph dimensions
-        _grdim "`margin'" "`refdim'" `aspectratio' /* returns refsize 
-            Ymin Ymax Xmin Xmax yrange xrange aratio */
+        _grdim, margin(`margin') refdim(`refdim') aratio(`aspectratio')/*
+            */ `options' // returns refsize Ymin Ymax Xmin Xmax aratio options
         local aspectratio aspectratio(`aratio'`aspectratio_opts')
         if "`tight'"!="" {
             // update ysize and ysize
-            _grdim_tight, aratio(`aratio') `scheme' `ysize' `xsize' 
+            _grdim_tight, aratio(`aratio') `scheme' `ysize' `xsize'
         }
         
     // scale bar
@@ -171,19 +171,17 @@ program _geoplot, rclass
         
     // clegend
         if `clegend' {
-            _clegend `legend_pos', `clegend2' // returns plot, clegend
+            _clegend `legend_pos', `clegend2' _gropts(`options') // plot clegend
             local plots `plots' `plot'
         }
         else local clegend
         
     // draw graph
         local graph /*
-            */ graph twoway `plots',/*
-            */ `legend' `clegend' /*
+            */ graph twoway `plots', `legend' `clegend' /*
             */ graphregion(margin(small) style(none) istyle(none))/*
             */ plotregion(margin(zero) style(none) istyle(none))/*
-            */ bgcolor(white) `scheme'/*
-            */ `yrange' `xrange' `aspectratio' `ysize' `xsize' `options'
+            */ bgcolor(white) `scheme' `aspectratio' `ysize' `xsize' `options'
         if "`nograph'"=="" {
             `graph'
         }
@@ -191,6 +189,7 @@ program _geoplot, rclass
     
     // returns
     return local graph `graph'
+    return local legend `legend'
     if "`frame'"!="" {
         local cframe `"`c(frame)'"'
         capt confirm new frame `frame'
@@ -554,36 +553,160 @@ program _zoom_parse_box
 end
 
 program _grdim
-    args margin refdim aratio
+    syntax [, margin(str) refdim(str) aratio(str)/*
+        */ XSCale(str asis) YSCale(str asis) * ]
+    // get dimensions of coordinates on map
     foreach v in X Y {
         su `v', mean
-        local `v'min = r(min)
-        local `v'max = r(max)
+        local `v'MIN = r(min)
+        local `v'MAX = r(max)
         capt confirm variable `v'2, exact
         if _rc==0 {
             su `v'2, mean
-            local `v'min = min(``v'min', r(min))
-            local `v'max = max(``v'max', r(max))
+            local `v'MIN = min(``v'MIN', r(min))
+            local `v'MAX = max(``v'MAX', r(max))
         }
-        local `v'range = ``v'max' - ``v'min'
+        local `v'range = ``v'MAX' - ``v'MIN'
     }
     if      "`refdim'"=="y" local refsize `Yrange'
     else if "`refdim'"=="x" local refsize `Xrange'
     else                    local refsize = min(`Yrange', `Xrange')
+    // add margin
     foreach v in X Y {
         gettoken m margin : margin
-        local `v'min = ``v'min' - `refsize' * (`m'/100)
+        local `v'MIN = ``v'MIN' - `refsize' * (`m'/100)
+        local `v'min ``v'MIN'
         gettoken m margin : margin
-        local `v'max = ``v'max' + `refsize' * (`m'/100)
+        local `v'MAX = ``v'MAX' + `refsize' * (`m'/100)
+        local `v'max ``v'MAX'
     }
+    // update dimensions depending in x/yscale(), xylabel()
+    foreach V in X Y {
+        local v = strlower("`V'") 
+        _grdim_parse_scale `V' ``V'min' ``V'max', ``v'scale'
+        foreach O in LABel TIck MLABel MTIck {
+            local xopts
+            local O `V'`O'
+            local o = strlower("`O'") 
+            while (1) {
+                capt n _grdim_parse_label `O' `o' `V' ``V'min' ``V'max',/*
+                    */ `options'
+                if _rc==1 exit 1
+                if _rc {
+                    di as err "error in `o'()"
+                    exit _rc
+                }
+                if `done' continue, break
+                local xopts `xopts' ``o''
+            }
+            local options `xopts' `options'
+        }
+    }
+    // return
     c_local refsize `refsize' // reference size (before adding margin)
-    c_local Ymin `Ymin'       // after adding margin
-    c_local Ymax `Ymax'       // after adding margin
-    c_local Xmin `Xmin'       // after adding margin
-    c_local Xmax `Xmax'       // after adding margin
-    c_local yrange yscale(off range(`Ymin' `Ymax')) ylabel(none)
-    c_local xrange xscale(off range(`Xmin' `Xmax')) xlabel(none)
+    c_local Xmin `Xmin'
+    c_local Xmax `Xmax'
+    c_local Ymin `Ymin'
+    c_local Ymax `Ymax'
     c_local aratio = (`Ymax'-`Ymin') / (`Xmax'-`Xmin') * `aratio'
+    c_local options xscale(range(`Xmin' `Xmax') `Xscale_opts')/*
+        */ yscale(range(`Ymin' `Ymax') `Yscale_opts')/*
+        */ xlabel(none, labsize(vsmall)) ylabel(none, labsize(vsmall))/*
+        */ xtitle("")  ytitle("") `options'
+end
+
+program _grdim_parse_scale
+    _parse comma lhs 0 : 0
+    gettoken v    lhs : lhs
+    gettoken vmin lhs : lhs
+    gettoken vmax lhs : lhs
+    syntax [, Range(numlist) off on * ]
+    if "`on'"=="" local off off
+    else          local off on
+    if `"`range'"'!="" {
+        mata: st_local("range", ///
+            invtokens(strofreal(minmax(strtoreal(tokens(st_local("range")))))))
+        gettoken min max : range
+        gettoken max     : max
+        if "`min'"!="" {
+            local vmin = min(`vmin', `min')
+        }
+        if "`max'"!="" {
+            local vmax = max(`vmax', `max')
+        }
+    }
+    c_local `v'min `vmin'
+    c_local `v'max `vmax'
+    c_local `v'scale_opts `off' `options'
+end
+
+program _grdim_parse_label
+    _parse comma  lhs 0 : 0
+    gettoken OPT  lhs : lhs
+    gettoken opt  lhs : lhs
+    syntax [, `opt'(str asis) * ]
+    if `"``opt''"'=="" {
+        c_local done 1
+        exit
+    }
+    c_local done 0
+    c_local options `options'
+    gettoken v    lhs : lhs
+    gettoken vmin lhs : lhs
+    gettoken vmax lhs : lhs
+    local vMIN `vmin'
+    local vMAX `vmax'
+    _parse comma 0 rhs : `opt'
+    // process rule, if specified
+    gettoken rule : 0
+    local update 0
+    if      `"`rule'"'=="."              gettoken rule 0 : 0
+    else if `"`rule'"'=="none"           gettoken rule 0 : 0
+    else if `"`rule'"'=="minmax"         gettoken rule 0 : 0
+    else if substr(`"`rule'"',1,2)=="##" gettoken rule 0 : 0
+    else if substr(`"`rule'"',1,1)=="#" {
+        gettoken rule 0 : 0
+        local rule = substr(`"`rule'"',2,.)
+        _natscale `vMIN' `vMAX' `rule'
+        local vmin = min(`vmin', r(min))
+        local vmax = max(`vmax', r(max))
+        local rule `r(min)'
+        forv i = 2/`=r(n)' {
+            local val = r(min) + (`i'-1) * r(delta)
+            local rule `rule' `val'
+        }
+        local update 1
+    }
+    else local rule
+    // process numlist [label] ...
+    while (`"`0'"'!="") {
+        local nlist
+        while (`"`0'"'!="") {
+            gettoken n 0: 0, quotes qed(q)
+            if `q' continue, break
+            local nlist `nlist' `n'
+        }
+        numlist `"`nlist'"'
+        local nlist `r(numlist)'
+        local rule `rule' `nlist' `n'
+        mata: st_local("nlist", ///
+            invtokens(strofreal(minmax(strtoreal(tokens(st_local("nlist")))))))
+        gettoken min max : nlist
+        gettoken max     : max
+        if "`min'"!="" {
+            local vmin = min(`vmin', `min')
+        }
+        if "`max'"!="" {
+            local vmax = max(`vmax', `max')
+        }
+    }
+    // returns
+    c_local `v'min `vmin'
+    c_local `v'max `vmax'
+    if `update' {
+        local `opt' `rule'`rhs'
+    }
+    c_local `opt' `opt'(``opt'')
 end
 
 program _grdim_tight
@@ -811,7 +934,7 @@ program _clegend
         */ OUTside POSition(str) width(passthru) height(passthru)/*
         */ BMargin(passthru) REGion(passthru)/*
         */ BPLACEment(passthru)/* will be ignored
-        */ * ]
+        */ _gropts(str asis) * ]
     if `"`off'"'!="" {
         c_local clegend
         c_local plot
@@ -883,7 +1006,7 @@ program _clegend
         set obs `N'
     }
     if `discrete' {
-        qui replace CLEG_Z = .0001
+        qui replace CLEG_Z = .0001 in 1
         local values 0
         forv i = 1/`K' {
             qui replace CLEG_Z = `i' in `=`i'+1'
@@ -897,14 +1020,16 @@ program _clegend
             local labels -.5 `labmis' `labels'
             local values -1 `values'
         }
-        local hght = min(100, (`N'-`hasmis')*3)
-        local zlabels zlabel(`labels', `format' labsize(vsmall) notick labgap(1))/*
-            */ zscale(noline)
+        local hght = min(100, (`N'-1)*3)
+        local zlabel zlabel(`labels', `format' labsize(vsmall) notick labgap(1))
+        local zscale zscale(noline)
+        if `hasmis' local Zmin = CLEG_Z[`K' + 2]
+        else        local Zmin = CLEG_Z[1]
+        local Zmax = CLEG_Z[`K' + 1]
     }
     else {
         local labels `values'
         if `hasmis' {
-            local K: list sizeof values
             local v0: word 1 of `values'
             local v: word `K' of `values'
             local v0 = `v0'- (`v'-`v0')/`K'
@@ -920,8 +1045,18 @@ program _clegend
             local ++i
             qui replace CLEG_Z = `v' in `i'
         }
-        local hght = min(40, (`N'-`hasmis')*3)
-        local zlabels zlabel(`labels', `format' labsize(vsmall))
+        local hght = min(40, (`N'-1)*3)
+        local zlabel zlabel(`labels', `format' labsize(vsmall))
+        local zscale
+        local Zmin = CLEG_Z[1]
+        local Zmax = CLEG_Z[`K' + `hasmis']
+    }
+    // adjust max
+    local ZMAX `Zmax'
+    _clegend_adjustmax `Zmin' `Zmax', `_gropts'
+    if `Zmax'!=`ZMAX' {
+        mata: st_local("values", ///
+            invtokens((tokens(st_local("values"))[|1 \ `N'-1|], "`Zmax'")))
     }
     // layout of clegend
     if `"`position'"'=="" {
@@ -939,7 +1074,29 @@ program _clegend
     // return clegend plot and clegend option
     c_local plot (scatter CLEG_Y CLEG_X in 1/`i', colorvar(CLEG_Z)/*
         */ colorcuts(`values') colorlist(`colors') colorkeysrange)
-    c_local clegend ztitle("") `zlabels' clegend(`options')
+    c_local clegend clegend(`options') ztitle("") `zlabel' `zscale'
+end
+
+program _clegend_adjustmax
+    _parse comma lhs 0 : 0
+    gettoken Zmin lhs : lhs
+    gettoken Zmax lhs : lhs
+    syntax [, ZSCale(str asis) * ]
+    _grdim_parse_scale Z `Zmin' `Zmax', `zscale'
+    foreach O in LABel TIck MLABel MTIck {
+        local O Z`O'
+        local o = strlower("`O'") 
+        while (1) {
+            capt n _grdim_parse_label `O' `o' Z `Zmin' `Zmax', `options'
+            if _rc==1 exit 1
+            if _rc {
+                di as err "error in `o'()"
+                exit _rc
+            }
+            if `done' continue, break
+        }
+    }
+    c_local Zmax `Zmax'
 end
 
 program _scalebar
