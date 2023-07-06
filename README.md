@@ -72,8 +72,7 @@ Map with provincial capitals.
 
     geoplot ///
         (area regions) ///
-        (point capitals size [w=pop98], discrete color(Set1, opacity(50)) ///
-            mlcolor(%0)) ///
+        (point capitals i.size [w=pop98], color(Set1, opacity(50)) mlcolor(%0)) ///
         (label capitals city if pop98>250000, color(black)) ///
         , legend compass sbar(length(300) units(km))
 
@@ -83,8 +82,8 @@ Map with composite legend.
 
     geoplot ///
         (area regions fortell) ///
-        (point capitals size [w=pop98], discrete color(Set1, reverse ///
-            opacity(50)) mlcolor(white)) ///
+        (point capitals i.size [w=pop98], color(Set1, reverse opacity(50)) ///
+            mlcolor(white)) ///
         , legend(layout(- "FORTELL" 1 | - "CITY SIZE" 2) position(sw))
 
 ![example 7](/images/7.png)
