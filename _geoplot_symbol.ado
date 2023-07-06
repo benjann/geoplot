@@ -1,4 +1,4 @@
-*! version 1.0.3  29jun2023  Ben Jann
+*! version 1.0.6  06jul2023  Ben Jann
 
 program _geoplot_symbol
     version 17
@@ -8,17 +8,29 @@ program _geoplot_symbol
     ***
     frame `frame' {
         // syntax
-        qui syntax [varlist(default=none max=1 numeric)] [if] [in] [iw/] [,/*
+        qui syntax [varlist(default=none max=1 numeric fv)] [if] [in] [iw/] [,/*
             */ SHape(passthru) line/*
             */ SIze(str) OFFset(numlist max=2)/*
             */ ANGle(real 0) ratio(real 1) n(passthru)/*
-            */ COLORVar(varname numeric) LEVels(str)/*
+            */ COLORVar(varname numeric fv) LEVels(str) DISCRete/*
             */ COORdinates(varlist numeric min=2 max=2)/*
             */ CENTRoids(str) area(str)/* (will be ignored)
+            */ _frameonly(str)/* undocumented; used by geoframe symbol
             */ * ]
-        // plottype
-        if "`line'"!="" local plottype line
-        else            local plottype area
+        local NOPLOT = `"`_frameonly'"'!=""
+        if `NOPLOT' {
+            gettoken frame1 _frameonly : _frameonly
+            gettoken ID : _frameonly
+        }
+        else {
+            // check zvar
+            if `"`colorvar'"'!="" local zvar `colorvar'
+            else                  local zvar `varlist'
+            _parse_zvar `zvar' // returns zvar, discrete
+            // plottype
+            if "`line'"!="" local plottype line
+            else            local plottype area
+        }
         // parse shape() and n()
          _parse_shape, `n' `shape' // returns shape, arg, n
         // parse offset
@@ -64,12 +76,20 @@ program _geoplot_symbol
         // extra variables to be copied
         local ORG `wvar'
         local TGT W
-        if "`colorvar'"=="" local colorvar `varlist'
-        if "`colorvar'"!="" {
-            local zvar `colorvar'
-            local options colorvar(ZVAR) `options'
+        if `NOPLOT' {
+            if "`ID'"=="" {
+                tempname ID
+                qui gen byte `ID' = .
+                qui replace `ID' = sum(`touse')
+            }
+            local ORG `ORG' `ID'
+            local TGT `TGT' _ID
+        }
+        else if "`zvar'"!="" {
+            local options `discrete' `options'
+            local ZVAR ZVAR
             local ORG `ORG' `zvar'
-            local TGT `TGT' ZVAR
+            local TGT `TGT' `ZVAR'
             // get variable from levels(, weight())
             if `"`levels'"'!="" {
                 _parse_levels `levels'
@@ -82,24 +102,44 @@ program _geoplot_symbol
         }
     }
     if `scale' {
-        // get reference size of existing map
-        su Y, meanonly
-        local refsize = r(max) - r(min)
-        su X, meanonly
-        local refsize = min(`refsize', r(max) - r(min))
+        if `NOPLOT' local refsize 0
+        else {
+            // get reference size of existing map
+            su Y, meanonly
+            local refsize = r(max) - r(min)
+            su X, meanonly
+            local refsize = min(`refsize', r(max) - r(min))
+        }
     }
     frame `frame' {
         // compute shapes and post coordinates into temporary frame
-        tempname frame1
+        if `"`frame1'"'=="" tempname frame1
         frame create `frame1'
         mata: _compute_symbols("`frame1'", "`touse'", "`shape'",/*
             */ st_local("arg"), `n', `scale', `angle', `ratio',/*
             */ `offset', `oangle')
     }
+    if `NOPLOT' exit
     ***
-    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `wgt', lock `options'
+    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `ZVAR' `wgt', lock/*
+        */ `options'
     c_local plot `plot'
     c_local p `p'
+end
+
+program _parse_zvar
+    if "`0'"=="" exit
+    if substr("`0'",1,2)=="i." {    // i.zvar
+        c_local zvar = substr("`0'",3,.)
+        c_local discrete discrete
+        exit
+    }
+    capt confirm variable `0'
+    if _rc==1 exit _rc
+    if _rc {
+        di as err `"`0' not allowed"'
+        exit 198
+    }
 end
 
 program _parse_shape
@@ -186,16 +226,17 @@ void _compute_symbols(string scalar frame, string scalar touse,
     real scalar      i, a, b, s, haspl
     real matrix      YX, Z, yx, V
     real colvector   pl, PL, S
-    string rowvector ORG, TGT
+    string rowvector ORG, TGT, VTYP
     pointer matrix   INFO
-    pointer(real matrix function) scalar f
     
     // get origin data
     ORG  = tokens(st_local("ORG"))
     YX   = st_data(., st_local("coord"), touse)
     Z    = st_data(., ORG, touse)
     INFO = _fmtvl(ORG) // collect formats and labels
-    i    = rows(YX)
+    VTYP = J(1,i=length(ORG),"") // collect data types
+    for (;i;i--) VTYP[i] = st_vartype(ORG[i]) 
+    i = rows(YX)
     // obtain shape
     haspl = 0
     if (shape=="@numlist") {
@@ -239,12 +280,14 @@ void _compute_symbols(string scalar frame, string scalar touse,
     // apply angle to shape
     _geo_rotate(yx, -angle) // (_geo_rotate() expects XY, not YX)
     // apply offset to centroids
-    if (off) YX = YX :+ S:*((off/100)*(sin(oang*pi()/180), cos(oang*pi()/180)))
+    if (off) YX = YX :+ S :*
+        J(rows(S), 1, (off/100)*(sin(oang*pi()/180), cos(oang*pi()/180)))
     // prepare destination data
     st_framecurrent(frame)
     TGT = tokens(st_local("TGT"))
     st_addobs(i * (n+1))
-    st_view(V=., ., st_addvar("double", (tokens("_Y _X _CY _CX"), TGT)))
+    st_view(V=., ., st_addvar((J(1,4,"double"), VTYP),
+                      (tokens("_Y _X _CY _CX"), TGT)))
     _fmtvl(TGT, INFO)
     if (haspl) st_view(PL=., ., st_addvar("byte", "_PLEVEL"))
     // write shapes to destination data

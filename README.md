@@ -31,7 +31,7 @@ Load data using `geoframe`.
 
     local url http://fmwww.bc.edu/repec/bocode/i/
     geoframe create regions  `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) ///
-                     shpfile(`url'Italy-RegionsCoordinates.dta)
+        shpfile(Italy-RegionsCoordinates.dta)
     geoframe create country  `url'Italy-OutlineCoordinates.dta
     geoframe create capitals `url'Italy-Capitals.dta, coord(xcoord ycoord)
     geoframe create lakes    `url'Italy-Lakes.dta, feature(water)
@@ -134,6 +134,32 @@ Zoom.
 
 Main changes:
 
+
+    06jul2023
+    geoplot (version 1.0.6)
+    - i.zvar now allowed, implying -discrete-; also in colorvar()
+    - label() now uses values rather than indices in case of i.zvar or discrete 
+    - i.zvar and -discrete- now recycle colors (rather than interpolating) unless
+      class of the palette is non-categorical
+    - can now specify -nolegend- as an alternative to -legend(off)-
+    - legend() now has suboption -reverse- to revers order of legend keys within
+      layers
+    - clegend() is now also placed north-east by default, unless there is already
+      a standard legend in this place
+    - immediate arguments for -symboli- are now -x y size-, no longer -y x-; option
+      size() will be ignored 
+    - fixed bug related to offset() in symbol/pie/bar
+    geoframe (version 1.0.6)
+    - -geoframe create- no longer looks at chars written by -spshape2dta- to find
+      out whether there is a shape file to be loaded automatically; a shapefile is
+      now autoloaded if a file called <basename>_shp.dta is available in the same
+      folder as the main file, where <basename> is the base name of the main file
+    - -geoframe create- now adds the path of the main file to the file specified
+      in shpframe() if the file is specified without path
+    - -geoplot bbox- is now faster if by() is equal to the unit ID
+    - -geoframe symbol- and -geoframe symboli- added
+    lgeoplot.mlib
+    - geo_symbol(): inner circle of pin2 now clockwise
 
     02jul2023
     geoplot (version 1.0.5)

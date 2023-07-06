@@ -1,4 +1,4 @@
-*! version 1.0.5  01jul2023  Ben Jann
+*! version 1.0.6  06jul2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -44,14 +44,14 @@ end
 program _geoplot, rclass
     _parse comma lhs 0 : 0
     syntax [, /*
-        */ LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
+        */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis) /*
         */ SBAR SBAR2(str asis) COMPass COMPass2(str asis) /*
         */ ANGle(real 0) tight Margin(str) REFdim(str) ASPECTratio(str) /* 
         */ YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
         */ frame(str) NOGRAPH * ]
     local legend  = `"`legend'`legend2'"'!=""
     local clegend = `"`clegend'`clegend2'"'!=""
-    if !`legend' & !`clegend' local legend 1
+    if !`legend' & !`clegend' & "`nolegend'"=="" local legend 1
     _parse_aspectratio `aspectratio' // returns aspectratio, aspectratio_opts
     if "`margin'"=="" local margin 0 0 0 0
     else              _parse_margin `margin'
@@ -165,13 +165,13 @@ program _geoplot, rclass
         
     // legend
         if `legend' {
-            _legend, `legend2' // returns legend
+            _legend, `legend2' // returns legend, legend_pos
         }
         else local legend legend(off)
         
     // clegend
         if `clegend' {
-            _clegend, `clegend2' // returns plot, clegend
+            _clegend `legend_pos', `clegend2' // returns plot, clegend
             local plots `plots' `plot'
         }
         else local clegend
@@ -627,7 +627,8 @@ end
 
 program _legend
     // syntax
-    syntax [, off Layout(str asis) BOTtom HORizontal OUTside POSition(str)/*
+    syntax [, off Layout(str asis) BOTtom HORizontal REVerse/*
+        */ OUTside POSition(str)/*
         */ SIze(passthru) SYMYsize(passthru) SYMXsize(passthru)/*
         */ KEYGap(passthru) COLGap(passthru) ROWGap(passthru)/*
         */ BMargin(passthru) REGion(passthru)/*
@@ -748,7 +749,11 @@ program _legend
             }
             else {
                 local nkeys = `nkeys' + `: char LAYER[Lsize_`l']'
-                local order `order' `: char LAYER[Legend_`l']'
+                local keys: char LAYER[Legend_`l']
+                if "`reverse'"!="" {
+                    _legend_reverse_keys `keys'
+                }
+                local order `order' `keys'
             }
         }
         local order order(`order')
@@ -775,6 +780,7 @@ program _legend
     local opts `opts' `size' `symysize' `symxsize' `keygap' `colgap'
     if `"`position'"'=="" local position 2
     else                  _parse_position `position' // compass => clock
+    c_local legend_pos `position'
     if "`outside'"!=""    local position position(`position')
     else                  local position position(0) bplace(`position')
     if `"`bmargin'"'==""  local bmargin bmargin(zero)
@@ -784,12 +790,23 @@ program _legend
     c_local legend legend(`order' on all `opts')
 end
 
+program _legend_reverse_keys
+    local keys
+    while (`"`0'"'!="") {
+        gettoken key 0 : 0
+        gettoken lbl 0 : 0
+        local keys `key' `"`lbl'"' `keys'
+    }
+    c_local keys `keys'
+end
+
 program _clegend
     if c(stata_version)<18 {
         di as err "{bf:clegend()} requires Stata 18"
         exit 9
     }
     // syntax
+    _parse comma legend_pos 0 : 0
     syntax [, off Layer(numlist int max=1 >0) noLABel MISsing Format(str)/*
         */ OUTside POSition(str) width(passthru) height(passthru)/*
         */ BMargin(passthru) REGion(passthru)/*
@@ -907,7 +924,10 @@ program _clegend
         local zlabels zlabel(`labels', `format' labsize(vsmall))
     }
     // layout of clegend
-    if `"`position'"'==""  local position 4
+    if `"`position'"'=="" {
+        if inlist("`legend_pos'","1","2") local position 4
+        else                              local position 2
+    }
     else                   _parse_position `position' // compass => clock
     if "`outside'"!=""     local position position(`position')
     else                   local position position(0) bplace(`position')
@@ -1368,15 +1388,18 @@ program _geoplot_symboli
     gettoken p 0 : 0
     _parse comma args 0 : 0
     tempname frame
-    frame create `frame' _Y _X
+    frame create `frame' double(_X _Y SIZE)
     while (`"`args'"'!="") {
-        gettoken y args : args
-        local y = real(`"`y'"')
         gettoken x args : args
         local x = real(`"`x'"')
-        frame post `frame' (`y') (`x')
+        gettoken y args : args
+        local y = real(`"`y'"')
+        gettoken size args : args
+        local size = real(`"`size'"')
+        frame post `frame' (`x') (`y') (`size')
     }
-    _geoplot_symbol `layer' `p' `frame' `0'
+    syntax [, size(passthru) * ]
+    _geoplot_symbol `layer' `p' `frame', size(SIZE) `options'
     c_local plot `plot'
     c_local p `p'
 end

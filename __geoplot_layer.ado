@@ -1,4 +1,4 @@
-*! version 1.0.5  02jul2023  Ben Jann
+*! version 1.0.6  05jul2023  Ben Jann
 
 /*
     Syntax:
@@ -93,7 +93,7 @@ program _layer
     local PLVopts
     local WGT
     local MLABopts
-    local Zopts COLORVar(varname numeric)/*
+    local Zopts COLORVar(varname numeric fv)/*
         */ LEVels(str) cuts(numlist sort min=2) DISCRete MISsing(str asis) /*
         */ COLor(passthru) LWidth(passthru) LPattern(passthru)
     local Zel color lwidth lpattern
@@ -136,14 +136,21 @@ program _layer
     // collect info from syntax, frame and possible shpframe
     frame `frame' {
         // syntax
-        qui syntax [varlist(default=none max=1 numeric)] [if] [in] `WGT' [,/*
-            */`OPTS' `Zopts' `PLVopts' `MLABopts' * ]
+        qui syntax [varlist(default=none max=1 numeric fv)] [if] [in] `WGT'/*
+            */ [, `OPTS' `Zopts' `PLVopts' `MLABopts' * ]
+        // check zvar
+        if `"`colorvar'"'!="" local zvar `colorvar'
+        else                  local zvar `varlist'
+        _parse_zvar `zvar' // returns zvar, discrete
+        local hasZ = `"`zvar'"'!=""
+        // varia
         local hasMLAB = `"`mlabel'"'!=""
         local cuts: list uniq cuts
         _parse_size `size' // => size, s_max, s_scale
         local hasSIZE = `"`size'"'!=""
         _parse_levels `levels' // => levels, method, l_wvar
         if `"`fcolor'"'!="" mata: _get_colors("fcolor")
+        // sample
         marksample touse, novarlist
         // feature
         if `"`feature'"'=="" geoframe get feature, l(feature)
@@ -154,10 +161,6 @@ program _layer
                 if "`fintensity'"=="" local fintensity fintensity(50)
             }
         }
-        // check zvar
-        if `"`colorvar'"'!="" local zvar `colorvar'
-        else                  local zvar `varlist'
-        local hasZ = `"`zvar'"'!=""
         // check shpframe
         if `hasSHP' {
             geoframe get shpframe, local(shpframe)
@@ -552,12 +555,10 @@ program _layer
             local CUTS: copy local cuts
             _label_separate `label' // => lab_keys, lab_lbls
             if "`nolabel'"!="" local zlabels: copy local cuts
-            local i 0
             foreach key of local lkeys {
-                local ++i
                 gettoken Nobs NOBS : NOBS
-                gettoken mid CUTS : CUTS
-                local mid `: di `format' `mid''
+                gettoken i CUTS : CUTS
+                local mid `: di `format' `i''
                 gettoken lab zlabels : zlabels
                 capt confirm number `lab'
                 if _rc==0 {
@@ -644,6 +645,21 @@ program _layer
     }
     c_local plot `plot'
     c_local p `p'
+end
+
+program _parse_zvar
+    if "`0'"=="" exit
+    if substr("`0'",1,2)=="i." {    // i.zvar
+        c_local zvar = substr("`0'",3,.)
+        c_local discrete discrete
+        exit
+    }
+    capt confirm variable `0'
+    if _rc==1 exit _rc
+    if _rc {
+        di as err `"`0' not allowed"'
+        exit 198
+    }
 end
 
 program _parse_feature
@@ -799,6 +815,7 @@ program _z_colors
         */ `opacity' `intensity' `options'
     local color `"`r(p)'"'
     local pclass `"`r(pclass)'"'
+    if `"`pclass'"'=="" & `discrete' local pclass "categorical"
     local l: list sizeof color
     if `l'==0 {
         c_local `nm'

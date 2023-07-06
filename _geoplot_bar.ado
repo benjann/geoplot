@@ -1,4 +1,4 @@
-*! version 1.0.3  29jun2023  Ben Jann
+*! version 1.0.6  06jul2023  Ben Jann
 
 program _geoplot_bar
     version 17
@@ -189,7 +189,8 @@ void _compute_bars(string scalar frame, string scalar touse,
     else s = 1
     S[.] = S * (s / sqrt(2)) // (write back to data for use by outline())
     // apply offset
-    if (off) YX = YX :+ s * (off/100) * (sin(oang*pi()/180), cos(oang*pi()/180))
+    if (off) YX = YX :+ S :*
+        J(rows(S), 1, (off/100)*(sin(oang*pi()/180), cos(oang*pi()/180)))
     // prepare frame
     st_framecurrent(frame)
     v = st_addvar("double", ("_Y","_X","_CY","_CX", "Z", "W"))

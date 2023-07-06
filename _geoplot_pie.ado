@@ -1,4 +1,4 @@
-*! version 1.0.3  29jun2023  Ben Jann
+*! version 1.0.6  06jul2023  Ben Jann
 
 program _geoplot_pie
     version 17
@@ -226,7 +226,8 @@ void _compute_pies(string scalar frame, string scalar touse, real scalar polar,
         S[.] = S * s // (write back to data for use by outline())
     }
     // apply offset
-    if (off) YX = YX :+ s * (off/100) * (sin(oang*pi()/180), cos(oang*pi()/180))
+    if (off) YX = YX :+ S :*
+        J(rows(S), 1, (off/100)*(sin(oang*pi()/180), cos(oang*pi()/180)))
     // prepare frame
     st_framecurrent(frame)
     v = st_addvar("double", ("_Y","_X","_CY","_CX", "Z", "W"))

@@ -956,7 +956,7 @@ end
 
 *! {smcl}
 *! {marker geo_symbol}{bf:symbol()}{asis}
-*! version 1.0.1  01jul2023  Ben Jann
+*! version 1.0.2  06jul2023  Ben Jann
 *!
 *! Returns the coordinates of a selected symbol
 *!
@@ -1108,15 +1108,15 @@ real matrix _geo_symbol_pin2(| real scalar n0, string scalar arg)
     }
     if (n0>=.) n = max((4, ceil(a * 100)))
     else       n = n0
-    // outer polygon
+    // outer polygon (counterclockwise)
     c = 2 - a
     r = rangen(-asin(a/c), pi()+asin(a/c), n+1)
     xy0 = a * (cos(r),sin(r))
     xy0[,2] = xy0[,2] :+ c
     xy0 = xy0 \ (0,0) \ xy0[1,] 
     xy0 = xy0, J(rows(xy0),1,0) // plevel=0
-    // inner polygon
-    r = rangen(0, 1, n+1) * (2 * pi())
+    // inner polygon (clockwise)
+    r = rangen(1, 0, n+1) * (2 * pi())
     xy1 = (0.5*a) * (cos(r), sin(r))
     xy1[,2] = xy1[,2] :+ c
     xy1 = (.,.) \ xy1
