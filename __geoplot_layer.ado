@@ -1,4 +1,4 @@
-*! version 1.0.6  05jul2023  Ben Jann
+*! version 1.1.0  11sep2023  Ben Jann
 
 /*
     Syntax:
@@ -27,7 +27,7 @@
     Outline of a (case 1) program making used of __geoplot_layer:
 
     program _geoplot_mylayer
-        version 17
+        version 16.1
         gettoken layer 0 : 0
         gettoken p 0 : 0
         gettoken frame 0 : 0
@@ -46,7 +46,7 @@
 */
 
 program __geoplot_layer
-    version 17
+    version 16.1
     gettoken i 0 : 0
     if `i' {
         _layeri `0'
@@ -88,7 +88,7 @@ program _layer
     gettoken frame 0 : 0, parse(" ,")
     local hasSHP 0
     local TYPE
-    local OPTS LABel(str asis) Feature(passthru)
+    local OPTS LABel(str asis) Feature(passthru) box BOX2(str) SELect(str asis)
     local hasPLV 0
     local PLVopts
     local WGT
@@ -144,6 +144,7 @@ program _layer
         _parse_zvar `zvar' // returns zvar, discrete
         local hasZ = `"`zvar'"'!=""
         // varia
+        if `"`box2'"'!="" local box box
         local hasMLAB = `"`mlabel'"'!=""
         local cuts: list uniq cuts
         _parse_size `size' // => size, s_max, s_scale
@@ -344,6 +345,16 @@ program _layer
             local TGT `TGT' MLAB
         }
         else local mlabcolor
+        // select option
+        if `"`select'"'!="" {
+            tempname touse2
+            qui gen byte `touse2' = 0
+            qui replace `touse2' = 1 if `touse' & (`select')
+            if `hasSHP' {
+                local org `org' `touse2'
+                local tgt `tgt' `touse2'
+            }
+        }
         // inject colors
         _process_coloropts options, `options'
         if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
@@ -373,6 +384,8 @@ program _layer
                 */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
                 /* returns zlevels nobs nmiss discrete */
         }
+        // select
+        if `"`select'"'!="" local touse `touse2'
     }
     // copy data into main frame
     local n0 = _N + 1
@@ -477,9 +490,14 @@ program _layer
         if "`mlabvposition'"!="" local opts `opts' mlabvposition(MLABPOS)
         if "`mlabformat'"!=""    local opts `opts' mlabformat(`mlabformat')
     }
+    // add box (below)
+    if "`box'"!="" {
+        _box `p' `n0' `n1' `"`TYPE'"', `box2'
+        qui replace LAYER = `layer' in `n1'/l
+    }
+    else local plot
     // compile plot
     if `hasWGT' local in inrange(_n,`n0',`n1')) | (_n<3)
-    local plot
     local p0 = `p' + 1
     gettoken pl0 : plevels
     foreach pl of local plevels {
@@ -622,7 +640,7 @@ program _layer
         local legend `p1' `label'
         local lsize 1
     }
-    // return results
+    // set chars
     if `layer'<. {
         char LAYER[Keys_`layer'] `keys'
         char LAYER[Legend_`layer'] `legend'
@@ -643,6 +661,7 @@ program _layer
             }
         }
     }
+    // returns
     c_local plot `plot'
     c_local p `p'
 end
@@ -979,7 +998,36 @@ program _process_coloropts // pass standard color options through ColrSpace
     c_local `nm' `OPTS' `options'
 end
 
-version 17
+program _box
+    // syntax
+    _parse comma args 0 : 0
+    gettoken p      args : args
+    gettoken n0     args : args
+    gettoken n1     args : args
+    gettoken TYPE   args : args
+    syntax [, ROTate CIRcle hull PADding(passthru) n(passthru) line/*
+        */ box BOX2(passthru) SIze(passthru) COLORVar(passthru) * ]
+    if `"`box'`box2'`size'`colorvar'"'!="" {
+        di as err "box(): invalid syntax"
+        exit 198
+    }
+    // copy relevant data into new frame
+    tempname XY
+    frame create `XY'
+    mata: _box_copy_XY("`XY'", `n0', `n1', "`TYPE'"=="pc")
+    // generate frame containing box
+    tempname BOX
+    frame `XY': qui geoframe bbox `BOX', `rotate' `circle' `hull' `padding' `n'
+    // compile plot
+    if "`line'"!="" local plottype line
+    else            local plottype area
+    _layer `plottype' . `p' `BOX', `options'
+    // returns
+    c_local plot `plot'
+    c_local p `p'
+end
+
+version 16.1
 mata:
 mata set matastrict on
 
@@ -1274,6 +1322,21 @@ void  _get_lbl(string scalar key, string scalar keys, string scalar lbls,
     }
     if (i>n) st_local("lbl", def)
     else st_local("lbl", tokens(st_local(lbls))[i])
+}
+
+void _box_copy_XY(string scalar frame, real scalar n0, real scalar n1,
+    real scalar pc)
+{
+    real matrix   XY
+    string scalar cframe
+
+    XY = st_data((n0,n1), ("X","Y"))
+    if (pc) XY = XY \ st_data((n0,n1), ("X2","Y2"))
+    cframe = st_framecurrent()
+    st_framecurrent(frame)
+    st_addobs(rows(XY))
+    st_store(., st_addvar("double", ("_X","_Y")), XY)
+    st_framecurrent(cframe)
 }
 
 end

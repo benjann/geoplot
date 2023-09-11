@@ -1,7 +1,7 @@
-*! version 1.0.6  06jul2023  Ben Jann
+*! version 1.1.0  11sep2023  Ben Jann
 
 program _geoplot_pie
-    version 17
+    version 16.1
     gettoken layer 0 : 0
     gettoken p 0 : 0
     gettoken frame 0 : 0
@@ -198,7 +198,7 @@ program _parse_sym
     c_local sym_opts   `color' `lcolor' `options'
 end
 
-version 17
+version 16.1
 mata:
 mata set matastrict on
 

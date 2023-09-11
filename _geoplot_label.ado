@@ -1,7 +1,7 @@
-*! version 1.0.1  19jun2023  Ben Jann
+*! version 1.1.0  11sep2023  Ben Jann
 
 program _geoplot_label
-    version 17
+    version 16.1
     gettoken layer 0 : 0
     gettoken p 0 : 0
     gettoken frame 0 : 0

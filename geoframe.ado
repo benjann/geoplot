@@ -1,7 +1,7 @@
-*! version 1.0.6  05jul2023  Ben Jann
+*! version 1.1.0  11sep2023  Ben Jann
 
 program geoframe
-    version 17
+    version 16.1
     gettoken subcmd 0 : 0, parse(" ,")
     _parse_subcmd `subcmd'
     _geoframe_`subcmd' `macval(0)'
@@ -273,7 +273,7 @@ program _geoframe_link
     if `"`clean'`clean2'"'!="" {
         geoframe clean, quietly `clean2'
     }
-    di as txt "(link to frame {cmd:`shpframe'} added)"
+    di as txt "(link to frame {bf:`shpframe'} added)"
 end
 
 program __geoframe_link_parse_clean
@@ -792,72 +792,6 @@ program _geoframe_generate_plevel
     }
 end
 
-program _geoframe_spjoin
-    syntax [namelist(min=1 max=2)] [if] [in] [,/*
-        */ COordinates(varlist min=2 max=2) replace noset ]
-    marksample touse
-    gettoken shpframe namelist : namelist
-    gettoken id       namelist : namelist
-    if "`id'"=="" local id _ID
-    if "`replace'"=="" confirm new variable `id'
-    if `"`coordinates'"'!="" local xy `coordinates'
-    else geoframe get coordinates, l(xy) strict
-    markout `touse' `coordinates'
-    local frame `"`c(frame)'"'
-    local TOUSE
-    frame `shpframe' {
-        // check whether shpframe is an attribute frame linked to a shape frame
-        geoframe get type, l(type)
-        if "`type'"!="shape" {
-            geoframe get shpframe, local(shpframe2)
-            if `"`shpframe2'"'!="" {
-                tempvar TOUSE
-                qui gen `TOUSE' = 1
-                geoframe get linkname, local(lnkvar) strict
-                frame `shpframe2' {
-                    qui frget `TOUSE' = `TOUSE', from(`lnkvar')
-                    qui replace `TOUSE' = 0 if `TOUSE'>=.
-                }
-                local shpframe `shpframe2'
-            }
-        }
-    }
-    frame `shpframe' {
-        geoframe get ID, l(ID) strict
-        local type: type `ID'
-        geoframe get coordinates, l(XY) strict
-        geoframe get pid, l(PID)
-        if "`PID'"=="" {
-            tempvar PID
-            qui geoframe gen pid `PID', noset
-        }
-        geoframe get pl, l(PL)
-        if "`PL'"=="" {
-            di as txt "({helpb geoframe##gen_plevel:plevel} not set;"/*
-                */ " assuming that there are no nested polygons)"
-        }
-    }
-    tempvar Id
-    qui gen `type' `Id' = .
-    frame `shpframe': mata: _spjoin("`frame'", "`Id'", "`xy'", "`touse'",/*
-        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'")
-    qui count if `Id'>=. & `touse'
-    if `r(N)' {
-        if r(N)==1 local msg point
-        else       local msg points
-        di as txt "({bf:`r(N)'} `msg' not matched)"
-    }
-    capt confirm new variable `id'
-    if _rc==1 exit _rc
-    if _rc drop `id'
-    rename `Id' `id'
-    if "`set'"=="" {
-        geoframe set id `id'
-        if "`coordinates'"!="" geoframe set coordinates `xy'
-    }
-    di as txt "(variable {bf:`id'} added to frame {bf:`frame'})"
-end
-
 program _geoframe_bbox
     syntax name(id="newname" name=newname) [if] [in] [, by(varname numeric)/*
         */ ROTate CIRcle n(numlist int max=1 >0) hull PADding(real 0) replace ]
@@ -1001,6 +935,167 @@ program __geoframe_symbol
         di as txt "(new frame "/*
             */ `"{stata geoframe describe `newname':{bf:`newname'}}"'/*
             */ " created)"
+    }
+end
+
+program _geoframe_collapse
+    __geoframe_collapse 0 `0'
+end
+
+program _geoframe_contract
+    __geoframe_collapse 1 `0'
+end
+
+program __geoframe_collapse
+    gettoken contract 0 : 0
+    local cframe `"`c(frame)'"'
+    gettoken frame 0 : 0, parse(" ,")
+    frame `frame' {
+        local opts COordinates(passthru) SELect(passthru) id(varname)/*
+            */ GENerate GENerate2(str)
+        if `contract' {
+            syntax [if] [in] [fw] [, `opts' * ]
+        }
+        else {
+            syntax anything(equalok id="clist") [if] [in] [aw fw iw pw] [,/*
+                */ `opts' cw ]
+        }
+        if `"`generate2'"'!="" local generate generate
+        if "`id'"!="" {
+            if `"`generate'"'!="" {
+                di as err "generate() and id() not both allowed"
+                exit 198
+            }
+            if `"`select'"'!="" {
+                di as err "select() not allowed together with id()"
+                exit 198
+            }
+            if `"`coordinates'"'!="" {
+                di as err "coordinates() not allowed together with id()"
+                exit 198
+            }
+            local ID `id'
+        }
+        else {
+            if `"`generate'"'!="" {
+                __geoframe_collapse_parse_gen `generate2' /*
+                    returns generate, replace, set */
+                local ID `generate'
+                local novarnote
+            }
+            else {
+                tempname ID
+                local replace
+                local set noset
+                local novarnote novarnote
+            }
+            geoframe spjoin `cframe' `ID' `if' `in',/*
+                */ `select' `coordinates' `replace' `set' `novarnote'
+        }
+    }
+    tempname frame1
+    frame copy `frame' `frame1'
+    frame `frame1' {
+        marksample touse
+        qui keep if `touse' & `ID'<.
+        if `contract' {
+            contract `ID' [`weight'`exp'], `options'
+        }
+        else {
+            collapse `anything' [`weight'`exp'], by(`ID') fast `cw'
+        }
+        geoframe get id, local(id)
+        if `"`id'"'!="`ID'" {
+            geoframe set id `ID'
+        }
+    }
+    geoframe copy `frame1' *, exclude(`ID') quietly
+    if `r(k)'==1 di as txt "(variable " _c
+    else         di as txt "(variables " _c
+    di as res r(newlist) as txt " added to frame {bf:`cframe'})"
+end
+
+program __geoframe_collapse_parse_gen
+    syntax [name] [, replace noset ]
+    if "`namelist'"=="" local namelist _ID // default
+    c_local generate `namelist'
+    c_local replace `replace'
+    c_local set `set'
+end
+
+program _geoframe_spjoin
+    syntax [namelist(min=1 max=2)] [if] [in] [, SELect(str asis) /*
+        */ COordinates(varlist min=2 max=2) replace noset NOVARNOTE ]
+    marksample touse
+    gettoken shpframe namelist : namelist
+    gettoken id       namelist : namelist
+    if "`id'"=="" local id _ID
+    if "`replace'"=="" confirm new variable `id'
+    if `"`coordinates'"'!="" local xy `coordinates'
+    else geoframe get coordinates, l(xy) strict
+    markout `touse' `xy'
+    local frame `"`c(frame)'"'
+    local TOUSE
+    frame `shpframe' {
+        // check whether shpframe is an attribute frame linked to a shape frame
+        geoframe get type, l(type)
+        if "`type'"!="shape" {
+            geoframe get shpframe, local(shpframe2)
+            if `"`shpframe2'"'!="" {
+                tempvar TOUSE
+                if `"`select'"'!="" {
+                    qui gen byte `TOUSE' = 0
+                    qui replace `TOUSE' = 1 if (`select')
+                }
+                else qui gen byte `TOUSE' = 1
+                geoframe get linkname, local(lnkvar) strict
+                frame `shpframe2' {
+                    qui frget `TOUSE' = `TOUSE', from(`lnkvar')
+                    qui replace `TOUSE' = 0 if `TOUSE'>=.
+                }
+                local shpframe `shpframe2'
+            }
+            else if `"`select'"'!="" {
+                tempvar TOUSE
+                qui gen byte `TOUSE' = 0
+                qui replace `TOUSE' = 1 if (`select')
+            }
+        }
+    }
+    frame `shpframe' {
+        geoframe get ID, l(ID) strict
+        local type: type `ID'
+        geoframe get coordinates, l(XY) strict
+        geoframe get pid, l(PID)
+        if "`PID'"=="" {
+            tempvar PID
+            qui geoframe gen pid `PID', noset
+        }
+        geoframe get pl, l(PL)
+        if "`PL'"=="" {
+            di as txt "({helpb geoframe##gen_plevel:plevel} not set;"/*
+                */ " assuming that there are no nested polygons)"
+        }
+    }
+    tempvar Id
+    qui gen `type' `Id' = .
+    frame `shpframe': mata: _spjoin("`frame'", "`Id'", "`xy'", "`touse'",/*
+        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'")
+    qui count if `Id'>=. & `touse'
+    if `r(N)' {
+        if r(N)==1 local msg point
+        else       local msg points
+        di as txt "({bf:`r(N)'} `msg' not matched)"
+    }
+    capt confirm new variable `id'
+    if _rc==1 exit _rc
+    if _rc drop `id'
+    rename `Id' `id'
+    if "`set'"=="" {
+        geoframe set id `id'
+    }
+    if "`novarnote'"=="" {
+        di as txt "(variable {bf:`id'} added to frame {bf:`frame'})"
     }
 end
 
@@ -1215,8 +1310,13 @@ program __geoframe_get_coordinates
         else                     local VARS _X _Y
         capt confirm numeric variable `VARS', exact
         if _rc==1 exit _rc
-        if _rc==0 {
-            local exp `VARS'
+        if _rc==0 local exp `VARS'
+        else if inlist(`"`type'"',"","unit") { // check alternative names
+            if `"`type'"'=="unit" local VARS _X _Y
+            else                  local VARS _CX _CY
+            capt confirm numeric variable `VARS', exact
+            if _rc==1 exit _rc
+            if _rc==0 local exp `VARS'
         }
     }
     if "`flip'"!="" geoframe flip `exp', local(exp)
@@ -1344,7 +1444,7 @@ program _geoframe_unlink
     }
     __geoframe_set_shpframe
     __geoframe_set_linkname
-    di as txt "(link to frame {cmd:`shpframe'} removed)"
+    di as txt "(link to frame {bf:`shpframe'} removed)"
 end
 
 program _geoframe_attach
@@ -1619,7 +1719,7 @@ program _check_types
     exit 499 // TYPE is bite => recast
 end
 
-version 17
+version 16.1
 mata:
 mata set matastrict on
 

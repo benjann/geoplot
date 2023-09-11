@@ -1,7 +1,7 @@
-*! version 1.0.6  06jul2023  Ben Jann
+*! version 1.1.0  11sep2023  Ben Jann
 
 program _geoplot_symbol
-    version 17
+    version 16.1
     gettoken layer 0 : 0
     gettoken p 0 : 0
     gettoken frame 0 : 0, pars(", ")
@@ -157,7 +157,7 @@ program _parse_shape
     // predefined shapes
     local SHAPES0 Triangle Square Pentagon HEXagon HEPtagon Octagon
     local shapes0 = strlower("`SHAPES0'")
-    local SHAPES  `SHAPES0' Circle Arc SLice PENTAGRam HEXAGRam pin
+    local SHAPES  `SHAPES0' Circle Arc SLice star star6 PENTAGRam HEXAGRam pin
     local shapes  = strlower("`SHAPES'")
     gettoken shape arg : shape
     local arg = strtrim(`"`arg'"')
@@ -214,7 +214,7 @@ program _parse_levels
     }
 end
 
-version 17
+version 16.1
 mata:
 mata set matastrict on
 

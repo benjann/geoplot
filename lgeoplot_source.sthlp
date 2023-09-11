@@ -13,7 +13,7 @@
 *!     {helpb lgeoplot_source##geo_welzl:geo_welzl()}
 *! {asis}
 
-version 17
+version 16.1
 
 *! {smcl}
 *! {marker geo_area}{bf:geo_area()}{asis}
@@ -1037,7 +1037,7 @@ real matrix _geo_symbol_arc(| real scalar n0, string scalar arg)
     return((cos(r), sin(r)))
 }
 
-real matrix _geo_symbol_pentagram(| real scalar n, string scalar arg)
+real matrix _geo_symbol_star(| real scalar n, string scalar arg)
 {
     real matrix XY, xy
     pragma unused n
@@ -1054,7 +1054,7 @@ real matrix _geo_symbol_pentagram(| real scalar n, string scalar arg)
     return(XY)
 }
 
-real matrix _geo_symbol_hexagram(| real scalar n, string scalar arg)
+real matrix _geo_symbol_star6(| real scalar n, string scalar arg)
 {
     real matrix XY, xy
     pragma unused n
@@ -1069,6 +1069,24 @@ real matrix _geo_symbol_hexagram(| real scalar n, string scalar arg)
     XY = colshape(((XY[5::6,] \ XY[1::4,]), xy[1::6,]), 2)
     XY = XY \ XY[1,] // last point = first point
     return(XY)
+}
+
+real matrix _geo_symbol_hexagram(| real scalar n, string scalar arg)
+{
+    real matrix XY
+    pragma unused n
+    pragma unused arg
+    
+    XY = _geo_symbol_star6()
+    return(XY[(1,5,9,1),] \ (.,.) \ XY[(7,11,3,7),])
+}
+
+real matrix _geo_symbol_pentagram(| real scalar n, string scalar arg)
+{
+    pragma unused n
+    pragma unused arg
+    
+    return(_geo_symbol_star()[(1,5,9,3,7,1),])
 }
 
 real matrix _geo_symbol_pin(| real scalar n0, string scalar arg)

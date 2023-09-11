@@ -1,4 +1,4 @@
-*! version 1.0.7  06jul2023  Ben Jann
+*! version 1.1.0  11sep2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -29,7 +29,7 @@ if `rc_colorpalette' | `rc_colrspace' | `rc_moremata' {
 }
 
 program geoplot
-    version 17
+    version 16.1
     nobreak {
         capture noisily break {
             mata: _GEOPLOT_ColrSpace_S = ColrSpace() // add global object
@@ -470,11 +470,11 @@ program __zoom
                 local box_origin box_origin
             }
             if "`box_origin'"!="" {
-                _geoplot_symboli . `p' `Ymid' `Xmid', size(`s')  `options'
+                _geoplot_symboli . `p' `Xmid' `Ymid' `s', `options'
                 local plots `plots' `plot'
             }
             if "`box_destination'"!="" {
-                _geoplot_symboli . `p' `YMID' `XMID', size(`S') `options'
+                _geoplot_symboli . `p' `XMID' `YMID' `S', `options'
                 local plots `plots' `plot'
             }
         }
@@ -508,11 +508,11 @@ program __zoom
                     local box_origin box_origin
                 }
                 if "`box_origin'"!="" {
-                    _geoplot_symboli . `p' `Ymid' `Xmid', size(`s') `options'
+                    _geoplot_symboli . `p' `Xmid' `Ymid' `s', `options'
                     local plots `plots' `plot'
                 }
                 if "`box_destination'"!="" {
-                    _geoplot_symboli . `p' `YMID' `XMID', size(`S') `options'
+                    _geoplot_symboli . `p' `XMID' `YMID' `S', `options'
                     local plots `plots' `plot'
                 }
             }
@@ -644,7 +644,7 @@ program _grdim_parse_label
     _parse comma  lhs 0 : 0
     gettoken OPT  lhs : lhs
     gettoken opt  lhs : lhs
-    syntax [, `opt'(str asis) * ]
+    syntax [, `OPT'(str asis) * ]
     if `"``opt''"'=="" {
         c_local done 1
         exit
@@ -932,7 +932,7 @@ program _clegend
     _parse comma legend_pos 0 : 0
     syntax [, off Layer(numlist int max=1 >0) noLABel MISsing Format(str)/*
         */ OUTside POSition(str) width(passthru) height(passthru)/*
-        */ BMargin(passthru) REGion(passthru)/*
+        */ BMargin(passthru) REGion(passthru) cuts(str asis)/*
         */ BPLACEment(passthru)/* will be ignored
         */ _gropts(str asis) * ]
     if `"`off'"'!="" {
@@ -941,6 +941,7 @@ program _clegend
         exit
     }
     local bplacement
+    _clegend_parse_cuts, `cuts'
     // select layer
     local k `layer'
     local clayers: char LAYER[Layers_C]
@@ -1046,10 +1047,15 @@ program _clegend
             qui replace CLEG_Z = `v' in `i'
         }
         local hght = min(40, (`N'-1)*3)
-        local zlabel zlabel(`labels', `format' labsize(vsmall))
-        local zscale
         local Zmin = CLEG_Z[1]
         local Zmax = CLEG_Z[`K' + `hasmis']
+        local zscale
+        if "`cuts'"!="label" local zlabel zlabel(none, `format' labsize(vsmall))
+        else local zlabel zlabel(`labels', `format' labsize(vsmall))
+        if "`cuts'"=="mlabel" /*
+            */ local zlabel `zlabel' zmlabel(`labels', `format' labsize(tiny))
+        else if "`cuts'"=="tick"  local zlabel `zlabel' ztick(`values')
+        else if "`cuts'"=="mtick" local zlabel `zlabel' zmtick(`values')
     }
     // adjust max
     local ZMAX `Zmax'
@@ -1077,6 +1083,25 @@ program _clegend
     c_local clegend clegend(`options') ztitle("") `zlabel' `zscale'
 end
 
+program _clegend_parse_cuts
+    syntax [, NONE LABel TIck MLABel MTIck ]
+    local cuts `label' `tick' `mlabel' `mtick'
+    if "`none'"!="" {
+        if "`cuts'"!="" {
+            di as err "clegend(cuts()): too many keywords specified"
+            exit 198
+        }
+        c_local cuts
+        exit
+    }
+    if "`cuts'"=="" local cuts label
+    else if `: list sizeof cuts'>1 {
+        di as err "clegend(cuts()): too many keywords specified"
+        exit 198
+    }
+    c_local cuts `cuts'
+end
+
 program _clegend_adjustmax
     _parse comma lhs 0 : 0
     gettoken Zmin lhs : lhs
@@ -1085,7 +1110,7 @@ program _clegend_adjustmax
     _grdim_parse_scale Z `Zmin' `Zmax', `zscale'
     foreach O in LABel TIck MLABel MTIck {
         local O Z`O'
-        local o = strlower("`O'") 
+        local o = strlower("`O'")
         while (1) {
             capt n _grdim_parse_label `O' `o' Z `Zmin' `Zmax', `options'
             if _rc==1 exit 1
@@ -1561,7 +1586,7 @@ program _geoplot_symboli
     c_local p `p'
 end
 
-version 17
+version 16.1
 mata:
 mata set matastrict on
 

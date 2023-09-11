@@ -1,5 +1,5 @@
 {smcl}
-{* 06jul2023}{...}
+{* 11sep2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -221,7 +221,7 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the shapes to be
+    where {it:frame} is the frame containing the shapes to be
     plotted (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
@@ -261,6 +261,12 @@
     for normalization; use this option to make sizes comparable across layers.
 
 {phang}
+    {opth sel:ect(exp)} selects the shapes to be included in the
+    plot. {cmd:select()} is applied after determining the cuts for {it:zvar}
+    and after processing weights and {cmd:size()}. Specify {it:{help if}} or
+    {it:{help in}} if you want to select observations upfront.
+
+{phang}
     {cmdab:ec:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}
     sets the fill color used for enclaves. {it:colorspec} is a (single) color
     specification as described in
@@ -277,7 +283,29 @@
 {phang}
     {opt lock} causes the orientation of the shapes to be unaffected by global
     option {helpb geoplot##angle:angle()}. That is, if {cmd:lock} is specified,
-    {helpb geoplot##angle:angle()} will rotate only positions only.
+    {helpb geoplot##angle:angle()} will rotate positions only.
+
+{phang}
+    {opt box}[{cmd:(}{it:suboptions}{cmd:)}] draws a bounding box around the
+    plotted shapes. {it:suboptions} are as follows.
+
+{phang2}
+    {opt rot:ate}, {opt cir:cle}, {opt hull}, {opt pad:ding(#)}, and {opt n(n)} as
+    described in help {helpb geoframe##bbox:geoframe bbox}.
+
+{phang2}
+    {opt line} plots the bounding box using plot type {helpb geoplot##line:line}. The
+    default is to plot the bounding box using plot type {helpb geoplot##area:area}. Note
+    that, by default, the bounding box does not have a fill color even if option
+    {cmd:line} is omitted. Specify {cmd:color(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} or
+    {cmd:fcolor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} to set a
+    fill color.
+
+{phang2}
+    {it:{help area_options}} or {it:{help line_options}}, depending on whether
+    option {cmd:line} has been specified, are regular graph options to affect
+    the look of the bounding box. Color options support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}.
 
 {phang}
     {opt f:eature(string)} specifies the type of feature represented in the
@@ -331,18 +359,19 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the shapes to be
+    where {it:frame} is the frame containing the shapes to be
     plotted (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, rescales the coordinates of
     the shapes by the absolute (and normalized) values of {it:exp}. Type
-    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical 
+    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
     variable. {it:options} are as follows.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()},
-    {cmd:lock}, {opt feature()}, {opt coordinates()}, {opt id()}, {opt centroids()}, and {cmd:area()} are
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()}, {cmd:select()},
+    {cmd:lock}, {opt box()}, {opt feature()}, {opt coordinates()}, {opt id()},
+    {opt centroids()}, and {cmd:area()} are
     options as described for layer type {helpb geoplot##area:area}.
 
 {phang}
@@ -360,7 +389,7 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the points to be
+    where {it:frame} is the frame containing the points to be
     plotted (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
@@ -372,18 +401,9 @@
     are as follows.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}} are options determining the look
-    of the markers (e.g. color or size) depending on the values of
-    {help geoplot##zvar:{it:zvar}} as described
-    {help geoplot##zvar_options:below}.
-
-{phang}
-    {cmd:wmax}[{cmd:(}{it:#}{cmd:)}] specifies a custom upper bound for
-    normalization of weights. This is only relevant if {it:{help weight}} has
-    been specified. The default is to normalize by max(1,{it:wmax}), where
-    {it:wmax} is the observed maximum of the (absolute) weights (within
-    layer). Specify {opt wmax(#)} to normalize by {it:#}. Specify {cmd:wmax}
-    without argument to normalize by {it:wmax} even if {it:wmax}<1.
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()},
+    {opt box()}, and {opt coordinates()} are
+    options as described for layer type {helpb geoplot##area:area}.
 
 {phang}
     {it:{help marker_options}}, {it:{help marker_label_options}},
@@ -391,11 +411,6 @@
     the look of markers as described in {helpb twoway scatter}. For example,
     use option {cmd:msymbol()} to set the marker symbol. Color options
     support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
-
-{phang}
-    {opt coor:dinates(X Y)} specifies custom coordinate variables. The default
-    is to use the variables returned by
-    {helpb geoframe##get:geoframe get coordinates}.
 
 {marker labels}{...}
 {dlgtab:single-coordinate labels}
@@ -406,7 +421,7 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the labels to be
+    where {it:frame} is the frame containing the labels to be
     plotted (see {helpb geoframe}), {it:labelvar} is a (numeric or string) variable
     providing the labels, and {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling. Type
@@ -415,10 +430,9 @@
     {helpb geoplot##point:point}. {it:options} are as follows.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}} are options determining the look
-    of the labels (e.g. color or size) depending on the values of
-    {help geoplot##zvar:{it:zvar}} as described
-    {help geoplot##zvar_options:below}.
+    {it:{help geoplot##zopts:zvar_options}}, {opt box()}, {cmd:select()}, and
+    {opt coordinates()} are
+    options as described for layer type {helpb geoplot##area:area}.
 
 {phang}
     {opth si:ze(textsizestyle)},
@@ -439,11 +453,6 @@
     {help geoplot##zvar_options:below} for {cmd:mlabsize()}, {cmd:mlabcolor()},
     and {cmd:mlabangle()}.
 
-{phang}
-    {opt coor:dinates(X Y)} specifies custom coordinate variables. The default
-    is to use the variables returned by
-    {helpb geoframe##get:geoframe get coordinates}.
-
 {marker symbol}{...}
 {dlgtab:single-coordinate symbols}
 
@@ -453,7 +462,7 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the positions of
+    where {it:frame} is the frame containing the positions of
     the symbols (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
@@ -484,9 +493,13 @@
     {p_end}
 {p2col:{cmdab:sl:ice} [{it:angle}]}slice of circle; {it:angle} in [-360,360]
     {p_end}
-{p2col:{cmdab:pentagr:am}}pentagram (5-pointed star)
+{p2col:{cmdab:star}}5-pointed star
     {p_end}
-{p2col:{cmdab:hexagr:am}}hexagram (6-pointed star)
+{p2col:{cmdab:star6}}6-pointed star
+    {p_end}
+{p2col:{cmdab:pentagr:am}}pentagram (5-pointed star with crossing lines)
+    {p_end}
+{p2col:{cmdab:hexagr:am}}hexagram (6-pointed star with crossing lines)
     {p_end}
 {p2col:{cmdab:pin} [{it:headsize}]}pin (needle); {it:headsize} in [0,1]
     {p_end}
@@ -619,7 +632,7 @@
     {helpb colorpalette##colorlist:colorpalette}.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:ecolor()},
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()}, {cmd:ecolor()}, {cmd:box()},
     {opt feature()}, and {opt coordinates()} are options as described for layer type
     {helpb geoplot##area:area}.
 
@@ -632,9 +645,10 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the positions of
-    the pie charts (see {helpb geoframe}), {it:varlist} contains the values determining
-    the slice sizes (a separate pie chart will be created for each unit/row in the data), and
+    where {it:frame} is the frame containing the positions and data of
+    the pie charts (see {helpb geoframe}), {it:varlist} specifies the variables
+    determining the slice sizes (a separate pie chart will be created for each
+    unit/row in the data), and
     {it:weight}, specified as {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the pie charts by the
     absolute (and normalized) values of {it:exp}. {it:options}
@@ -731,8 +745,8 @@
     {opt nolab:el} uses variable names rather variable labels in the legend.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()},
-    {it:{help area_options}}, and {opt coordinates()} are options as described
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()},
+    {it:{help area_options}}, {cmd:box()}, and {opt coordinates()} are options as described
     for layer type {helpb geoplot##area:area}. {it:zvar_options} without asterisk
     will be ignored.
 
@@ -745,8 +759,8 @@
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the coordinates of the positions of
-    the bar charts (see {helpb geoframe}), {it:varlist} contains the values determining
+    where {it:frame} is the frame containing the positions and data of
+    the bar charts (see {helpb geoframe}), {it:varlist} specifies the variables determining
     the bar segments (a separate bar chart will be created for each unit/row in the data), and
     {it:weight}, specified as {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the bar charts by the
@@ -811,8 +825,8 @@
     {opt nolab:el} uses variable names rather variable labels in the legend.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()},
-    {it:{help area_options}}, and {opt coordinates()} are options as described
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()},
+    {it:{help area_options}}, {cmd:box()}, and {opt coordinates()} are options as described
     for layer type {helpb geoplot##area:area}. {it:zvar_options} without asterisk
     will be ignored.
 
@@ -848,10 +862,8 @@
     for {cmd:pcpoint}. {it:options} are as follows.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}} are options determining the look
-    of the objects (e.g. color or size) depending on the values of
-    {help geoplot##zvar:{it:zvar}} as described
-    {help geoplot##zvar_options:below}.
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:select()}, and {opt box()} are
+    options as described for layer type {helpb geoplot##area:area}.
 
 {phang}
     Options to affect the rendering of the spike
@@ -888,7 +900,7 @@
     multiple {cmd:"}{it:text}{cmd:"} elements are specified.
 
 {pstd}
-    Note that {cmd:geoplot} passes {it:immediate_values} through to the underlying 
+    Note that {cmd:geoplot} passes {it:immediate_values} through to the underlying
     graph command as is. This means that coordinates must be specified in
     revere order (i.e. Y followed by X, not X followed by Y).
 
@@ -1095,7 +1107,7 @@
     {it:options} are as follows.
 
 {phang2}
-    {opt nol:abel} omits the use of value labels in case of {cmd:i.}{it:zvar} or 
+    {opt nol:abel} omits the use of value labels in case of {cmd:i.}{it:zvar} or
     {helpb geoplot##discrete:discrete}.
 
 {phang2}
@@ -1300,8 +1312,20 @@
     {help geoplot##zvar:{it:zvar}}.
 
 {phang2}
-    {opt nolab:el} omits the use of value labels if {helpb geoplot##discrete:discrete}
-    has been specified.
+    {opt cuts(keyword)} determines how ticks and labels are used to indicated
+    the cuts between the color levels. {it:keyword} may be {cmd:none} (do not
+    indicate the cuts), {cmdab:lab:el} (major ticks plus labels), {cmdab:ti:ck}
+    (major ticks only), {cmdab:mlab:el} (minor ticks plus labels), and {cmdab:mti:ck}
+    (minor ticks only). Default is {cmd:cuts(label)}. You may use options
+    {helpb axis_label_options:zlabel()}, {helpb axis_label_options:ztick()}, 
+    {helpb axis_label_options:zmlabel()}, and {helpb axis_label_options:zmtick()}
+    outside of {cmd:clegend()} to add further ticks and labels or to override the
+    ticks and labels added by {cmd:cuts()}. {cmd:cuts()} has no effect if
+    {help geoplot##zvar:{it:zvar}} is {helpb geoplot##discrete:discrete}
+
+{phang2}
+    {opt nolab:el} omits the use of value labels. This is only relevant
+    if {help geoplot##zvar:{it:zvar}} is {helpb geoplot##discrete:discrete}.
 
 {phang2}
     {opt mis:sing} requests that missing value is

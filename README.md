@@ -12,7 +12,7 @@ To install `geoplot` from the SSC Archive, type
 
     . ssc install geoplot, replace
 
-in Stata. Stata version 17 or newer is required. Furthermore,
+in Stata. Stata version 16.1 or newer is required. Furthermore,
 the following packages need to be installed on the system:
 
     . ssc install palettes, replace
@@ -117,21 +117,33 @@ Map with bar charts.
 
 Zoom.
 
-    geoframe bbox bbox, by(id) circle pad(5)
-    frame bbox: rename _ID id
     geoplot (area regions)                                           /// 1
         (area regions         if id==1, fc(Coral*.5) lc(gray))       /// 2
         (label regions region if id==1, color(black))                /// 3
-        (area bbox            if id==1, fc(gs14) lc(gray))           /// 3
-        (area regions         if id==1, fc(Coral) lc(gray))          /// 4
+        (area regions         if id==1, fc(Coral) lc(gray) /*
+                                     */ box(circle pad(5) fc(gs14))) /// 4
         (pie regions relig1 relig2 relig3 if id==1, lab(, reverse))  /// 5
-        , legend(pos(se) rowgap(1)) zoom(4/6: 6 90 210)
+        , legend(pos(se) rowgap(1)) zoom(4/5: 6 90 210)
 
 ![example 12](/images/12.png)
 
 ---
 
 Main changes:
+
+    11sep2023 (version 1.1.0)
+    - Stata 16 now supported
+    geoplot 
+    - box() added to layer options to draw bounding box
+    - select() added to layer options to (sub)select objects to be printed
+    - zoom() failed to print origin and destination boxes; this is fixed
+    - symbol: pentagram and hexagram now use crossing lines; star and star6 added
+    - clegend(): suboption cuts() added
+    geoframe
+    - subcommands collapse and contract added
+    - spjoin: option select() added
+    - get coordinates: now also tries _X _Y if type is "unit"
+    - get coordinates: now also tries _CX _CY if type is ""
 
     06jul2023
     geoplot (version 1.0.7)
