@@ -1,5 +1,5 @@
 {smcl}
-{* 11sep2023}{...}
+{* 12sep2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -155,7 +155,7 @@
 {synopt :{helpb geoplot##aspect:{ul:aspect}ratio({it:spec})}}adjust aspect
     ratio of map
     {p_end}
-{synopt :{it:{help twoway_options}}}twoway options, other than {cmd:by()}
+{synopt :{help geoplot##twopts:{it:twoway_options}}}twoway options, other than {cmd:by()}
 
 {syntab :Legends}
 {synopt :{helpb geoplot##legend:{ul:leg}end{sf:[}({it:options}){sf:]}}}add
@@ -1228,6 +1228,7 @@
     will compress the map vertically, values larger than 1 will compress the map
     horizontally). For {it:pos_option} see help {it:{help aspect_option}}.
 
+{marker twopts}{...}
 {phang}
     {it:twoway_options} are general twoway options, other than {cmd:by()}, as
     documented in help {it:{help twoway_options}}. {cmd:geoplot} imposes own

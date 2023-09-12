@@ -131,6 +131,16 @@ Zoom.
 
 Main changes:
 
+    12sep2023
+    __geoplot_layer.ado (version 1.1.1)
+    - a typo introduced in one of the previous versions caused the computations 
+      by levels(, quantile) and levels(, kmeans) to be based on the a dataset
+      containing one observation for each coordinate of the shape polygons (rather
+      than one observation per unit); this is fixed
+    - some improvements have been made on how default rendering options are
+      determined for area
+    - label(): "@lab" now maps to "@lb - @ub" (rather than "@lb-@ub")
+
     11sep2023 (version 1.1.0)
     - Stata 16 now supported
     geoplot 

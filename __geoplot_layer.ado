@@ -1,4 +1,4 @@
-*! version 1.1.0  11sep2023  Ben Jann
+*! version 1.1.1  12sep2023  Ben Jann
 
 /*
     Syntax:
@@ -103,7 +103,8 @@ program _layer
         local hasSHP 1
         local OPTS `OPTS' SIze(str asis) lock wmax WMAX2(numlist max=1 >0)/*
             */ COORdinates(namelist min=2 max=2) id(name)/*
-            */ CENTRoids(varlist numeric min=2 max=2) area(varname numeric)
+            */ CENTRoids(varlist numeric min=2 max=2) area(varname numeric)/*
+            */ LColor(passthru)
         local WGT [iw/]
         if `"`plottype'"'=="area" {
             local hasPLV 1
@@ -356,7 +357,7 @@ program _layer
             }
         }
         // inject colors
-        _process_coloropts options, `options'
+        _process_coloropts options, `lcolor' `options'
         if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
     }
     // put frames together and categorize zvar
@@ -377,7 +378,7 @@ program _layer
             }
             else local ztouse `touse'
             tempname CUTS
-            mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`touse'") /* returns
+            mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`ztouse'") /* returns
                 CUTS, cuts, levels */
             if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
             _z_categorize `CUTS', levels(`levels') zvar(`Zvar')/*
@@ -462,26 +463,28 @@ program _layer
             if `"`color'"'=="" local color `"`mlabcolor'"'
         }
         // - process missing
-        if `nmiss' _z_parse_missing `plottype', `missing'
+        if `nmiss' _z_parse_missing `plottype' `hasMLAB', `missing'
     }
     else local zlevels 0
     // Set default options
     if `"`plottype'"'=="area" {
         local opts cmissing(n) nodropbase lalign(center) `opts'
         if "`COLOR'"=="" {
-            local opts lcolor(gray) `opts'
+            if `"`lcolor'"'=="" local opts lcolor(gray) `opts'
             if `"`fcolor'"'=="" local opts fcolor(none) `opts'
         }
         if "`FINTENSITY'"=="" local opts finten(100) `opts'
         if "`LWIDTH'"=="" {
-            local opts lwidth(.15) `opts'
-            if `hasZ' & `"`fcolor'"'=="" local opts lcolor(%0) `opts'
+            if "`COLOR'"!="" & `"`fcolor'`lcolor'"'=="" {
+                local opts lwidth(0) lcolor(%0) `opts' // turn lines off
+            }
+            else local opts lwidth(.15) `opts'
         }
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
     else if "`plottype'"'=="line" {
         local opts `opts' cmissing(n)
-        if "`COLOR'"=="" local opts lcolor(gray) `opts'
+        if "`COLOR'"=="" & `"`lcolor'"'=="" local opts lcolor(gray) `opts'
         if "`LWIDTH'"==""   local opts lwidth(.15) `opts'
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
@@ -516,7 +519,9 @@ program _layer
         foreach i of local zlevels {
             local IFF `iff'
             if `hasZ' {
-                if `i'==0 local OPTS `missing' // missing
+                if `i'==0 {
+                    local OPTS `opts' `missing' // missing
+                }
                 else {
                     local OPTS
                     foreach el of local ZEL {
@@ -610,7 +615,7 @@ program _layer
                 local lb  `: di `format' `LB''
                 local ub  `: di `format' `UB''
                 mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `""(@lb,@ub]""')
-                local lbl: subinstr local lbl "@lab" "`lb'-`ub'", all
+                local lbl: subinstr local lbl "@lab" "`lb' - `ub'", all
                 local lbl: subinstr local lbl "@lb" "`lb'", all
                 local lbl: subinstr local lbl "@ub" "`ub'", all
                 local lbl: subinstr local lbl "@mid" "`mid'", all
@@ -892,20 +897,21 @@ program _z_recycle
 end
 
 program _z_parse_missing
-    _parse comma plottype 0 : 0
-    syntax [, NOLABel LABel(str asis) first nogap COLor(str asis) * ]
+    gettoken plottype 0 : 0
+    gettoken hasMLAB 0 : 0, parse(", ")
+    syntax [, NOLABel LABel(str asis) first nogap COLor(str asis)/*
+        */ MLABColor(passthru) * ]
     _add_quotes label `label'
     if `"`label'"'=="" local label `""no data""'
-    _process_coloropts options, `options'
+    _process_coloropts options, `mlabcolor' `options'
+    mata: _get_colors("color")
     if `"`color'"'=="" local color gs14
+    if `hasMLAB' {
+        if `"`mlabcolor'"'=="" {
+            local options mlabcolor(`color') `options'
+        }
+    }
     local options color(`color') `options'
-    if `"`plottype'"'=="area" {
-        local options cmissing(n) nodropbase lalign(center) finten(100)/*
-            */ lwidth(.15) lpattern(solid) lcolor(%0) `options'
-    }
-    else if "`plottype'"'=="line" {
-        local options cmissing(n) lwidth(.15) lpattern(solid) `options'
-    }
     c_local missing `options'
     c_local missing_color `"`color'"'
     c_local missing_lab   `"`label'"'
