@@ -1,4 +1,4 @@
-*! version 1.1.1  12sep2023  Ben Jann
+*! version 1.1.1  29sep2023  Ben Jann
 
 /*
     Syntax:
@@ -69,12 +69,12 @@ program _layeri
     if `layer'<. {
         _parse_label `label'
         _add_quotes label `label'
-        if `"`label'"'=="" local label `""""'
+        if `"`label'"'=="" local label `""`plottype'""'
         local legend `p' `label'
         local lsize 1
-        char LAYER[Keys_`layer'] `p'
-        char LAYER[Legend_`layer'] `legend'
-        char LAYER[Lsize_`layer'] `lsize'
+        char LAYER[hasz_`layer'] 0
+        char LAYER[keys_`layer'] `p'
+        char LAYER[labels_`layer'] `"`"`label'"'"'
     }
     c_local p `p'
     c_local plot (`plottype' `lhs', `options')
@@ -104,7 +104,7 @@ program _layer
         local OPTS `OPTS' SIze(str asis) lock wmax WMAX2(numlist max=1 >0)/*
             */ COORdinates(namelist min=2 max=2) id(name)/*
             */ CENTRoids(varlist numeric min=2 max=2) area(varname numeric)/*
-            */ LColor(passthru)
+            */ LColor(passthru) lforce // lforce: do not not turn lines off
         local WGT [iw/]
         if `"`plottype'"'=="area" {
             local hasPLV 1
@@ -152,6 +152,7 @@ program _layer
         local hasSIZE = `"`size'"'!=""
         _parse_levels `levels' // => levels, method, l_wvar
         if `"`fcolor'"'!="" mata: _get_colors("fcolor")
+        _parse_label `label' // => label, nolabel, format, reverse
         // sample
         marksample touse, novarlist
         // feature
@@ -377,13 +378,15 @@ program _layer
                     */ if `id'==`id'[_n-1] & `touse'==`touse'[_n-1]
             }
             else local ztouse `touse'
-            tempname CUTS
-            mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`ztouse'") /* returns
-                CUTS, cuts, levels */
-            if "`discrete'"!="" _z_labels `Zvar' `cuts' // returns zlabels
-            _z_categorize `CUTS', levels(`levels') zvar(`Zvar')/*
+            tempname CUTS NOBS NMIS
+            mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`ztouse'") /*
+                fills in CUTS, returns levels */
+            if "`discrete'"!="" & "`nolabel'"=="" {
+                _z_labels `Zvar' `levels' `CUTS' // => zlabels
+            }
+            _z_categorize `CUTS' `NOBS' `NMIS', levels(`levels') zvar(`Zvar')/*
                 */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
-                /* returns zlevels nobs nmiss discrete */
+                /* returns zlevels discrete */
         }
         // select
         if `"`select'"'!="" local touse `touse2'
@@ -394,9 +397,12 @@ program _layer
     local n1 = _N
     //local n1 = _N
     if `n1'<`n0' {
+        if `layer'<. {
+            char LAYER[hasz_`layer'] 0
+            di as txt "(layer `layer' is empty)"
+        }
         c_local plot
         c_local p `p'
-        if `layer'<. di as txt "(layer `layer' is empty)"
         exit
     }
     local in in `n0'/`n1'
@@ -463,7 +469,7 @@ program _layer
             if `"`color'"'=="" local color `"`mlabcolor'"'
         }
         // - process missing
-        if `nmiss' _z_parse_missing `plottype' `hasMLAB', `missing'
+        if `NMIS' _z_parse_missing `plottype' `hasMLAB', `missing'
     }
     else local zlevels 0
     // Set default options
@@ -475,7 +481,7 @@ program _layer
         }
         if "`FINTENSITY'"=="" local opts finten(100) `opts'
         if "`LWIDTH'"=="" {
-            if "`COLOR'"!="" & `"`fcolor'`lcolor'"'=="" {
+            if "`COLOR'"!="" & `"`fcolor'`lcolor'`lforce'"'=="" {
                 local opts lwidth(0) lcolor(%0) `opts' // turn lines off
             }
             else local opts lwidth(.15) `opts'
@@ -560,57 +566,43 @@ program _layer
     }
     numlist "`p0'/`p1'"
     local keys `r(numlist)'
-    // compile legend keys
-    _parse_label `label'
+    // compile legend labels
     if `hasZ' {
-        local lkeys: copy local keys
         if `"`format'"'=="" local format `zfmt'
-        if `nmiss' {
-            gettoken mis_key lkeys : lkeys
-            if `missing_nolab' local mis_key
+        if `NMIS' {
+            local labels `"`"`missing_lab'"'"'
+            local Nobs = `NMIS'
+            local labels: subinstr local labels "@n" "`Nobs'", all
+            local space " "
         }
-        local legend
-        local lsize 0
-        if `discrete' {
-            local ZLABELS
+        else {
+            local labels
             local space
-            local NOBS: copy local nobs
-            local CUTS: copy local cuts
+        }
+        if `discrete' {
             _label_separate `label' // => lab_keys, lab_lbls
-            if "`nolabel'"!="" local zlabels: copy local cuts
-            foreach key of local lkeys {
-                gettoken Nobs NOBS : NOBS
-                gettoken i CUTS : CUTS
-                local mid `: di `format' `i''
+            forv i = 1/`levels' {
+                local val = `CUTS'[1,`i']
+                local mid `: di `format' `val''
                 gettoken lab zlabels : zlabels
-                capt confirm number `lab'
-                if _rc==0 {
-                    local lab `: di `format' `lab''
-                }
-                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `"`"@lab"'"')
+                if `"`lab'"'=="" local lab `mid'
+                mata: _get_lbl("`val'", "lab_keys", "lab_lbls", `"`"@lab"'"')
                 local lbl: subinstr local lbl "@lab" `"`lab'"', all
-                local lbl: subinstr local lbl "@lb" "`mid'", all
-                local lbl: subinstr local lbl "@ub" "`mid'", all
+                local lbl: subinstr local lbl "@lb"  "`mid'", all
+                local lbl: subinstr local lbl "@ub"  "`mid'", all
                 local lbl: subinstr local lbl "@mid" "`mid'", all
+                local Nobs = `NOBS'[1,`i']
                 local lbl: subinstr local lbl "@n" "`Nobs'", all
-                if `reverse' local legend `legend' `key' `lbl'
-                else         local legend `key' `lbl' `legend'
-                local ZLABELS `"`ZLABELS'`space'`lbl'"'
+                local labels `"`labels'`space'`"`lbl'"'"'
                 local space " "
-                local ++lsize
             }
         }
         else {
             if `"`label'"'=="" local label 1 "[@lb,@ub]"
             _label_separate `label' // => lab_keys, lab_lbls
-            local NOBS: copy local nobs
-            local CUTS: copy local cuts
-            gettoken LB CUTS : CUTS
-            local i 0
-            foreach key of local lkeys {
-                local ++i
-                gettoken Nobs NOBS : NOBS
-                gettoken UB CUTS : CUTS
+            forv i = 1/`levels' {
+                local LB = `CUTS'[1,`i']
+                local UB = `CUTS'[1,`i'+1]
                 local mid `: di `format' (`UB'+`LB')/2'
                 local lb  `: di `format' `LB''
                 local ub  `: di `format' `UB''
@@ -619,54 +611,54 @@ program _layer
                 local lbl: subinstr local lbl "@lb" "`lb'", all
                 local lbl: subinstr local lbl "@ub" "`ub'", all
                 local lbl: subinstr local lbl "@mid" "`mid'", all
+                local Nobs = `NOBS'[1,`i']
                 local lbl: subinstr local lbl "@n" "`Nobs'", all
-                if `reverse' local legend `legend' `key' `lbl'
-                else         local legend `key' `lbl' `legend'
-                local LB `UB'
-                local ++lsize
+                local labels `"`labels'`space'`"`lbl'"'"'
+                local space " "
             }
-        }
-        local missing_lab: subinstr local missing_lab "@n" "`nmiss'", all
-        if "`mis_key'"!="" {
-            local mis_key `mis_key' `missing_lab'
-            if `missing_gap' {
-                if `missing_first' local legend - " " `legend'
-                else               local legend `legend' - " "
-                local ++lsize
-            }
-            if `missing_first' local legend `mis_key' `legend'
-            else               local legend `legend' `mis_key'
-            local ++lsize
         }
     }
     else {
         _add_quotes label `label'
         if `"`label'"'=="" local label `""`frame'""'
-        local legend `p1' `label'
-        local lsize 1
-    }
-    // set chars
-    if `layer'<. {
-        char LAYER[Keys_`layer'] `keys'
-        char LAYER[Legend_`layer'] `legend'
-        char LAYER[Lsize_`layer'] `lsize'
-        if `hasZ' {
-            char LAYER[Layers_Z] `:char LAYER[Layers_Z]' `layer'
-            char LAYER[Discrete_`layer'] `discrete'
-            char LAYER[Nmiss_`layer']  `nmiss'
-            char LAYER[Format_`layer'] `zfmt'
-            char LAYER[Values_`layer'] `cuts'
-            char LAYER[Nobs_`layer'] `nobs'
-            char LAYER[Labels_`layer'] `"`ZLABELS'"'
-            char LAYER[Colors_`layer'] `"`color'"'
-            char LAYER[Labmis_`layer'] `"`missing_lab'"'
-            char LAYER[Colmis_`layer'] `"`missing_color'"'
-            if `: list sizeof color'>1 {
-                char LAYER[Layers_C] `:char LAYER[Layers_C]' `layer'
-            }
-        }
+        local labels `"`"`label'"'"'
     }
     // returns
+    if `layer'<. {
+        char LAYER[keys_`layer'] `keys'
+        char LAYER[labels_`layer'] `"`labels'"'
+        char LAYER[hasz_`layer'] `hasZ'
+        if `hasZ' {
+            local hasmis = `NMIS' > 0
+            char LAYER[z_hasmis_`layer'] `hasmis'
+            if `hasmis' {
+                matrix `NOBS' = (`NMIS', `NOBS')
+                local mleg = (1 + `missing_first'*2 + `missing_gap')/*
+                    */ * (!`missing_nolab') 
+                char LAYER[z_mleg_`layer'] `mleg'
+                // 0 = omit missing in legend
+                // 1 = place missing last without gap
+                // 2 = place missing last with gap
+                // 3 = place missing first without gap
+                // 4 = place missing first with gap
+            }
+            local hascolors = `: list sizeof color' > 1
+            char LAYER[z_hascol_`layer'] `hascolors'
+            if `hasmis' local color `"`missing_color' `color'"'
+            char LAYER[z_colors_`layer'] `"`color'"'
+            char LAYER[z_discrete_`layer'] `discrete'
+            char LAYER[z_reverse_`layer'] `reverse'
+            char LAYER[z_format_`layer'] `zfmt'
+            local TMP: char LAYER[CUTS]
+            char LAYER[CUTS] // clear
+            matrix rename `CUTS' `TMP'
+            char LAYER[z_levels_`layer'] `TMP'
+            local TMP: char LAYER[NOBS]
+            char LAYER[NOBS] // clear
+            matrix rename `NOBS' `TMP'
+            char LAYER[z_nobs_`layer'] `TMP'
+        }
+    }
     c_local plot `plot'
     c_local p `p'
 end
@@ -743,8 +735,11 @@ program __parse_levels
 end
 
 program _z_categorize
-    syntax anything(name=CUTS), levels(str) zvar(str) gen(str)/*
+    syntax anything, levels(str) zvar(str) gen(str)/*
         */ touse(str) ztouse(str) [ discrete ]
+    gettoken CUTS anything : anything
+    gettoken NOBS anything : anything
+    gettoken NMIS anything : anything
     //local nobs
     local discrete = "`discrete'"!=""
     tempname tmp
@@ -752,8 +747,8 @@ program _z_categorize
     if      `levels'>32740 local dtype long
     else if `levels'>100   local dtype int
     qui gen `dtype' `tmp' = .
-    mata: _z_categorize(`levels', `discrete', "`CUTS'", "`zvar'", "`tmp'",/*
-        */ "`ztouse'")
+    mata: _z_categorize(`levels', `discrete', "`CUTS'", "`NOBS'", "`NMIS'",/*
+        */ "`zvar'", "`tmp'", "`ztouse'")
     if "`touse'"!="`ztouse'" {
         // fill in remaining obs of shape units
         qui replace `tmp' = `tmp'[_n-1] if `touse' & !`ztouse'
@@ -761,8 +756,6 @@ program _z_categorize
     if "`zvar'"=="`gen'" drop `zvar'
     rename `tmp' `gen'
     c_local zlevels `zlevels'
-    c_local nobs `nobs'
-    c_local nmiss `nmiss'
     c_local discrete `discrete'
 end
 
@@ -783,16 +776,18 @@ program _get_plevel
 end
 
 program _z_labels
-    gettoken var 0 : 0
+    args var levels CUTS
     local labname: value label `var'
     if `"`labname'"'=="" {
-        local labels `0'
+        mata: st_local("labels", invtokens(strofreal(st_matrix("`CUTS'"),/*
+            */ "%18.0g")))
     }
     else {
         local labels
         local space
-        foreach val of local 0 {
-            local lab: label `labname' `val'
+        forv i = 1/`levels' {
+            local val = `CUTS'[1,`i']
+            local lab: label `labname' `val', strict
             local labels `"`labels'`space'`"`lab'"'"'
             local space " "
         }
@@ -851,8 +846,8 @@ program _z_colors
         c_local sizeofel 1
         exit
     }
-    if `:list sizeof color'<`k' {
-        // recycle or interpolate colors if too few colors have been obtained
+    if `l'!=`k' {
+        // recycle or interpolate colors if wrong number of colors
         colorpalette `color', nograph n(`k') class(`pclass')
         local color `"`r(p)'"'
     }
@@ -875,8 +870,8 @@ program _z_recycle
             // generate range
             gettoken lb opt : opt
             gettoken ub opt : opt
-            mata: st_local("opt", /*
-                */ invtokens(strofreal(rangen(`lb', `ub', `k')')))
+            mata: st_local("opt",/*
+                */ invtokens(strofreal(rangen(`lb', `ub', `k')', "%18.0g")))
         }
     }
     // expand
@@ -1071,7 +1066,6 @@ void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
         C = select(C, C:<.) // remove missing codes
         if (length(C)==0) C = J(0,1,.) // select() may return 0x0
         st_matrix(CUTS, C')
-        st_local("cuts", invtokens(strofreal(C)'))
         st_local("levels", strofreal(length(C)))
         return
     }
@@ -1081,7 +1075,6 @@ void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
     // SPECIAL CASE 1: no nonmissing data
     if (minmax==J(1,2,.)) {
         st_matrix(CUTS, J(1,0,.))
-        st_local("cuts", "")
         st_local("levels", "0")
         return
     }
@@ -1093,7 +1086,6 @@ void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
     lb = minmax[1]; ub = minmax[2]
     if (lb==ub) {
         st_matrix(CUTS, minmax)
-        st_local("cuts", invtokens(strofreal(minmax)))
         st_local("levels", "1")
         return
     }
@@ -1101,7 +1093,6 @@ void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
     if (method=="") {
         C = rangen(lb, ub, k+1) 
         st_matrix(CUTS, C')
-        st_local("cuts", invtokens(strofreal(C)'))
         st_local("levels", strofreal(length(C)-1))
         return
     }
@@ -1130,7 +1121,6 @@ void _z_cuts(string scalar CUTS, string scalar zvar, string scalar wvar,
     if (C[1]>lb) C[1] = lb // make sure that min is included
     if (C[k]<ub) C[k] = ub // make sure that max is included
     st_matrix(CUTS, C')
-    st_local("cuts", invtokens(strofreal(C)'))
     st_local("levels", strofreal(k-1))
 }
 
@@ -1156,7 +1146,8 @@ real colvector _z_cuts_kmeans(real scalar k, real colvector X)
 }
 
 void _z_categorize(real scalar k, real scalar discrete, string scalar cuts,
-    string scalar zvar, string scalar ztmp, string scalar touse)
+    string scalar nobs, string scalar nmis, string scalar zvar,
+    string scalar ztmp, string scalar touse)
 {
     real scalar    i, n, m, c0, c1
     real rowvector C, N
@@ -1187,8 +1178,8 @@ void _z_categorize(real scalar k, real scalar discrete, string scalar cuts,
     }
     else if (k) st_local("zlevels", invtokens(strofreal(1..k)))
     else        st_local("zlevels", "")
-    st_local("nobs", invtokens(strofreal(N)))
-    st_local("nmiss", strofreal(m))
+    st_matrix(nobs, N)
+    st_numscalar(nmis, m)
 }
 
 void _z_color_parselastcomma(string scalar nm)
@@ -1268,7 +1259,7 @@ void _get_colors(string scalar lname, | string scalar lname2)
     pointer (class ColrSpace scalar) scalar S
     
     if (args()<2) lname2 = lname
-    kw1 = ("none", "bg", "fg", "background", "foreground")
+    kw1 = ("none", ".", "bg", "fg", "background", "foreground")
     kw2 = ("*", "%")
     S = findexternal("_GEOPLOT_ColrSpace_S")
     //if ((S = findexternal("_GEOPLOT_ColrSpace_S"))==NULL) S = &(ColrSpace())
@@ -1291,7 +1282,7 @@ void _parse_colorspec(string scalar lname)
     
     c = tokens(st_local(lname))
     if (length(c)!=1) return
-    if (anyof(("none", "bg", "fg", "background", "foreground"), c)) {
+    if (anyof(("none", ".", "bg", "fg", "background", "foreground"), c)) {
         st_local("color_is_kw","1")
         return
     }

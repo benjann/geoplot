@@ -64,7 +64,7 @@ Different formatting of legend labels.
 Similar graph with more colors and alternative type of legend (requires Stata 18)
 
     geoplot (area regions fortell, levels(20) lcolor(gray)) ///
-        , clegend(position(ne) height(30)) zlabel(4(3)28)
+        , clegend(height(30)) zlabel(4(3)28)
 
 ![example 5](/images/5.png)
 
@@ -131,6 +131,23 @@ Zoom.
 
 Main changes:
 
+    28sep2023
+    geoplot.ado
+    - there were some numerical precision issues with zoom(); this is fixed
+    - by default, legend(horizontal) now arranges keys from lowest to highest, not
+      from highest to lowest
+    - legend(reverse) did not work with multiline labels; this is fixed
+    - some improvement of behavior of legend() if order(), rows(), or cols() is
+      specified; note added to help that discourages use of order(), rows(), or
+      cols()
+    - internally, legend labels are now set by label() options rather then by
+      including the labels in order()
+    - internal communication between geoplot.ado and __geoplot_layer.ado has been
+      revised
+    - some information on layers is now returned in r()
+    - plottype symbol supressd the outline if option color() was specified; this
+      is fixed
+  
     12sep2023
     __geoplot_layer.ado (version 1.1.1)
     - a typo introduced in one of the previous versions caused the computations 

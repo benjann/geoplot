@@ -1,4 +1,4 @@
-*! version 1.1.0  11sep2023  Ben Jann
+*! version 1.1.1  28sep2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -93,7 +93,7 @@ program _geoplot, rclass
             cY cX:   centroids for non-rotating objects
         */
         gen byte LAYER = .
-        char LAYER[Layers] `layer_n'
+        char LAYER[layers] `layer_n'
         gen double Y = .
         gen double X = .
         qui set obs 2
@@ -103,7 +103,16 @@ program _geoplot, rclass
         local p 0
         local plots
         forv i = 1/`layer_n' {
-            local ii `i' // for error message
+            // provide tempnames for returns (matrices)
+            if `"`: char LAYER[CUTS]'"'=="" {
+                tempname TMP
+                char LAYER[CUTS] `TMP'
+            }
+            if `"`: char LAYER[NOBS]'"'=="" {
+                tempname TMP
+                char LAYER[NOBS] `TMP'
+            }
+            // parse plottype and frame
             gettoken plottype layer : layer_`i', parse(" ,")
             _parse_plottype `plottype'
             gettoken lframe : layer, parse(" ,[")
@@ -121,15 +130,20 @@ program _geoplot, rclass
                 gettoken lframe layer : layer, parse(" ,[")
                 if `"`lframe'"'=="." local lframe `"`cframe'"'
             }
+            // generate plot
             capt n _geoplot_`plottype' `i' `p' `lframe' `layer' // => plot, p
             if _rc==1 exit 1
             if _rc {
-                di as err "(error in layer `ii': `plottype' ...)"
+                di as err "(error in layer `i': `plottype' ...)"
                 exit _rc
             }
             local plots `plots' `plot'
         }
+        char LAYER[CUTS]
+        char LAYER[NOBS]
         if !`p' {
+            return scalar layers = 0
+            char LAYER[layers]
             di as txt "(nothing to plot)"
             exit
         }
@@ -176,6 +190,39 @@ program _geoplot, rclass
         }
         else local clegend
         
+    // move char to r()
+        forv i = `layer_n'(-1)1 {
+            local lchars
+            local schars
+            local mchars
+            if `"`: char LAYER[hasz_`i']'"'=="1" {
+                local schars `schars' z_discrete
+                local lchars `lchars' z_colors
+                local schars `schars' z_hascol z_hasmis
+                local mchars `mchars' z_nobs z_levels
+            }
+            local schars `schars' hasz
+            local lchars `lchars' labels keys
+            foreach char of local lchars {
+                return local `char'_`i' `"`:char LAYER[`char'_`i']'"'
+                char LAYER[`char'_`i']
+            }
+            foreach char of local schars {
+                return scalar `char'_`i' = `:char LAYER[`char'_`i']'
+                char LAYER[`char'_`i']
+            }
+            foreach char of local mchars {
+                local TMP: char LAYER[`char'_`i']
+                char LAYER[`char'_`i']
+                return matrix `char'_`i' = `TMP'
+            }
+            char LAYER[z_reverse_`i']
+            char LAYER[z_mleg_`i']
+            char LAYER[z_format_`i']
+        }
+        return scalar layers = `layer_n'
+        char LAYER[layers]
+        
     // draw graph
         local graph /*
             */ graph twoway `plots', `legend' `clegend' /*
@@ -188,8 +235,8 @@ program _geoplot, rclass
     }
     
     // returns
-    return local graph `graph'
     return local legend `legend'
+    return local graph `graph'
     if "`frame'"!="" {
         local cframe `"`c(frame)'"'
         capt confirm new frame `frame'
@@ -624,8 +671,9 @@ program _grdim_parse_scale
     if "`on'"=="" local off off
     else          local off on
     if `"`range'"'!="" {
-        mata: st_local("range", ///
-            invtokens(strofreal(minmax(strtoreal(tokens(st_local("range")))))))
+        mata: st_local("range", invtokens(strofreal(/*
+            */ minmax(strtoreal(tokens(st_local("range"))))/*
+            */ , "%18.0g")))
         gettoken min max : range
         gettoken max     : max
         if "`min'"!="" {
@@ -689,8 +737,9 @@ program _grdim_parse_label
         numlist `"`nlist'"'
         local nlist `r(numlist)'
         local rule `rule' `nlist' `n'
-        mata: st_local("nlist", ///
-            invtokens(strofreal(minmax(strtoreal(tokens(st_local("nlist")))))))
+        mata: st_local("nlist", invtokens(strofreal(/*
+            */ minmax(strtoreal(tokens(st_local("nlist"))))/*
+            */ , "%18.0g")))
         gettoken min max : nlist
         gettoken max     : max
         if "`min'"!="" {
@@ -755,7 +804,8 @@ program _legend
         */ SIze(passthru) SYMYsize(passthru) SYMXsize(passthru)/*
         */ KEYGap(passthru) COLGap(passthru) ROWGap(passthru)/*
         */ BMargin(passthru) REGion(passthru)/*
-        */ order(passthru) Cols(passthru) Rows(passthru) NOCOLFirst COLFirst/*
+        */ order(passthru) Cols(numlist max=1 int >0)/*
+        */ Rows(numlist max=1 int >0) NOCOLFirst COLFirst/*
         */ on all BPLACEment(passthru)/* will be ignored
         */ * ]
     if `"`off'"'!="" {
@@ -766,133 +816,175 @@ program _legend
     local all
     local bplacement
     // select layer if layer() is empty
-    local zlayers: char LAYER[Layers_Z]
     if `"`layout'"'=="" {
-        gettoken layout : zlayers // first layer containing Z
+        forv l=1/`: char LAYER[layers]' {
+            if `"`: char LAYER[hasz_`l']'"'=="1" {
+                local layout `l'
+                continue, break
+            }
+        }
         if "`layout'"=="" {
             c_local legend legend(off)
             exit
         }
     }
     // compile legend
-    if `"`order'"'=="" {
-        local LAYOUT
-        local ncols 0
-        local kmax 0
-        local nkeys 0
-        // - first analyze layout
-        while (1) {
-            gettoken l layout : layout, parse(".|- ")
-            if `"`l'"'=="" continue, break
-            if `"`l'"'=="." {
-                local ++nkeys
-                local LAYOUT `LAYOUT' .
-            }
-            else if `"`l'"'=="|" {
-                if !`nkeys' continue // ignore empty columns
-                local ++ncols
-                local nkeys_`ncols' `nkeys'
-                local kmax = max(`kmax', `nkeys')
-                local nkeys 0
-                local LAYOUT `LAYOUT' |
-            }
-            else if `"`l'"'=="-" {
-                gettoken l : layout, quotes qed(hasquotes)
-                local titl
-                local space
-                while (`hasquotes') {
-                    gettoken l layout : layout, quotes
-                    local titl `"`titl'`space'`l'"'
-                    local space " "
-                    gettoken l : layout, quotes qed(hasquotes)
-                }
-                local LAYOUT `LAYOUT' - `"`titl'"'
-                local ++nkeys
-            }
-            else {
-                capt n numlist `"`l'"', int range(>0)
-                if _rc==1 exit 1
-                if _rc {
-                    di as err "(error in legend(layer()))"
-                    exit _rc
-                }
-                local L `r(numlist)'
-                foreach l of local L {
-                    local lsize: char LAYER[Lsize_`l']
-                    if `"`lsize'"'=="" continue
-                    if !`lsize' continue
-                    local nkeys = `nkeys' + `lsize'
-                    local LAYOUT `LAYOUT' `l'
-                }
-            }
+    local LAYOUT
+    local ncols 0
+    local kmax 0
+    local nkeys 0
+    if "`horizontal'"=="" {
+        if "`reverse'"=="" local reverse reverse
+        else               local reverse
+    }
+    // - first analyze layout
+    while (1) {
+        gettoken l layout : layout, parse(".|- ")
+        if `"`l'"'=="" continue, break
+        if `"`l'"'=="." {
+            local ++nkeys
+            local LAYOUT `LAYOUT' .
         }
-        if `nkeys' { // close last column
+        else if `"`l'"'=="|" {
+            if !`nkeys' continue // ignore empty columns
             local ++ncols
             local nkeys_`ncols' `nkeys'
             local kmax = max(`kmax', `nkeys')
+            local nkeys 0
             local LAYOUT `LAYOUT' |
         }
-        if !`kmax' { // legend is empty
-            c_local legend legend(off)
-            exit
+        else if `"`l'"'=="-" {
+            gettoken l : layout, quotes qed(hasquotes)
+            local titl
+            local space
+            while (`hasquotes') {
+                gettoken l layout : layout, quotes
+                local titl `"`titl'`space'`l'"'
+                local space " "
+                gettoken l : layout, quotes qed(hasquotes)
+            }
+            local LAYOUT `LAYOUT' - `"`titl'"'
+            local ++nkeys
         }
-        // - now compile legend
-        local nkeys 0
-        local lcol 1
-        local newcol 1
-        while (1) {
-            gettoken l LAYOUT : LAYOUT
-            if `"`l'"'=="" continue, break
-            if `newcol' {
-                if "`bottom'"!="" {
-                    while (`nkeys'<(`kmax'-`nkeys_`lcol'')) {
-                        local ++nkeys
-                        local order `order' - " "
+        else {
+            capt n numlist `"`l'"', int range(>0)
+            if _rc==1 exit 1
+            if _rc {
+                di as err "(error in legend(layer()))"
+                exit _rc
+            }
+            local L `r(numlist)'
+            foreach l of local L {
+                local lsize_`l': char LAYER[keys_`l']
+                local lsize_`l': list sizeof lsize_`l'
+                if `"`: char LAYER[z_hasmis_`l']'"'=="1" {
+                    local mleg_`l': char LAYER[z_mleg_`l']
+                    if !inlist(`"`mleg_`l''"',"1","2","3","4") local mleg_`l'
+                    if "`mleg_`l''"=="" {
+                        local --lsize_`l'
+                    }
+                    else if inlist("`mleg_`l''", "2", "4") {
+                        local ++lsize_`l'
                     }
                 }
-                local newcol 0
-            }
-            if `"`l'"'=="." {
-                local ++nkeys
-                local order `order' - " "
-            }
-            else if `"`l'"'=="|" {
-                while (`nkeys'<`kmax') {
-                    local ++nkeys
-                    local order `order' - " "
-                }
-                local nkeys 0
-                local ++lcol
-                local newcol 1
-            }
-            else if `"`l'"'=="-" {
-                gettoken l LAYOUT : LAYOUT
-                local ++nkeys
-                local order `order' - `l'
-            }
-            else {
-                local nkeys = `nkeys' + `: char LAYER[Lsize_`l']'
-                local keys: char LAYER[Legend_`l']
-                if "`reverse'"!="" {
-                    _legend_reverse_keys `keys'
-                }
-                local order `order' `keys'
+                else local mleg_`l'
+                if `lsize_`l''<=0 continue
+                local nkeys = `nkeys' + `lsize_`l''
+                local LAYOUT `LAYOUT' `l'
             }
         }
-        local order order(`order')
     }
+    if `nkeys' { // close last column
+        local ++ncols
+        local nkeys_`ncols' `nkeys'
+        local kmax = max(`kmax', `nkeys')
+        local LAYOUT `LAYOUT' |
+    }
+    if !`kmax' { // legend is empty
+        c_local legend legend(off)
+        exit
+    }
+    // - now compile legend
+    local ORDER
+    local LABELS
+    local nkeys 0
+    local lcol 1
+    local newcol 1
+    while (1) {
+        gettoken l LAYOUT : LAYOUT
+        if `"`l'"'=="" continue, break
+        if `newcol' {
+            if "`bottom'"!="" {
+                while (`nkeys'<(`kmax'-`nkeys_`lcol'')) {
+                    local ++nkeys
+                    local ORDER `ORDER' - " "
+                }
+            }
+            local newcol 0
+        }
+        if `"`l'"'=="." {
+            local ++nkeys
+            local ORDER `ORDER' - " "
+        }
+        else if `"`l'"'=="|" {
+            while (`nkeys'<`kmax') {
+                local ++nkeys
+                local ORDER `ORDER' - " "
+            }
+            local nkeys 0
+            local ++lcol
+            local newcol 1
+        }
+        else if `"`l'"'=="-" {
+            gettoken l LAYOUT : LAYOUT
+            local ++nkeys
+            local ORDER `ORDER' - `l'
+        }
+        else {
+            local nkeys = `nkeys' + `lsize_`l''
+            local keys:   char LAYER[keys_`l']
+            local lbls:   char LAYER[labels_`l']
+            if `"`: char LAYER[z_hasmis_`l']'"'=="1" {
+                gettoken mkey keys : keys
+                gettoken mlbl lbls : lbls
+            }
+            local revrs = `"`:char LAYER[z_reverse_`l']'"'=="1"
+            if "`reverse'"!="" {
+                if `revrs' local revrs 0
+                else       local revrs 1
+            }
+            local KEYS
+            foreach key of local keys {
+                gettoken lbl lbls : lbls
+                local labels `labels' label(`key' `lbl')
+                if `revrs' local KEYS `key' `KEYS'
+                else       local KEYS `KEYS' `key'
+            }
+            if "`mleg_`l''"!="" {
+                local labels `labels' label(`mkey' `mlbl')
+                if      "`mleg_`l''"=="1" local KEYS `KEYS' `mkey'
+                else if "`mleg_`l''"=="2" local KEYS `KEYS' - " " `mkey'
+                else if "`mleg_`l''"=="3" local KEYS `mkey' `KEYS'
+                else if "`mleg_`l''"=="4" local KEYS `mkey' - " " `KEYS'
+            }
+            local ORDER `ORDER' `KEYS'
+        }
+    }
+    if `"`order'"'=="" local order order(`ORDER')
+    else               local ncols
     // orientation / layout
     if "`horizontal'"!="" {
-        if `"`rows'`cols'"'=="" & "`ncols'"!="" local rows rows(`ncols')
-        if "`colfirst'"==""                     local nocolfirst nocolfirst
+        if `"`rows'`cols'"'=="" & "`ncols'"!="" local rows `ncols'
+        if "`colfirst'"=="" & "`cols'"!="1"     local nocolfirst nocolfirst
     }
     else {
-        if `"`rows'`cols'"'=="" & "`ncols'"!="" local cols cols(`ncols')
-        if "`nocolfirst'"==""                   local colfirst colfirst
+        if `"`rows'`cols'"'=="" & "`ncols'"!="" local cols `ncols'
+        if "`nocolfirst'"=="" & "`rows'"!="1"   local colfirst colfirst
         if `"`rowgap'"'==""                     local rowgap rowgap(0)
     }
-    local opts `rows'
-    local opts `opts' `cols'
+    local opts
+    if "`rows'"!="" local opts `opts' rows(`rows')
+    if "`cols'"!="" local opts `opts' cols(`cols')
     local opts `opts' `nocolfirst' `colfirst'
     local opts `opts' `rowgap'
     if `"`size'"'==""     local size size(vsmall)
@@ -910,17 +1002,7 @@ program _legend
     if `"`region'"'==""   local region region(style(none) margin(zero))
     local opts `opts' `position' `bmargin' `region' `options'
     // return legend option
-    c_local legend legend(`order' on all `opts')
-end
-
-program _legend_reverse_keys
-    local keys
-    while (`"`0'"'!="") {
-        gettoken key 0 : 0
-        gettoken lbl 0 : 0
-        local keys `key' `"`lbl'"' `keys'
-    }
-    c_local keys `keys'
+    c_local legend legend(`order' `labels' on all `opts')
 end
 
 program _clegend
@@ -944,9 +1026,17 @@ program _clegend
     _clegend_parse_cuts, `cuts'
     // select layer
     local k `layer'
-    local clayers: char LAYER[Layers_C]
-    if "`k'"=="" gettoken k : clayers // first layer that has colors
-    else local k: list k & clayers
+    if "`k'"!="" {
+        if `"`: char LAYER[z_hascol_`k']'"'!="1" local k
+    }
+    else {
+        forv l=1/`: char LAYER[layers]' {
+            if `"`: char LAYER[z_hascol_`l']'"'=="1" {
+                local k `l'
+                continue, break
+            }
+        }
+    }
     if "`k'"=="" {
         if "`layer'"!="" di as txt /*
             */"(clegend omitted; layer `layer' does not contain color gradient)"
@@ -957,13 +1047,16 @@ program _clegend
         exit
     }
     // collect info on levels, colors, and labels
-    local values:   char LAYER[Values_`k']
-    local colors:   char LAYER[Colors_`k']
-    local discrete: char LAYER[Discrete_`k']
-    local hasmis:   char LAYER[Nmiss_`k']
-    local hasmis = (`hasmis'!=0)
+    local CUTS:   char LAYER[z_levels_`k']
+    local colors: char LAYER[z_colors_`k']
+    local FMT:    char LAYER[z_format_`k']
+    local LABELS: char LAYER[labels_`k']
+    local discrete = `"`: char LAYER[z_discrete_`k']'"'=="1"
+    local hasmis   = `"`: char LAYER[z_hasmis_`k']'"'=="1"
     if `hasmis' {
+        gettoken labmis LABELS : LABELS
         if `"`missing'"'=="" {
+            gettoken colmis colors : colors
             if !`: list sizeof colors' {
                 di as txt "(clegend omitted: "/*
                     */ "layer `k' contains no non-missing color keys)"
@@ -973,35 +1066,30 @@ program _clegend
             }
             local hasmis 0
         }
+        else if `: list sizeof labmis'>1 local labmis `"`"`labmis'"'"'
     }
-    if `hasmis' {
-        local labmis:   char LAYER[Labmis_`k']
-        if `: list sizeof labmis'>1 {
-            local labmis `"`"`labmis'"'"'
-        }
-        local colors `"`:char LAYER[Colmis_`k']' `colors'"'
-    }
+    local K: colsof `CUTS'
     if `discrete' {
-        if "`label'"=="" local LABELS: char LAYER[Labels_`k']
-        else             local LABELS `values'
-        local i 0
-        foreach lbl of local LABELS {
-            local labels `labels' `i'.5 `"`lbl'"'
-            local ++i
+        forv i = 1/`K' {
+            if "`label'"=="" {
+                gettoken lbl LABELS : LABELS  // maybe need to strip quotes?
+                if `: list sizeof lbl'>1 local lbl `"`"`lbl'"'"'
+            }
+            else  local lbl `"`"`=`CUTS'[1,`i']'"'"'
+            local labels `labels' `=`i'-.5' `lbl'
         }
     }
     if `"`format'"'!="" {
         capt confirm numeric format `format'
         if _rc local format
     }
-    else local format: char LAYER[Format_`k']
+    else local format `"`FMT'"'
     if `"`format'"'=="" local format format(%7.0g)
     else                local format format(`format')
     // append data for clegend plot
     qui gen byte CLEG_Y = .
     qui gen byte CLEG_X = .
     qui gen double CLEG_Z = .
-    local K: list sizeof values
     local N = `K' + `discrete' + `hasmis' 
     if `N'>_N {
         set obs `N'
@@ -1027,28 +1115,29 @@ program _clegend
         if `hasmis' local Zmin = CLEG_Z[`K' + 2]
         else        local Zmin = CLEG_Z[1]
         local Zmax = CLEG_Z[`K' + 1]
+        local K = `K' + 1 + `hasmis'
     }
     else {
+        forv i = 1/`K' {
+            local val = `CUTS'[1,`i']
+            local values `values' `val'
+        }
         local labels `values'
         if `hasmis' {
-            local v0: word 1 of `values'
-            local v: word `K' of `values'
-            local v0 = `v0'- (`v'-`v0')/`K'
+            local v0 = `CUTS'[1,1] - (`CUTS'[1,`K']-`CUTS'[1,1])/`K'
+            matrix `CUTS' = (`v0', `CUTS')
             local values `v0' `values'
             local labels `v0' `labmis' `labels'
+            local ++K
         }
-        gettoken v0 VALUES : values
-        gettoken v         : VALUES
-        qui replace CLEG_Z = `v0' + (`v'-`v0')/10000 in 1 /* shift first point
-            slightly up */
-        local i 1
-        foreach v of local VALUES {
-            local ++i
-            qui replace CLEG_Z = `v' in `i'
+        qui replace CLEG_Z = `CUTS'[1,1] + (`CUTS'[1,2]-`CUTS'[1,1])/10000 in 1
+            /* shift first point slightly up */
+        forv i = 2/`K' {
+            qui replace CLEG_Z = `CUTS'[1,`i'] in `i'
         }
         local hght = min(40, (`N'-1)*3)
         local Zmin = CLEG_Z[1]
-        local Zmax = CLEG_Z[`K' + `hasmis']
+        local Zmax = CLEG_Z[`K']
         local zscale
         if "`cuts'"!="label" local zlabel zlabel(none, `format' labsize(vsmall))
         else local zlabel zlabel(`labels', `format' labsize(vsmall))
@@ -1078,7 +1167,7 @@ program _clegend
     if `"`region'"'==""    local region region(margin(zero))
     local options `position' `width' `height' `bmargin' `region' `options'
     // return clegend plot and clegend option
-    c_local plot (scatter CLEG_Y CLEG_X in 1/`i', colorvar(CLEG_Z)/*
+    c_local plot (scatter CLEG_Y CLEG_X in 1/`K', colorvar(CLEG_Z)/*
         */ colorcuts(`values') colorlist(`colors') colorkeysrange)
     c_local clegend clegend(`options') ztitle("") `zlabel' `zscale'
 end
@@ -1595,9 +1684,9 @@ void _st_welzl()
     real rowvector C
     
     C = geo_welzl(st_data(., "X Y", st_local("touse")))
-    st_local("Xmid", strofreal(C[1]))
-    st_local("Ymid", strofreal(C[2]))
-    st_local("R",    strofreal(C[3]))
+    st_local("Xmid", strofreal(C[1], "%18.0g"))
+    st_local("Ymid", strofreal(C[2], "%18.0g"))
+    st_local("R",    strofreal(C[3], "%18.0g"))
 }
 
 void _st_circle_tangents(
@@ -1607,7 +1696,8 @@ void _st_circle_tangents(
     real matrix R
     
     R = geo_circle_tangents((x1,y1,r1), (x2,y2,r2))
-    if (length(R)) st_local("YX", invtokens(strofreal(vec(R[,(2,1)]')')))
+    if (length(R)) st_local("YX", invtokens(strofreal(vec(R[,(2,1)]')',
+                   "%18.0g")))
     else           st_local("YX", "")
 }
 
@@ -1635,7 +1725,7 @@ void _zoom_boxconnect(real scalar Xmax, real scalar Xmin, real scalar Ymax,
         YX = geo_rotate(YX, 90)
     }
     P = P :+ (YMIN, YMAX)
-    st_local("YX", invtokens(strofreal(vec(P')')))
+    st_local("YX", invtokens(strofreal(vec(P')', "%18.0g")))
 }
 
 real matrix __zoom_boxconnect(real scalar i, real matrix yx, real matrix YX)
@@ -1671,8 +1761,8 @@ void _compass_store(real colvector X, real colvector Y, real colvector A)
     b = a + b - 1
     st_store((a,b), "X", X :* cos(R) - Y :* sin(R))
     st_store((a,b), "Y", X :* sin(R) + Y :* cos(R))
-    st_local("a", strofreal(a))
-    st_local("b", strofreal(b))
+    st_local("a", strofreal(a, "%18.0g"))
+    st_local("b", strofreal(b, "%18.0g"))
 }
 
 void _compass_circle(real scalar n, real scalar scale, real scalar wd)

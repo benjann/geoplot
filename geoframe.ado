@@ -1,4 +1,4 @@
-*! version 1.1.0  11sep2023  Ben Jann
+*! version 1.1.1  28sep2023  Ben Jann
 
 program geoframe
     version 16.1
@@ -1850,7 +1850,7 @@ void _plevel(string scalar pl, string scalar id, string scalar pid,
         L = geo_plevel(1, ID, PID, XY)
         st_store(., pl, touse, L)
     }
-    st_local("N", strofreal(sum(L:!=0 :& _mm_uniqrows_tag((ID,PID)))))
+    st_local("N", strofreal(sum(L:!=0 :& _mm_uniqrows_tag((ID,PID))), "%18.0g"))
 }
 
 void _spjoin(string scalar frame, string scalar id1, string scalar xy1,

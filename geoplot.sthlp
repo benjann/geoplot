@@ -1,5 +1,5 @@
 {smcl}
-{* 12sep2023}{...}
+{* 27sep2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -1089,7 +1089,7 @@
 {p2col: {cmd:@ub}}upper bound of the interval
     {p_end}
 {p2col: {cmd:@lab}}value label in case of {cmd:i.}{it:zvar} or
-    {helpb geoplot##discrete:discrete}, else equivalent to {cmd:@lb-@ub}
+    {helpb geoplot##discrete:discrete}, else equivalent to {cmd:@lb - @ub}
     {p_end}
 {p2col: {cmd:@n}}number of units
     {p_end}
@@ -1099,8 +1099,8 @@
     {cmd:label("@lab")}. For example, type {cmd:label("@lab (@n)")} to
     include the number of units in the label. For continuous {help geoplot##zvar:{it:zvar}},
     the default is equivalent to {cmd:label(1 = "[@lb,@ub]" * = "(@lb,@ub]")}. For example,
-    type {cmd:label("@lb-@ub")} or {cmd:label("@lab")} to create labels
-    formatted as "{it:lb}-{it:ub}", where {it:lb} and {it:ub} are the lower
+    type {cmd:label("@lb - @ub")} or {cmd:label("@lab")} to create labels
+    formatted as "{it:lb} - {it:ub}", where {it:lb} and {it:ub} are the lower
     and upper bounds of the intervals.
 
 {pmore}
@@ -1286,7 +1286,10 @@
 
 {phang2}
     {it:contents} and {it:location} options are further options to affect the
-    rendering of the legend as documented in {it:{help legend_option}}. Option
+    rendering of the legend as documented in {it:{help legend_option}}. Be
+    careful with options {cmd:order()}, {cmd:rows()}, {cmd:cols()}, and
+    {cmd:colfirst}, as these options are set automatically by {cmd:geoplot} and
+    you may not want to override these settings. Option
     {cmd:bplacement()} will be ignored.
 
 {pmore}
@@ -1673,11 +1676,55 @@
 
 {title:Returned results}
 
+{pstd} Scalars:
+
+{p2colset 5 22 22 2}{...}
+{p2col : {cmd:r(layers)}}number of layers in the graph
+    {p_end}
+{p2col : {cmd:r(hasz_}{it:#}{cmd:)}}1 if layer {it:#} has {help geoplot##zvar:{it:zvar}}; 0 else
+    {p_end}
+{p2col : {cmd:r(z_hascol_}{it:#}{cmd:)}}1 if a color gradient has been used for
+    {help geoplot##zvar:{it:zvar}} in layer {it:#}; 0 else (if relevant)
+    {p_end}
+{p2col : {cmd:r(z_discrete_}{it:#}{cmd:)}}1 if {help geoplot##zvar:{it:zvar}} in layer {it:#}
+    is discrete or categorical; 0 else (if relevant)
+    {p_end}
+{p2col : {cmd:r(z_hasmis_}{it:#}{cmd:)}}1 if levels of {help geoplot##zvar:{it:zvar}} in layer {it:#}
+    include a missing category; 0 else (if relevant)
+    {p_end}
+
+{pstd} Macros:
+
+{p2col : {cmd:r(graph)}}copy of the called graph command
+    {p_end}
+{p2col : {cmd:r(legend)}}copy of the legend option in {cmd:r(graph)} (so
+    that the legend can be restored when modifying the graph using command
+    {helpb addplot}; see {stata ssc describe addplot}).
+    {p_end}
+{p2col : {cmd:r(keys_}{it:#}{cmd:)}}legend keys of layer {it:#}
+    {p_end}
+{p2col : {cmd:r(labels_}{it:#}{cmd:)}}labels of legend keys of layer {it:#}
+    {p_end}
+{p2col : {cmd:r(z_colors_}{it:#}{cmd:)}}colors used for the levels of 
+    {help geoplot##zvar:{it:zvar}} in layer {it:#} (if relevant)
+    {p_end}
+
+{pstd} Matrices:
+
+{p2col : {cmd:r(z_levels_}{it:#}{cmd:)}}cut points or levels of {help geoplot##zvar:{it:zvar}}
+    in layer {it:#} (if relevant)
+    {p_end}
+{p2col : {cmd:r(z_nobs_#)}}number of units per level of {help geoplot##zvar:{it:zvar}}
+    in layer {it:#} (if relevant)
+    {p_end}
+
 {pstd}
-    {cmd:geoplot} returns a copy of the called graph command in macro
-    {cmd:r(graph)}. Furthermore, the legend option of the command is
-    returned in {cmd:r(legend)} (so that the legend can be preserved when
-    modifying the graph using comman {helpb addplot}; see {stata ssc describe addplot}).
+    If the levels of {help geoplot##zvar:{it:zvar}} in layer {it:#} include
+    a missing category, the first element in
+    {cmd:r(keys_}{it:#}{cmd:)},
+    {cmd:r(labels_}{it:#}{cmd:)},
+    {cmd:r(z_colors_}{it:#}{cmd:)}, or
+    {cmd:r(z_nobs_}{it:#}{cmd:)} corresponds to the missing category.
 
 
 {title:Author}

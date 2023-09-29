@@ -1,4 +1,4 @@
-*! version 1.1.0  11sep2023  Ben Jann
+*! version 1.1.1  27sep2023  Ben Jann
 
 program _geoplot_pie
     version 16.1
@@ -125,7 +125,7 @@ program _geoplot_pie
         local sym_size size(`sym_size')
         if !`sym_hascol' {
             // use first color from main plot
-            local sym_lcolor: char LAYER[Colors_`layer']
+            local sym_lcolor: char LAYER[z_colors_`layer']
             gettoken sym_lcolor : sym_lcolor, quotes
             local sym_lcolor lcolor(`sym_lcolor')
         }

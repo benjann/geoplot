@@ -1,4 +1,4 @@
-*! version 1.1.0  11sep2023  Ben Jann
+*! version 1.1.1  29sep2023  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -121,8 +121,8 @@ program _geoplot_symbol
     }
     if `NOPLOT' exit
     ***
-    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `ZVAR' `wgt', lock/*
-        */ `options'
+    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `ZVAR' `wgt',/*
+        */ lforce lock `options'
     c_local plot `plot'
     c_local p `p'
 end
