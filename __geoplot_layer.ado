@@ -1,4 +1,4 @@
-*! version 1.1.1  29sep2023  Ben Jann
+*! version 1.1.2  30sep2023  Ben Jann
 
 /*
     Syntax:
@@ -68,13 +68,12 @@ program _layeri
     local ++p
     if `layer'<. {
         _parse_label `label'
+        if `"`label'"'=="" local label `"`plottype'"'
         _add_quotes label `label'
-        if `"`label'"'=="" local label `""`plottype'""'
-        local legend `p' `label'
-        local lsize 1
+        if `:list sizeof label'>1 local label `"`"`label'"'"'
         char LAYER[hasz_`layer'] 0
         char LAYER[keys_`layer'] `p'
-        char LAYER[labels_`layer'] `"`"`label'"'"'
+        char LAYER[labels_`layer'] `"`label'"'
     }
     c_local p `p'
     c_local plot (`plottype' `lhs', `options')
@@ -88,7 +87,8 @@ program _layer
     gettoken frame 0 : 0, parse(" ,")
     local hasSHP 0
     local TYPE
-    local OPTS LABel(str asis) Feature(passthru) box BOX2(str) SELect(str asis)
+    local OPTS NOLEGEND LABel(str asis) Feature(passthru) box BOX2(str)/*
+        */ SELect(str asis)
     local hasPLV 0
     local PLVopts
     local WGT
@@ -127,7 +127,7 @@ program _layer
             local wgt "[aw=W]"
         }
         local MLABopts MLabel(varname) MLABVposition(varname numeric) /*
-            */ MLABFormat(str)
+            */ MLABFormat(str) mlabi(str asis) mlabz
         local Zopts `Zopts' Msymbol(passthru) MSIZe(passthru) /*
             */ MSAngle(passthru) MLWidth(passthru) MLABSize(passthru) /*
             */ MLABANGle(passthru) MLABColor(passthru)
@@ -146,7 +146,11 @@ program _layer
         local hasZ = `"`zvar'"'!=""
         // varia
         if `"`box2'"'!="" local box box
-        local hasMLAB = `"`mlabel'"'!=""
+        local hasMLAB = (`"`mlabi'"'!="") + ("`mlabz'"!="") + ("`mlabel'"!="")
+        if `hasMLAB'>1 {
+            di as err "only one of mlabel(), mlabi(), and mlabz allowed"
+            exit 198
+        }
         local cuts: list uniq cuts
         _parse_size `size' // => size, s_max, s_scale
         local hasSIZE = `"`size'"'!=""
@@ -325,23 +329,14 @@ program _layer
         if `hasMLAB' {
             if `"`mlabformat'"'!="" confirm format `mlabformat'
             if "`mlabvposition'"!="" {
-                if `hasSHP' {
-                    tempname MLABPOS
-                    local org `org' `mlabvposition'
-                    local tgt `tgt' `MLABPOS'
-                }
-                else local MLABPOS `mlabvposition'
-                local ORG `ORG' `MLABPOS'
+                local ORG `ORG' `mlabvposition'
                 local TGT `TGT' MLABPOS
             }
             tempname MLAB
             qui gen strL `MLAB' = ""
-            mata: _generate_mlabels("`MLAB'", "`mlabel'", "`mlabformat'",/*
-                */ "`touse'")
-            if `hasSHP' {
-                tempname MLAB
-                local org `org' `MLAB'
-                local tgt `tgt' `MLAB'
+            if "`mlabel'"'!="" {
+                mata: _generate_mlabels("`MLAB'", "`mlabel'", "`mlabformat'",/*
+                    */ "`touse'")
             }
             local ORG `ORG' `MLAB'
             local TGT `TGT' MLAB
@@ -495,9 +490,8 @@ program _layer
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
     if `hasMLAB' {
-        if "`mlabel'"!=""        local opts `opts' mlabel(MLAB)
+        local opts `opts' mlabel(MLAB)
         if "`mlabvposition'"!="" local opts `opts' mlabvposition(MLABPOS)
-        if "`mlabformat'"!=""    local opts `opts' mlabformat(`mlabformat')
     }
     // add box (below)
     if "`box'"!="" {
@@ -570,7 +564,7 @@ program _layer
     if `hasZ' {
         if `"`format'"'=="" local format `zfmt'
         if `NMIS' {
-            local labels `"`"`missing_lab'"'"'
+            local labels `"`missing_lab'"'
             local Nobs = `NMIS'
             local labels: subinstr local labels "@n" "`Nobs'", all
             local space " "
@@ -586,7 +580,7 @@ program _layer
                 local mid `: di `format' `val''
                 gettoken lab zlabels : zlabels
                 if `"`lab'"'=="" local lab `mid'
-                mata: _get_lbl("`val'", "lab_keys", "lab_lbls", `"`"@lab"'"')
+                mata: _get_lbl("`val'", "lab_keys", "lab_lbls", `"@lab"')
                 local lbl: subinstr local lbl "@lab" `"`lab'"', all
                 local lbl: subinstr local lbl "@lb"  "`mid'", all
                 local lbl: subinstr local lbl "@ub"  "`mid'", all
@@ -606,7 +600,7 @@ program _layer
                 local mid `: di `format' (`UB'+`LB')/2'
                 local lb  `: di `format' `LB''
                 local ub  `: di `format' `UB''
-                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `""(@lb,@ub]""')
+                mata: _get_lbl("`i'", "lab_keys", "lab_lbls", `"(@lb,@ub]"')
                 local lbl: subinstr local lbl "@lab" "`lb' - `ub'", all
                 local lbl: subinstr local lbl "@lb" "`lb'", all
                 local lbl: subinstr local lbl "@ub" "`ub'", all
@@ -619,14 +613,35 @@ program _layer
         }
     }
     else {
+        if `"`label'"'=="" local label `"`frame'"'
         _add_quotes label `label'
-        if `"`label'"'=="" local label `""`frame'""'
-        local labels `"`"`label'"'"'
+        if `:list sizeof label'>1 local label `"`"`label'"'"'
+        local labels `"`label'"'
+    }
+    // mlabi()/mlabz
+    if `"`mlabi'`mlabz'"'!="" {
+        if "`mlabz'"!="" local MLBLS labels
+        else             local MLBLS mlabi
+        if `hasZ' {
+            local MLABI
+            foreach i of local zlevels {
+                if `"`MLABI'"'=="" { // recycle
+                    local MLABI: copy local `MLBLS'
+                }
+                gettoken mlbi MLABI : MLABI
+                qui replace MLAB = `"`mlbi'"' in `n0'/`n1' if Z==`i'
+            }
+        }
+        else {
+            gettoken mlbi : `MLBLS'
+            qui replace MLAB = `"`mlbi'"' in `n0'/`n1'
+        }
     }
     // returns
     if `layer'<. {
         char LAYER[keys_`layer'] `keys'
         char LAYER[labels_`layer'] `"`labels'"'
+        char LAYER[nolegend_`layer'] `nolegend'
         char LAYER[hasz_`layer'] `hasZ'
         if `hasZ' {
             local hasmis = `NMIS' > 0
@@ -896,8 +911,9 @@ program _z_parse_missing
     gettoken hasMLAB 0 : 0, parse(", ")
     syntax [, NOLABel LABel(str asis) first nogap COLor(str asis)/*
         */ MLABColor(passthru) * ]
+    if `"`label'"'=="" local label `"no data"'
     _add_quotes label `label'
-    if `"`label'"'=="" local label `""no data""'
+    if `:list sizeof label'>1 local label `"`"`label'"'"'
     _process_coloropts options, `mlabcolor' `options'
     mata: _get_colors("color")
     if `"`color'"'=="" local color gs14
@@ -944,20 +960,24 @@ program _label_separate
         gettoken key 0 : 0, parse("= ")
         if `"`key'"'=="" continue, break
         local keys `"`keys' `key'"'
-        local lbl
-        local space
         gettoken eq : 0, parse("= ")
         if `"`eq'"'=="=" {
             gettoken eq 0 : 0, parse("= ")
         }
-        gettoken l : 0, quotes qed(hasquotes)
+        //gettoken l : 0, quotes qed(hasquotes)
+        local lbl
+        local space
+        local hasquotes 1
+        local i 0
         while (`hasquotes') {
-            gettoken l 0 : 0, quotes
-            local lbl `"`lbl'`space'`l'"'
+            local ++i
+            gettoken l 0 : 0
+            local lbl `"`lbl'`space'`"`l'"'"'
             local space " "
-            gettoken l : 0, quotes qed(hasquotes)
+            gettoken l : 0, qed(hasquotes)
         }
-        local lbls `"`lbls' `"`lbl'"'"'
+        if `i'>1 local lbls `"`lbls' `"`lbl'"'"'
+        else     local lbls `"`lbls' `lbl'"'
     }
     c_local lab_keys `"`keys'"'
     c_local lab_lbls `"`lbls'"'

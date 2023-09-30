@@ -131,6 +131,9 @@ Zoom.
 
 Main changes:
 
+    30sep2023
+    - layer type -label- now supports printing labels depending on zvar
+
     28sep2023
     geoplot.ado
     - there were some numerical precision issues with zoom(); this is fixed

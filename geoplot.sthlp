@@ -1,5 +1,5 @@
 {smcl}
-{* 27sep2023}{...}
+{* 30sep2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -125,6 +125,9 @@
 {syntab :Legend keys}
 {p2coldent:* {helpb geoplot##label:{ul:lab}el({it:spec})}}set labels of legend
     keys and related settings
+    {p_end}
+{synopt :{helpb geoplot##nolegend:nolegend}}do not consider the layer for the default
+    legend
     {p_end}
 
 {syntab :Missing}
@@ -416,18 +419,47 @@
 {dlgtab:single-coordinate labels}
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {it:labelvar} [{help geoplot##zvar:{it:zvar}}] {ifin}
+    {cmd:label} {it:frame} {it:labelspec} [{help geoplot##zvar:{it:zvar}}] {ifin}
     [{cmd:,}
     {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the labels to be
-    plotted (see {helpb geoframe}), {it:labelvar} is a (numeric or string) variable
-    providing the labels, and {help geoplot##zvar:{it:zvar}} is an optional
+    where {it:frame} is the frame containing the coordinates of the labels to be
+    plotted (see {helpb geoframe}), {it:labelspec} provides the labels,
+    and {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling. Type
     {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable. {cmd:label} is implemented as a wrapper for
-    {helpb geoplot##point:point}. {it:options} are as follows.
+    variable.
+
+{pstd}
+    The syntax of {it:labelspec} is as follows. To print labels from a variable, type
+
+{p 8 15 2}
+    {cmd:label} {it:frame} {help varname:{it:labelvar}} [{help geoplot##zvar:{it:zvar}}] ...
+
+{pstd}
+    where {it:labelvar} may be a numeric variable or a string variable. To print
+    custom labels by levels of {help geoplot##zvar:{it:zvar}}, type
+
+{p 8 15 2}
+    {cmd:label} {it:frame} {cmd:("}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]{cmd:)} {help geoplot##zvar:{it:zvar}} ...
+
+{pstd}
+    The first {cmd:"}{it:text}{cmd:"} element will be used for the first level, the
+    second element for the second level, and so on. If {help geoplot##zvar:{it:zvar}}
+    has missing values, the first element will be used for missing value. Furthermore,
+    elements will be recycled if the number of elements is smaller than the number
+    of levels. SMCL markup directives can be used in {it:text}; see
+    {help graph_text:{bf:[G-4]} {it:text}}. Finally, to print default labels
+    by levels of {help geoplot##zvar:{it:zvar}}, as defined by
+    {helpb geoplot##label:label()} and
+    {helpb geoplot##missing:missing(label())}, type
+
+{p 8 15 2}
+    {cmd:label} {it:frame} {cmd:.} {help geoplot##zvar:{it:zvar}} ...
+
+{pstd}
+    {it:options} are as follows.
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {opt box()}, {cmd:select()}, and
@@ -452,6 +484,9 @@
     {cmd:color()}, and {cmd:angle()} are interpreted in the way as described
     {help geoplot##zvar_options:below} for {cmd:mlabsize()}, {cmd:mlabcolor()},
     and {cmd:mlabangle()}.
+
+{pstd}
+    Layer type {cmd:label} is implemented as a wrapper for {helpb geoplot##point:point}.
 
 {marker symbol}{...}
 {dlgtab:single-coordinate symbols}
@@ -1123,6 +1158,14 @@
     set the label of the layer's legend key (the default is to use the name of
     the plotted frame as label). The above {it:options} and placeholders are ineffective in this case.
 
+{marker nolegend}{...}
+{phang}
+    {opt nolegend} requests that the current layer not be considered for the
+    legend that is displayed by default if there are layers containing a
+    {help geoplot##zvar:{it:zvar}}. {opt nolegend} only affects the default
+    behavior; you can still include the layer manually in the legend using the
+    {cmd:layer()} suboption of {helpb geoplot##legend:legend()}.
+
 {marker missing}{...}
 {phang}
     {opt missing(options)} specifies the styling of elements for which {help geoplot##zvar:{it:zvar}}
@@ -1321,7 +1364,7 @@
     indicate the cuts), {cmdab:lab:el} (major ticks plus labels), {cmdab:ti:ck}
     (major ticks only), {cmdab:mlab:el} (minor ticks plus labels), and {cmdab:mti:ck}
     (minor ticks only). Default is {cmd:cuts(label)}. You may use options
-    {helpb axis_label_options:zlabel()}, {helpb axis_label_options:ztick()}, 
+    {helpb axis_label_options:zlabel()}, {helpb axis_label_options:ztick()},
     {helpb axis_label_options:zmlabel()}, and {helpb axis_label_options:zmtick()}
     outside of {cmd:clegend()} to add further ticks and labels or to override the
     ticks and labels added by {cmd:cuts()}. {cmd:cuts()} has no effect if
@@ -1705,7 +1748,7 @@
     {p_end}
 {p2col : {cmd:r(labels_}{it:#}{cmd:)}}labels of legend keys of layer {it:#}
     {p_end}
-{p2col : {cmd:r(z_colors_}{it:#}{cmd:)}}colors used for the levels of 
+{p2col : {cmd:r(z_colors_}{it:#}{cmd:)}}colors used for the levels of
     {help geoplot##zvar:{it:zvar}} in layer {it:#} (if relevant)
     {p_end}
 

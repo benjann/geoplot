@@ -1,4 +1,4 @@
-*! version 1.1.0  11sep2023  Ben Jann
+*! version 1.1.2  30sep2023  Ben Jann
 
 program _geoplot_label
     version 16.1
@@ -6,11 +6,15 @@ program _geoplot_label
     gettoken p 0 : 0
     gettoken frame 0 : 0
     ***
-    gettoken mlabl 0 : 0, parse(" ,[")
+    gettoken mlabl 0 : 0, parse(" ,[") match(par)
     if inlist(`"`mlabl'"', "", ",", "if", "in", "[") {
-        di as err "must specify variable containing labels"
+        di as err "must specify labels, either as {it:lavelvar} or as "/*
+            */ `"{bf:(}"{it:text}" ...{bf:)}"'
         exit 198
     }
+    if "`par'"=="("           local mlabl mlabi(`mlabl')
+    else if `"`mlabl'"'=="."  local mlabl mlabz
+    else                      local mlabl mlabel(`mlabl')
     _parse comma lhs 0 : 0
     syntax [, POSition(str) VPOSition(str) gap(str) ANGle(str) TSTYle(str) /*
            */ SIze(str) COLor(str) Format(str) * ]
@@ -20,7 +24,7 @@ program _geoplot_label
         if `"``opt''"'!="" local opts `opts' mlab`opt'(``opt'')
     }
     if `"`tstyle'"'!="" local opts `opts' mlabtextstyle(`tstyle')
-    local options msymbol(i) mlabel(`mlabl') `opts' `options'
+    local options nolegend msymbol(i) `mlabl' `opts' `options'
     ***
     __geoplot_layer 0 scatter `layer' `p' `frame' `lhs', `options'
     c_local plot `plot'

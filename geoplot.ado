@@ -1,4 +1,4 @@
-*! version 1.1.1  28sep2023  Ben Jann
+*! version 1.1.2  30sep2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -819,8 +819,10 @@ program _legend
     if `"`layout'"'=="" {
         forv l=1/`: char LAYER[layers]' {
             if `"`: char LAYER[hasz_`l']'"'=="1" {
-                local layout `l'
-                continue, break
+                if `"`: char LAYER[nolegend_`l']'"'=="" {
+                    local layout `l'
+                    continue, break
+                }
             }
         }
         if "`layout'"=="" {
@@ -956,11 +958,15 @@ program _legend
             local KEYS
             foreach key of local keys {
                 gettoken lbl lbls : lbls
+                gettoken tmp : lbl, qed(hasquote)
+                if !`hasquote' local lbl `"`"`lbl'"'"'
                 local labels `labels' label(`key' `lbl')
                 if `revrs' local KEYS `key' `KEYS'
                 else       local KEYS `KEYS' `key'
             }
             if "`mleg_`l''"!="" {
+                gettoken tmp : mlbl, qed(hasquote)
+                if !`hasquote' local mlbl `"`"`mlbl'"'"'
                 local labels `labels' label(`mkey' `mlbl')
                 if      "`mleg_`l''"=="1" local KEYS `KEYS' `mkey'
                 else if "`mleg_`l''"=="2" local KEYS `KEYS' - " " `mkey'
@@ -1066,17 +1072,13 @@ program _clegend
             }
             local hasmis 0
         }
-        else if `: list sizeof labmis'>1 local labmis `"`"`labmis'"'"'
     }
     local K: colsof `CUTS'
     if `discrete' {
         forv i = 1/`K' {
-            if "`label'"=="" {
-                gettoken lbl LABELS : LABELS  // maybe need to strip quotes?
-                if `: list sizeof lbl'>1 local lbl `"`"`lbl'"'"'
-            }
-            else  local lbl `"`"`=`CUTS'[1,`i']'"'"'
-            local labels `labels' `=`i'-.5' `lbl'
+            if "`label'"=="" gettoken lbl LABELS : LABELS
+            else  local lbl `"`=`CUTS'[1,`i']'"'
+            local labels `labels' `=`i'-.5' `"`lbl'"'
         }
     }
     if `"`format'"'!="" {
@@ -1106,7 +1108,7 @@ program _clegend
             local ++i
             qui replace CLEG_Z = 0 in 1
             qui replace CLEG_Z = -.9999 in `i'
-            local labels -.5 `labmis' `labels'
+            local labels -.5 `"`labmis'"' `labels'
             local values -1 `values'
         }
         local hght = min(100, (`N'-1)*3)
@@ -1127,7 +1129,7 @@ program _clegend
             local v0 = `CUTS'[1,1] - (`CUTS'[1,`K']-`CUTS'[1,1])/`K'
             matrix `CUTS' = (`v0', `CUTS')
             local values `v0' `values'
-            local labels `v0' `labmis' `labels'
+            local labels `v0' `"`labmis'"' `labels'
             local ++K
         }
         qui replace CLEG_Z = `CUTS'[1,1] + (`CUTS'[1,2]-`CUTS'[1,1])/10000 in 1
