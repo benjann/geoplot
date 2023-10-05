@@ -1,5 +1,5 @@
 {smcl}
-{* 11sep2023}{...}
+{* 05oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -26,19 +26,17 @@
     {p_end}
 {p2col :{helpb geoframe##clean:{ul:cl}ean}}delete unmatched/empty shapes and units
     {p_end}
-{p2col :{helpb geoframe##select:{ul:sel}ect}}select units and shapes
+{p2col :{helpb geoframe##query:{ul:q}uery}}obtain information on shapes in geoframe
     {p_end}
 {synopt :{helpb geoframe##describe:{ul:d}escribe}}describe geoframe
     {p_end}
 
 {syntab :Manipulation}
+{p2col :{helpb geoframe##select:{ul:sel}ect}}select units and shapes
+    {p_end}
+{p2col :{helpb geoframe##rclip:rclip}}clip shapes using rectangular window
+    {p_end}
 {p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variable in current frame
-    {p_end}
-{p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box, enclosing circle, or convex hull in new frame
-    {p_end}
-{p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
-    {p_end}
-{p2col :{helpb geoframe##symboli:symboli}}{cmd:symbol} with immediate arguments
     {p_end}
 
 {syntab :Spatial join}
@@ -47,6 +45,14 @@
 {p2col :{helpb geoframe##contract:contract}}contract points from other frame into current frame
     {p_end}
 {p2col :{helpb geoframe##spjoin:spjoin}}match points in current frame to shapes from other frame
+    {p_end}
+
+{syntab :Generate shapes}
+{p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box, enclosing circle, or convex hull in new frame
+    {p_end}
+{p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
+    {p_end}
+{p2col :{helpb geoframe##symboli:symboli}}{cmd:symbol} with immediate arguments
     {p_end}
 
 {syntab :Settings}
@@ -258,6 +264,111 @@
     considered empty if it contains only a single observation and if the
     coordinates in this observation are missing.
 
+{marker query}{...}
+{dlgtab:geoframe query}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:q:uery} [{it:function}] [...]
+
+{pstd}
+    provides functions to obtain information about the units and shapes in the
+    current frame. Available functions are:
+
+{p2colset 9 17 19 2}{...}
+{p2col : {helpb geoframe##q_n:n}}number of units and shapes; the default
+    {p_end}
+{p2col : {helpb geoframe##q_bbox:{ul:bb}ox}}bounding box of shapes
+    {p_end}
+
+{marker q_n}{...}
+{pstd}{ul:Number of units and shapes}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {opt q:uery} [{opt n}] {ifin}
+
+{pstd}
+    obtains information about the number of selected units and corresponding
+    shape items (depending on context, a shape item can be a polygon, a line,
+    or a point). The following scalars will be returned in {cmd:r()}.
+
+{p2colset 9 22 22 2}{...}
+{p2col : {cmd:r(units)}}number of units
+    {p_end}
+{p2col : {cmd:r(items)}}number of shape items (polygons, lines, or points)
+    {p_end}
+{p2col : {cmd:r(min)}}minimum number of shape items per unit
+    {p_end}
+{p2col : {cmd:r(avg)}}average number of shape items per unit
+    {p_end}
+{p2col : {cmd:r(max)}}maximum number of shape items per unit
+    {p_end}
+
+{marker q_bbox}{...}
+{pstd}{ul:Bounding box of shapes}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {opt q:uery} [{opt bb:ox}] {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    obtains the bounding box of the selected shapes and returns
+    it in {cmd:r()}. {it:options} are as follows.
+
+{phang}
+    {opt pad:ding(#)} adds padding to the bounding box. Argument {it:#}
+    is in percent of the size in each dimension. For example,
+    type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
+
+{phang}
+    {opt abs:olute} treats {cmd:padding()} as an absolute value, not a percentage.
+
+{phang}
+    {opt nos:hp} obtains the bounding box from the coordinates found in the
+    current frame even if the current frame is linked to a shape frame. The default
+    is to base the bounding box on the coordinates in the shape frame.
+
+{pstd}
+    The following results will be returned in {cmd:r()}.
+
+{pmore} Scalars:
+
+{p2colset 9 22 22 2}{...}
+{p2col : {cmd:r(xmin)}}lower limit of X
+    {p_end}
+{p2col : {cmd:r(xmax)}}upper limit if X
+    {p_end}
+{p2col : {cmd:r(xmid)}}midpoint between {cmd:r(xmin)} and {cmd:r(xmax)}
+    {p_end}
+{p2col : {cmd:r(xpad)}}amount if padding applied to X
+    {p_end}
+{p2col : {cmd:r(ymin)}}lower limit of Y
+    {p_end}
+{p2col : {cmd:r(ymax)}}upper limit if Y
+    {p_end}
+{p2col : {cmd:r(ymid)}}midpoint between {cmd:r(ymin)} and {cmd:r(ymax)}
+    {p_end}
+{p2col : {cmd:r(ypad)}}amount if padding applied to Y
+    {p_end}
+
+{pmore} Matrix:
+
+{p2col : {cmd:r(limits)}}row vector containing limits (xmin, xmax, ymin, ymax)
+    {p_end}
+
+{marker describe}{...}
+{dlgtab:geoframe describe}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:d:escribe}
+
+{pstd}
+    displays the geoframe settings of the current frame. You may also type
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:d:escribe} {it:frame}
+
+{pstd}
+    to display the settings of frame {it:frame}.
+
 {marker select}{...}
 {dlgtab:geoframe select}
 
@@ -304,30 +415,92 @@
 {phang}
     {opt nocur:rent} does not make the created frame the current frame.
 
-{marker describe}{...}
-{dlgtab:geoframe describe}
+{marker rclip}{...}
+{dlgtab:geoframe rclip}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:d:escribe}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:rclip} {it:limits} {ifin}
+    [{cmd:,} {it:options} ]
 
 {pstd}
-    displays the geoframe settings of the current frame. You may also type
+    clips or selects the shapes by a rectangular window (and removes shapes
+    that do not satisfy the {it:if} and {it:in} qualifiers), where {it:limits}
+    specifies the boundaries of the window. {it:limits} can be specified as a
+    {it:{help numlist}} providing the minimum and maximum
+    of X and Y in the following order:
 
-{p 8 15 2}
-    {cmd:geoframe} {cmdab:d:escribe} {it:frame}
+            {it:xmin} {it:xmax} {it:ymin} {it:ymax}
 
 {pstd}
-    to display the settings of frame {it:frame}.
+    Specify {cmd:.} (missing) to set a boundary to (minus)
+    infinity. Alternatively,
+    specify {it:limits} as {it:matname} where {it:matname} is the name of a
+    {helpb matrix} (row or column vector) containing the limits (in the
+    same order as above). For example, you could type
+    {cmd:geoframe rclip r(limits)} to apply clipping by the bounding box
+    returned by {helpb geoframe##q_bbox:geoframe query bbox}. {it:options} are as
+    follows.
+
+{phang}
+    {opt l:ine} enforces line clipping for polygons. By default,
+    a polygon is clipped in such a way that the result is a
+    (closed) polygon again. Specify {cmd:line}, to clip a polygon
+    to a set of one or more (unclosed) lines. Polygons that lie completely within
+    the clipping window remain intact in any case. {cmd:line} has no effect
+    if {cmd:noclip} is specified.
+
+{phang}
+    {opt nocl:ip} applies selection rather than clipping. All shapes that
+    are at least partially inside the clipping window will be selected.
+
+{phang}
+    {opt st:rict} changes the behavior of {cmd:noclip}. Specify {cmd:strict}
+    together with {cmd:noclip} to select the shapes that are completely
+    within the window.
+
+{phang}
+    {opt st:rict} changes the behavior of {cmd:noclip}. By default, {cmd:noclip}
+    selects or excludes all shape items together
+    that belong to the same unit (e.g. main territory and exclaves). Specify
+    {cmd:split} to select or exclude each shape item individually.
+
+{phang}
+    {opt into(newname [newshpname])} copies the clipped or selected shapes
+    into a frame called {it:newname} (and possibly a linked shape
+    frame called {it:newshpname}) and leaves the current frame (and its linked
+    shape frame) unchanged. The default for {it:newshpname} is {it:newname}{cmd:_shp}.
+
+{phang}
+    {opt replace} allows {cmd:into()} to overwrite existing frames.
+
+{phang}
+    {opt nodes:cribe} suppresses the description of the created frame.
+
+{phang}
+    {opt nocur:rent} does not make the created frame the current frame.
 
 {marker generate}{...}
 {dlgtab:geoframe generate}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:g:enerate} {it:fnc} {it:...}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:g:enerate} {it:function} {it:...}
 
 {pstd}
     provides functions to generate specific variables in the current frame. Available
-    functions are as follows.
+    functions are:
+
+{p2colset 9 20 23 2}{...}
+{p2col : {helpb geoframe##g_centroids:{ul:cen}troids}}generate centroids
+    {p_end}
+{p2col : {helpb geoframe##g_area:area}}generate shape sizes
+    {p_end}
+{p2col : {helpb geoframe##g_pid:pid}}generate within-unit polygon ID
+    {p_end}
+{p2col : {helpb geoframe##g_plevel:{ul:pl}evel}}identify enclaves and exclaves
+    {p_end}
+
+{marker g_centroids}{...}
+{pstd}{ul:Centroids}
 
 {p 8 15 2}
     {cmd:geoframe} {cmdab:g:enerate} {cmdab:cen:troids} [{it:CX CY}] [{cmd:,} {opt replace} {opt noset} ]
@@ -342,6 +515,9 @@
     {cmd:replace} allows overwriting existing variables. The created variables
     will be registered using {helpb geoframe##set:geoframe set centroids}
     unless option {cmd:noset} is specified.
+
+{marker g_area}{...}
+{pstd}{ul:Shape sizes}
 
 {p 8 15 2}
     {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt s:cale(exp)} {opt replace} {opt noset} ]
@@ -360,6 +536,9 @@
     {helpb geoframe##set:geoframe set area} unless option {cmd:noset} is
     specified.
 
+{marker g_pid}{...}
+{pstd}{ul:Polygon IDs}
+
 {p 8 15 2}
     {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} {opt noset} ]
 
@@ -374,10 +553,14 @@
     {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is
     specified.
 
+{marker g_plevel}{...}
+{pstd}{ul:Enclaves and exclaves}
+
 {marker gen_plevel}{...}
 {p 8 15 2}
     {cmd:geoframe} {cmdab:g:enerate} {cmdab:pl:evel} [{it:PLEVEL}] {ifin}
-    [{cmd:,} {cmd:by(}{help varname:{it:byvar}}{cmd:)} {opt replace} {opt noset} ]
+    [{cmd:,} {cmd:by(}{help varname:{it:byvar}}{cmd:)} {opt replace} {opt noset}
+    {opt nodot:s} ]
 
 {pstd}
     generates (or updates) a variable identifying the plot order of the different polygons
@@ -397,7 +580,8 @@
     to replace an existing numeric variable rather then updating it. Variable
     {it:PLEVEL} will be registered in the shape frame using
     {helpb geoframe##set:geoframe set plevel} unless option {cmd:noset} is
-    specified.
+    specified. Option {cmd:nodots} suppresses the progress dots that are displayed
+    by default.
 
 {pstd}
     By default, {cmd:geoframe generate plevel} will do a search for nested polygons
@@ -430,6 +614,113 @@
     data to the geographic region you want to include in your
     graph (e.g. using {helpb geoframe##select:geoframe select}) before applying
     {cmd:geoframe generate plevel}.
+
+{marker collapse}{...}
+{dlgtab:geoframe collapse}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:collapse} {it:frame2}
+    {help collapse:{it:clist}} {ifin} {weight} [{cmd:,} {it:options} ]
+
+{pstd}
+    finds the positions of the points provided by {it:frame2} in the shapes
+    defined by the current frame using {helpb geoframe##spjoin:geoframe spjoin},
+    computes summary statistics such as means,
+    sums, or counts by shapes using {helpb collapse}, and then adds the results
+    as additional variables to the current frame (which can be
+    a shape frame or an attribute frame that is linked to a shape frame). Argument
+    {it:clist} specifies the statistics to be computed; see {helpb collapse}. Only
+    points from {it:frame2} that satisfy the {it:if} and {it:in}
+    qualifiers will be considered. {cmd:aweight}s, {cmd:iweight}s, {cmd:fweight}s,
+    and {cmd:pweight}s are allowed; see {help weight}, and see {help collapse##weights:Weights}
+    in {helpb collapse}. {it:options} are as follows.
+
+{phang}
+    {cmd:cw} specifies casewise deletion. If {cmd:cw} is not specified, all
+    possible observations are used for each calculated statistic.
+
+{phang}
+    {opt sel:ect(exp)} restricts the shapes from the current frame to be
+    considered. The default is to use all shapes. Specify
+    {opt select(exp)} to consider only shapes for which {it:exp} is unequal 0.
+
+{phang}
+    {opt co:ordinates(X Y)} specifies custom coordinate variables
+    in {it:frame2}. The default is to use the variables returned by
+    {helpb geoframe##set:geoframe get coordinates}.
+
+{phang}
+    {opt gen:erate}[{cmd:(}{it:spec}{cmd:)}] causes the IDs of the matched
+    shapes to be left behind as a new variable in {it:frame2}. {it:spec} is
+
+            [{help newvar:{it:ID}}] [{cmd:,} {cmd:replace} {cmd:noset} ]
+
+{pmore}
+    where {it:ID} is the variable name to be used, {cmd:replace} allows
+    overwriting an existing variable, and {cmd:noset} omits registering the
+    variable in {it:frame2} using {helpb geoframe##set:geoframe set id}. The
+    default for {it:ID} is {cmd:_ID}.
+
+{phang}
+    {cmd:id(}{help varname:{it:ID}}{cmd:)} indicates that an ID variable matching the points in
+    {it:frame2} to the shapes in the current frame already exists, e.g. from an
+    earlier call to {cmd:geoframe collapse} with option {cmd:generate()} or from
+    a call to {helpb geoframe##spjoin:geoframe spjoin}. In this case,
+    {cmd:geoframe collapse} will base its computations on existing variable
+    {it:ID} rather than computing a new ID variable. Options {cmd:select()},
+    {cmd:coordinates()}, and {cmd:generate()} are not allowed if {cmd:id()} is specified.
+
+{marker contract}{...}
+{dlgtab:geoframe contract}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:contract} {it:frame2}
+    {ifin} {weight} [{cmd:,} {it:options} ]
+
+{pstd}
+    is analogous to {helpb geoframe##collapse:geoframe collapse} but uses
+    {helpb contract} to summarize the data. {cmd:fweight}s are allowed; see
+    {help weight}. {it:options} are options described in {helpb contract}
+    as well as {cmd:select()}, {cmd:coordinates()}, {cmd:generate()}, and
+    {cmd:id()} as described in {helpb geoframe##collapse:geoframe collapse}.
+
+{marker spjoin}{...}
+{dlgtab:geoframe spjoin}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:spjoin} {it:frame2} [{it:ID}]
+    {ifin} [{cmd:,} {opt co:ordinates(X Y)} {opt replace} {opt noset} {opt nodot:s}
+    {opt sel:ect(exp)} ]
+
+{pstd}
+    finds the positions of the points provided by the current frame in the shapes
+    defined by {it:frame2} (note the reversed logic of the syntax compared to
+    {helpb geoframe##collapse:geoframe collapse}). Only points satisfying the {it:if} and {it:in}
+    qualifiers will be considered. {it:frame2} can be a shape frame or an attribute frame
+    that is linked to a shape frame.
+
+{pstd}
+    The IDs of the matched shapes will be stored in
+    variable {it:ID} in the current frame; {cmd:_ID} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
+    variable. The created variable will be registered in the current frame using
+    {helpb geoframe##set:geoframe set id} unless option {cmd:noset} is
+    specified. Option {opt coordinates()} specifies custom coordinate variables
+    in the current frame; the default is to use the variables returned by
+    {helpb geoframe##set:geoframe get coordinates}. Option {cmd:nodots} suppresses
+    the progress dots that are displayed by default.
+
+{pstd}
+    Option {opt select()} restricts the shapes from {it:frame2} that will be
+    considered in the spatial join. The default is to use all shapes. Specify
+    {opt select(exp)} to consider only shapes for which {it:exp} is unequal 0.
+
+{pstd}
+    The spacial join algorithm assumes that shapes do not overlap (no
+    crossings). It also assumes that nested shapes in
+    {it:frame2} (or its linked shape frame) have been tagged using
+    {helpb geoframe##gen_plevel:geoframe generate plevel}
+    (if there are nested shapes).
 
 {marker bbox}{...}
 {dlgtab:geoframe bbox}
@@ -506,111 +797,6 @@
     positions and stores their coordinates in a new frame called {it:newname}. {it:options}
     are as describes for {helpb geoframe##symbol:geoframe symbol}; option {cmd:size()}
     will be ignored.
-
-{marker collapse}{...}
-{dlgtab:geoframe collapse}
-
-{p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:collapse} {it:frame2}
-    {help collapse:{it:clist}} {ifin} {weight} [{cmd:,} {it:options} ]
-
-{pstd}
-    finds the positions of the points provided by {it:frame2} in the shapes
-    defined by the current frame using {helpb geoframe##spjoin:geoframe spjoin},
-    computes summary statistics such as means,
-    sums, or counts by shapes using {helpb collapse}, and then adds the results
-    as additional variables to the current frame (which can be
-    a shape frame or an attribute frame that is linked to a shape frame). Argument
-    {it:clist} specifies the statistics to be computed; see {helpb collapse}. Only
-    points from {it:frame2} that satisfy the {it:if} and {it:in}
-    qualifiers will be considered. {cmd:aweight}s, {cmd:iweight}s, {cmd:fweight}s,
-    and {cmd:pweight}s are allowed; see {help weight}, and see {help collapse##weights:Weights}
-    in {helpb collapse}. {it:options} are as follows.
-
-{phang}
-    {cmd:cw} specifies casewise deletion. If {cmd:cw} is not specified, all
-    possible observations are used for each calculated statistic.
-
-{phang}
-    {opt sel:ect(exp)} restricts the shapes from the current frame to be
-    considered. The default is to use all shapes. Specify
-    {opt select(exp)} to consider only shapes for which {it:exp} is unequal 0.
-
-{phang}
-    {opt co:ordinates(X Y)} specifies custom coordinate variables
-    in {it:frame2}. The default is to use the variables returned by
-    {helpb geoframe##set:geoframe get coordinates}.
-
-{phang}
-    {opt gen:erate}[{cmd:(}{it:spec}{cmd:)}] causes the IDs of the matched
-    shapes to be left behind as a new variable in {it:frame2}. {it:spec} is
-
-            [{help newvar:{it:ID}}] [{cmd:,} {cmd:replace} {cmd:noset} ]
-
-{pmore}
-    where {it:ID} is the variable name to be used, {cmd:replace} allows
-    overwriting an existing variable, and {cmd:noset} omits registering the
-    variable in {it:frame2} using {helpb geoframe##set:geoframe set id}. The
-    default for {it:ID} is {cmd:_ID}.
-
-{phang}
-    {cmd:id(}{help varname:{it:ID}}{cmd:)} indicates that an ID variable matching the points in
-    {it:frame2} to the shapes in the current frame already exists, e.g. from an
-    earlier call to {cmd:geoframe collapse} with option {cmd:generate()} or from
-    a call to {helpb geoframe##spjoin:geoframe spjoin}. In this case,
-    {cmd:geoframe collapse} will base its computations on existing variable
-    {it:ID} rather than computing a new ID variable. Options {cmd:select()},
-    {cmd:coordinates()}, and {cmd:generate()} are not allowed if {cmd:id()} is specified.
-
-{marker contract}{...}
-{dlgtab:geoframe contract}
-
-{p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:contract} {it:frame2}
-    {ifin} {weight} [{cmd:,} {it:options} ]
-
-{pstd}
-    is analogous to {helpb geoframe##collapse:geoframe collapse} but uses
-    {helpb contract} to summarize the data. {cmd:fweight}s are allowed; see
-    {help weight}. {it:options} are options described in {helpb contract}
-    as well as {cmd:select()}, {cmd:coordinates()}, {cmd:generate()}, and
-    {cmd:id()} as described in {helpb geoframe##collapse:geoframe collapse}.
-
-{marker spjoin}{...}
-{dlgtab:geoframe spjoin}
-
-{p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:spjoin} {it:frame2} [{it:ID}]
-    {ifin} [{cmd:,} {opt co:ordinates(X Y)} {opt replace} {opt noset} {opt sel:ect(exp)} ]
-
-{pstd}
-    finds the positions of the points provided by the current frame in the shapes
-    defined by {it:frame2} (note the reversed logic of the syntax compared to
-    {helpb geoframe##collapse:geoframe collapse}). Only points satisfying the {it:if} and {it:in}
-    qualifiers will be considered. {it:frame2} can be a shape frame or an attribute frame
-    that is linked to a shape frame.
-
-{pstd}
-    The IDs of the matched shapes will be stored in
-    variable {it:ID} in the current frame; {cmd:_ID} is used as default
-    variable name. Option {cmd:replace} allows overwriting an existing
-    variable. The created variable will be registered in the current frame using
-    {helpb geoframe##set:geoframe set id} unless option {cmd:noset} is
-    specified. Option {opt coordinates()} specifies custom coordinate variables
-    in the current frame; the default is to use the variables returned by
-    {helpb geoframe##set:geoframe get coordinates}.
-
-{pstd}
-    Option {opt select()} restricts the shapes from {it:frame2} that will be
-    considered in the spatial join. The default is to use all shapes. Specify
-    {opt select(exp)} to consider only shapes for which {it:exp} is unequal 0.
-
-{pstd}
-    The spacial join algorithm assumes that shapes do not overlap (no
-    crossings). It also assumes that nested shapes in
-    {it:frame2} (or its linked shape frame) have been tagged using
-    {helpb geoframe##gen_plevel:geoframe generate plevel}
-    (if there are nested shapes).
 
 {marker set}{...}
 {dlgtab:geoframe set}

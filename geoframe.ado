@@ -1,4 +1,4 @@
-*! version 1.1.1  28sep2023  Ben Jann
+*! version 1.1.2  05oct2023  Ben Jann
 
 program geoframe
     version 16.1
@@ -12,24 +12,25 @@ end
 
 program _parse_subcmd
     local l = strlen(`"`0'"')
-    if      `"`0'"'=="get"                              local 0 get
-    else if `"`0'"'=="set"                              local 0 set
-    else if `"`0'"'=="flip"                             local 0 flip // undocumented
-    else if `"`0'"'==substr("create",    1, max(2,`l')) local 0 create
-    else if `"`0'"'==substr("link",      1, max(1,`l')) local 0 link
-    else if `"`0'"'==substr("clean",     1, max(2,`l')) local 0 clean
-    else if `"`0'"'==substr("select",    1, max(3,`l')) local 0 select
-    else if `"`0'"'==substr("describe",  1, max(1,`l')) local 0 describe
-    else if `"`0'"'==substr("generate",  1, max(1,`l')) local 0 generate
-    else if `"`0'"'==substr("bbox",      1, max(2,`l')) local 0 bbox
-    else if `"`0'"'==substr("symbol",    1, max(3,`l')) local 0 symbol
-    else if `"`0'"'==substr("rename",    1, max(3,`l')) local 0 rename
-    else if `"`0'"'==substr("duplicate", 1, max(3,`l')) local 0 duplicate
-    else if `"`0'"'==substr("relink",    1, max(3,`l')) local 0 relink
-    else if `"`0'"'==substr("unlink",    1, max(3,`l')) local 0 unlink
-    else if `"`0'"'==substr("attach",    1, max(2,`l')) local 0 attach
-    else if `"`0'"'==substr("detach",    1, max(3,`l')) local 0 detach
-    else if `"`0'"'==substr("append",    1, max(2,`l')) local 0 append
+    if      `"`0'"'=="get"                             local 0 get
+    else if `"`0'"'=="set"                             local 0 set
+    else if `"`0'"'=="flip"                            local 0 flip // undocumented
+    else if `"`0'"'==substr("create",   1, max(2,`l')) local 0 create
+    else if `"`0'"'==substr("link",     1, max(1,`l')) local 0 link
+    else if `"`0'"'==substr("clean",    1, max(2,`l')) local 0 clean
+    else if `"`0'"'==substr("select",   1, max(3,`l')) local 0 select
+    else if `"`0'"'==substr("query",    1, max(1,`l')) local 0 query
+    else if `"`0'"'==substr("describe", 1, max(1,`l')) local 0 describe
+    else if `"`0'"'==substr("generate", 1, max(1,`l')) local 0 generate
+    else if `"`0'"'==substr("bbox",     1, max(2,`l')) local 0 bbox
+    else if `"`0'"'==substr("symbol",   1, max(3,`l')) local 0 symbol
+    else if `"`0'"'==substr("rename",   1, max(3,`l')) local 0 rename
+    else if `"`0'"'==substr("duplicate",1, max(3,`l')) local 0 duplicate
+    else if `"`0'"'==substr("relink",   1, max(3,`l')) local 0 relink
+    else if `"`0'"'==substr("unlink",   1, max(3,`l')) local 0 unlink
+    else if `"`0'"'==substr("attach",   1, max(2,`l')) local 0 attach
+    else if `"`0'"'==substr("detach",   1, max(3,`l')) local 0 detach
+    else if `"`0'"'==substr("append",   1, max(2,`l')) local 0 append
     capt mata: assert(st_islmname(st_local("0")))
     if _rc==1 exit _rc
     if _rc {
@@ -389,6 +390,239 @@ program _geoframe_clean
     if `lnkupdate' qui geoframe link `shpframe'
 end
 
+program _geoframe_query
+    gettoken fnc : 0, parse(" ,")
+    if inlist(`"`fnc'"',"if","in") {
+        local fnc ""
+    }
+    else {
+        gettoken fnc 0 : 0, parse(" ,")
+    }
+    local fnc = strlower(`"`fnc'"')
+    local l = strlen(`"`fnc'"')
+    if `l'==0                                         local fnc n
+    else if `"`fnc'"'=="n"                            local fnc n
+    else if `"`fnc'"''==substr("bbox", 1, max(2,`l')) local fnc bbox
+    else {
+        capt mata: assert(st_islmname(st_local("fnc")))
+        if _rc==1 exit 1
+        if _rc {
+            di as err `"`fnc': invalid function"'
+            exit 198
+        }
+    }
+    __geoframe_query_`fnc' `0'
+end
+
+program __geoframe_query_n, rclass
+    syntax [if] [in]
+    marksample touse
+    geoframe get id, local(id) strict
+    tempvar tmp
+    qui gen `tmp' = `id'!=`id'[_n-1]
+    su `tmp' if `touse', meanonly
+    local units = r(sum)
+    geoframe get shpframe, local(shpframe)
+    if `"`shpframe'"'!="" {
+        geoframe get linkname, local(lnkvar) strict
+        tempvar PID
+        qui geoframe generate pid `PID', noset
+        frame `shpframe' {
+            geoframe get id, local(id) strict
+            qui frget `touse' = `touse', from(`lnkvar')
+            qui replace `touse' = 0 if `touse'>=.
+            tempvar tmp
+            qui gen `tmp' = `id'!=`id'[_n-1]
+            su `tmp' if `touse', meanonly
+            local units_shp = r(sum)
+            qui replace `tmp' = (`PID'!=`PID'[_n-1]) | `tmp'
+            su `tmp' if `touse', meanonly
+            local shapes = r(sum)
+            su `PID' if `touse' & `id'!=`id'[_n+1], meanonly
+            local min = r(min)
+            local max = r(max)
+            if `units_shp'<`units' local min 0
+        }
+    }
+    else {
+        geoframe get type, l(type)
+        if "`type'"!="shape" {
+            di as txt "(shape frame not found;"/*
+                */ " treating current frame as shape frame)"
+        }
+        local units_shp `units'
+        tempvar PID
+        qui geoframe generate pid `PID', noset
+        qui replace `tmp' = ( `PID'!=`PID'[_n-1]) | `tmp'
+        su `tmp' if `touse', meanonly
+        local shapes = r(sum)
+        su `PID' if `touse' & `id'!=`id'[_n+1], meanonly
+        local min = r(min)
+        local max = r(max)
+    }
+    local avg = `shapes' / `units'
+    di as txt ""
+    di as txt "  Number of units               = " as res %9.0g `units'
+    di as txt "  Number of shape items         = " as res %9.0g `shapes'
+    di as txt "  Min number of items per unit  = " as res %9.0g `min'
+    di as txt "  Avg number of items per unit  = " as res %9.0g `avg'
+    di as txt "  Max number of items per unit  = " as res %9.0g `max'
+    return scalar max = `max'
+    return scalar avg = `avg'
+    return scalar min = `min'
+    return scalar items = `shapes'
+    return scalar units  = `units'
+end
+
+program __geoframe_query_bbox, rclass
+    syntax [if] [in] [, PADding(real 0) ABSolute noShp ]
+    // handle frames
+    marksample touse
+    if "`shp'"=="" {
+        geoframe get type, l(type) 
+        if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+    }
+    if `"`shpframe'"'=="" {
+        geoframe get coordinates, l(XY) strict
+        local frame `"`c(frame)'"'
+    }
+    else {
+        geoframe get linkname, local(lnkvar) strict
+        frame `shpframe' {
+            qui frget `touse' = `touse', from(`lnkvar')
+            qui replace `touse' = 0 if `touse'>=.
+            geoframe get coordinates, l(XY) strict
+        }
+        local frame `"`shpframe'"'
+    }
+    // compute min max
+    tempname BOX R
+    frame `frame' {
+        gettoken X XY : XY
+        gettoken Y XY : XY
+        gettoken X2 XY : XY // pc
+        gettoken Y2 XY : XY // pc
+        matrix `BOX' = J(1,4,.)
+        mat coln `BOX' = xmin xmax ymin ymax
+        qui su `X' if `touse', meanonly
+        mat `BOX'[1,1] = r(min)
+        mat `BOX'[1,2] = r(max)
+        if "`X2'"!="" {
+            qui su `X2' if `touse', meanonly
+            mat `BOX'[1,1] = min(`BOX'[1,1],r(min))
+            mat `BOX'[1,2] = min(`BOX'[1,2],r(max))
+        }
+        qui su `Y' if `touse', meanonly
+        mat `BOX'[1,3] = r(min)
+        mat `BOX'[1,4] = r(max)
+        if "`Y2'"!="" {
+            qui su `Y2' if `touse', meanonly
+            mat `BOX'[1,3] = min(`BOX'[1,3],r(min))
+            mat `BOX'[1,4] = min(`BOX'[1,4],r(max))
+        }
+    }
+    // apply padding and copy results
+    mat `R' = J(2,4,.)
+    mat coln `R' = Minimum Maximum Midpoint Padding
+    mat rown `R' = X Y
+    if `padding'!=0 {
+        if "`absolute'"!="" {
+            mat `R'[1,4] = `padding'
+            mat `R'[2,4] = `padding'
+        }
+        else {
+            mat `R'[1,4] = (`padding' / 100) * (`BOX'[1,2]-`BOX'[1,1])
+            mat `R'[2,4] = (`padding' / 100) * (`BOX'[1,4]-`BOX'[1,3])
+        }
+        mat `BOX'[1,1] = `BOX'[1,1] - `R'[1,4]
+        mat `BOX'[1,2] = `BOX'[1,2] + `R'[1,4]
+        mat `BOX'[1,3] = `BOX'[1,3] - `R'[2,4]
+        mat `BOX'[1,4] = `BOX'[1,4] + `R'[2,4]
+    }
+    else {
+        mat `R'[1,4] = 0
+        mat `R'[2,4] = 0
+    }
+    mat `R'[1,1] = `BOX'[1,1]
+    mat `R'[1,2] = `BOX'[1,2]
+    mat `R'[1,3] = (`BOX'[1,1] + `BOX'[1,2])/2
+    mat `R'[2,1] = `BOX'[1,3]
+    mat `R'[2,2] = `BOX'[1,4]
+    mat `R'[2,3] = (`BOX'[1,3] + `BOX'[1,4])/2
+    // display
+    matlist `R', title(Bounding box) border(rows)
+    // returns
+    ret scalar ypad = `R'[2,4]
+    ret scalar ymid = `R'[2,3]
+    ret scalar ymax = `R'[2,2]
+    ret scalar ymin = `R'[2,1]
+    ret scalar xpad = `R'[1,4]
+    ret scalar xmid = `R'[1,3]
+    ret scalar xmax = `R'[1,2]
+    ret scalar xmin = `R'[1,1]
+    ret matrix limits = `BOX'
+end
+
+program _geoframe_describe
+    syntax [name(id="frame name" name=frame)] 
+    if "`frame'"=="" local frame `"`c(frame)'"'
+    // collect chars
+    frame `frame' {
+        local allchars type feat id coord centr area sid pid plevel shpf
+        foreach char of local allchars {
+            geoframe get `char', local(`char')
+        }
+    }
+    // chars to print even if empty
+    local chars type feat id coord
+    if `"`type'"'=="shape"   local chars `chars' sid pid plevel
+    else if `"`type'"'=="unit" {
+                             local chars `chars' area shpf
+                             local centr
+    }
+    else if `"`type'"'=="pc" local chars `chars' shpf
+    else                     local chars `allchars'
+    // process chars
+    foreach char of local allchars {
+        if "`char'"=="shpf" {
+            if `"`shpf'"'=="" {
+                if !`:list char in chars' continue
+                local shpf "<none>"
+            }
+            else local shpf `"{stata geoframe describe `shpf':{bf:`shpf'}}"'
+            continue
+        }
+        if `"``char''"'=="" {
+            if !`:list char in chars' continue
+            local `char' "<none>"
+        }
+        else local `char' `"{bf:``char''}"'
+    }
+    // number of obs
+    frame `frame': qui count
+    local nobs `:di %18.0gc r(N)'
+    // display
+    di
+    __geoframe_describe_di "Frame name"             `"{bf:`frame'}"'
+    __geoframe_describe_di "Frame type"             `"`type'"'
+    __geoframe_describe_di "Feature type"           `"`feat'"'
+    __geoframe_describe_di "Number of obs"          `"{bf:`nobs'}"'
+    __geoframe_describe_di "Unit ID"                `"`id'"'
+    __geoframe_describe_di "Coordinates"            `"`coord'"'
+    __geoframe_describe_di "Centroids"              `"`centr'"'
+    __geoframe_describe_di "Area"                   `"`area'"'
+    __geoframe_describe_di "Within-unit sort ID"    `"`sid'"'
+    __geoframe_describe_di "Within-unit polygon ID" `"`pid'"'
+    __geoframe_describe_di "Plot level ID"          `"`plevel'"'
+    __geoframe_describe_di "Linked shape frame"     `"`shpf'"'
+end
+
+program __geoframe_describe_di
+    args lbl txt
+    if `"`txt'"'=="" exit
+    di as txt %22s `"`lbl'"' ": " `"`txt'"'
+end
+
 program _geoframe_select
     syntax [if] [in] [, into(namelist max=2) NOShp UNLink replace/*
         */ noDEScribe noCURrent ]
@@ -458,26 +692,24 @@ program _geoframe_select
         di as txt "(new shape frame {bf:`newshpname'} created)"
     }
     // apply selection and establish linkage
+    local Ndrop 0
+    local Ndropshp .
     frame `newname' {
         if `hasIF' {
             qui keep `if' `in'
-            if r(N_drop)==1 local msg observation
-            else            local msg observations
-            local Ndrop `: di %9.0gc `r(N_drop)''
-            di as txt "(dropped `Ndrop' `msg' in frame {bf:`newname'})"
+            local Ndrop = r(N_drop)
         }
         if `hasSHP' {
             if "`unlink'"=="" {
                 qui geoframe link `newshpname'
-                if `hasIF' & "`noshp'"=="" {
-                    geoframe get linkname, local(lnkvar)
-                    frame `newshpname' {
-                        qui keep if `lnkvar'<.
-                        if r(N_drop)==1 local msg observation
-                        else            local msg observations
-                        local Ndrop `: di %9.0gc `r(N_drop)''
-                        di as txt "(dropped `Ndrop' `msg' in shape frame"/*
-                            */ " {bf:`newshpname'})"
+                if "`noshp'"=="" {
+                    local Ndropshp 0
+                    if `hasIF' {
+                        geoframe get linkname, local(lnkvar)
+                        frame `newshpname' {
+                            qui keep if `lnkvar'<.
+                            local Ndropshp = r(N_drop)
+                        }
                     }
                 }
             }
@@ -486,7 +718,17 @@ program _geoframe_select
             }
         }
     }
-    // frame change/reporting
+    // reporting and frame change
+    if `Ndrop'==1 local msg observation
+    else          local msg observations
+    local tmp `: di %9.0gc `Ndrop''
+    di as txt "(dropped `tmp' `msg' in frame {bf:`newname'})"
+    if `Ndropshp'<. {
+        if `Ndropshp'==1 local msg observation
+        else             local msg observations
+        local tmp `: di %9.0gc `Ndropshp''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`newshpname'})"
+    }
     if `newFRM' {
         if "`current'"=="" {
             frame change `newname'
@@ -496,81 +738,260 @@ program _geoframe_select
     if "`describe'"=="" _geoframe_describe `newname'
 end
 
-program _geoframe_describe
-    syntax [name(id="frame name" name=frame)] 
-    if "`frame'"=="" local frame `"`c(frame)'"'
-    // collect chars
-    frame `frame' {
-        local allchars type feat id coord centr area sid pid plevel shpf
-        foreach char of local allchars {
-            geoframe get `char', local(`char')
-        }
+program _geoframe_rclip
+    // syntax
+    syntax anything(name=limits id="limits") [if] [in] [,/*
+        */ Line noCLip STrict SPlit /*
+        */ into(namelist max=2) replace noDEScribe noCURrent ]
+    tempname BOX
+    __geoframe_rclip_parse_limits `BOX' `limits'
+    local hasIF = `"`if'`in'"'!=""
+    // get settings of current frame
+    local frame `"`c(frame)'"'
+    geoframe get shpframe, local(shpframe)
+    local hasSHP = "`shpframe'"!=""
+    // make sure coordinates are available
+    if `hasSHP'==0 | "`noshp'"!="" {
+        qui geoframe get coordinates, strict
     }
-    // chars to print even if empty
-    local chars type feat id coord
-    if `"`type'"'=="shape"   local chars `chars' sid pid plevel
-    else if `"`type'"'=="unit" {
-                             local chars `chars' area shpf
-                             local centr
+    else {
+        frame `shpframe': qui geoframe get coordinates, strict
     }
-    else if `"`type'"'=="pc" local chars `chars' shpf
-    else                     local chars `allchars'
-    // process chars
-    foreach char of local allchars {
-        if "`char'"=="shpf" {
-            if `"`shpf'"'=="" {
-                if !`:list char in chars' continue
-                local shpf "<none>"
+    // parse into()
+    local newFRM 0
+    local newSHP 0
+    if "`into'"!="" {
+        gettoken newname into : into
+        local newFRM = "`newname'"!=`"`frame'"'
+        if "`replace'"=="" confirm new frame `newname'
+        if `hasSHP' {
+            if "`newname'"==`"`shpframe'"' {
+                di as err "{it:newname} must be different from"/*
+                    */ " name of linked shape frame"
+                exit 198
             }
-            else local shpf `"{stata geoframe describe `shpf':{bf:`shpf'}}"'
-            continue
+            gettoken newshpname : into
+            if "`newshpname'"=="" local newshpname `newname'_shp
+            local newSHP = "`newshpname'"!=`"`shpframe'"'
+            if "`replace'"=="" confirm new frame `newshpname'
+            if "`newshpname'"==`"`frame'"' {
+                di as err "{it:newshpname} must be different from"/*
+                    */ " name of current frame"
+                exit 198
+            }
+            if "`newshpname'"=="`newname'" {
+                di as err "{it:newshpname} must be different from"/*
+                    */ " {it:newname}"
+                exit 198
+            }
         }
-        if `"``char''"'=="" {
-            if !`:list char in chars' continue
-            local `char' "<none>"
-        }
-        else local `char' `"{bf:``char''}"'
     }
-    // number of obs
-    frame `frame': qui count
-    local nobs `:di %18.0gc r(N)'
-    // display
-    di
-    __geoframe_describe_di "Frame name"             `"{bf:`frame'}"'
-    __geoframe_describe_di "Frame type"             `"`type'"'
-    __geoframe_describe_di "Feature type"           `"`feat'"'
-    __geoframe_describe_di "Number of obs"          `"{bf:`nobs'}"'
-    __geoframe_describe_di "Unit ID"                `"`id'"'
-    __geoframe_describe_di "Coordinates"            `"`coord'"'
-    __geoframe_describe_di "Centroids"              `"`centr'"'
-    __geoframe_describe_di "Area"                   `"`area'"'
-    __geoframe_describe_di "Within-unit sort ID"    `"`sid'"'
-    __geoframe_describe_di "Within-unit polygon ID" `"`pid'"'
-    __geoframe_describe_di "Plot level ID"          `"`plevel'"'
-    __geoframe_describe_di "Linked shape frame"     `"`shpf'"'
+    if `newFRM'==0 local newname `frame'
+    if `newSHP'==0 local newshpname `shpframe'
+    // make copies of frames if necessary
+    if `newFRM' {
+        capt confirm new frame `newname'
+        if _rc==1 exit 1
+        if _rc frame drop `newname'
+        frame copy `frame' `newname'
+        // remove all linkage info in copied frame
+        frame `newname' {
+            __geoframe_set_shpframe
+            __geoframe_set_linkname
+            capt drop _GEOFRAME_lnkvar_*
+        }
+        di as txt "(new frame {bf:`newname'} created)"
+    }
+    if `newSHP' {
+        capt confirm new frame `newshpname'
+        if _rc==1 exit 1
+        if _rc frame drop `newshpname'
+        frame copy `shpframe' `newshpname'
+        // remove all linkage info in copied frame
+        frame `newshpname' {
+            __geoframe_set_shpframe
+            __geoframe_set_linkname
+            capt drop _GEOFRAME_lnkvar_*
+        }
+        di as txt "(new shape frame {bf:`newshpname'} created)"
+    }
+    // apply selection and establish linkage
+    local Ndrop 0
+    local Ndropshp .
+    frame `newname' {
+        if `hasIF' {
+            qui keep `if' `in'
+            local Ndrop = r(N_drop)
+        }
+        if `hasSHP' {
+            qui geoframe link `newshpname'
+            local Ndropshp 0
+            if `hasIF' {
+                geoframe get linkname, local(lnkvar)
+                frame `newshpname' {
+                    qui keep if `lnkvar'<.
+                    local Ndropshp = r(N_drop)
+                }
+            }
+        }
+    }
+    // apply clipping
+    if `hasSHP'==0 {
+        frame `newname' {
+            __geoframe_rclip `BOX' "`line'" "`clip'" "`strict'" "`split'"
+            local Ndrop = `Ndrop' + `Ndrop_clip'
+        }
+    }
+    else {
+        // apply selection
+        frame `newshpname' {
+            __geoframe_rclip `BOX' "`line'" "`clip'" "`strict'" "`split'"
+            local Ndropshp = `Ndropshp' + `Ndrop_clip'
+        }
+        // create reverse link from shapeframe and drop unmatched units
+        frame `newname' {
+            geoframe get id, local(id) strict
+            geoframe get linkname, local(lnkvar) strict
+            tempname tmpframe tag
+            frame `newshpname' {
+                geoframe get id, local(shpid) strict
+                qui gen byte `tag' = `lnkvar'<. & `shpid'!=`shpid'[_n-1]
+                frame put `shpid' if `tag', into(`tmpframe')
+            }
+            qui frlink 1:1 `id', frame(`tmpframe' `shpid')
+            qui drop if `tmpframe'>=.
+            local Ndrop = `Ndrop' + r(N_drop)
+            qui geoframe link `newshpname'
+        }
+    }
+    // reporting and frame change
+    if `Ndrop'==1 local msg observation
+    else          local msg observations
+    local tmp `: di %9.0gc `Ndrop''
+    di as txt "(dropped `tmp' `msg' in frame {bf:`newname'})"
+    if `Nadd_clip' {
+        if `Nadd_clip'==1 local msg observation
+        else              local msg observations
+        local tmp `: di %9.0gc `Nadd_clip''
+        di as txt "(added `tmp' `msg' in frame " _c 
+        if `hasSHP' di as txt "{bf:`newshpname'})"
+        else        di as txt "{bf:`newname'})"
+    }
+    if `Ndropshp'<. {
+        if `Ndropshp'==1 local msg observation
+        else             local msg observations
+        local tmp `: di %9.0gc `Ndropshp''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`newshpname'})"
+    }
+    if `newFRM' {
+        if "`current'"=="" {
+            frame change `newname'
+            di as txt "(current frame now {bf:`newname'})"
+        }
+    }
+    if "`describe'"=="" _geoframe_describe `newname'
 end
 
-program __geoframe_describe_di
-    args lbl txt
-    if `"`txt'"'=="" exit
-    di as txt %22s `"`lbl'"' ": " `"`txt'"'
+program __geoframe_rclip_parse_limits
+    gettoken BOX 0 : 0
+    local ismat 0
+    if `: list sizeof 0'==1 {
+        capt confirm matrix `0'
+        if _rc==0 local ismat 1
+    }
+    if !`ismat' {
+        numlist `"`0'"', min(0) max(4) missingokay
+        gettoken xmin 0 : 0
+        if "`xmin'"=="" local xmin .
+        gettoken xmax 0 : 0
+        if "`xmax'"=="" local xmax .
+        gettoken ymin 0 : 0
+        if "`ymin'"=="" local ymin .
+        gettoken ymax 0 : 0
+        if "`ymax'"=="" local ymax .
+        matrix `BOX' = (`xmin', `xmax', `ymin', `ymax')
+    }
+    else {
+        matrix `BOX' = `0'
+        if rowsof(`BOX')!=1 matrix `BOX' = vec(`BOX'')'
+        local c: colsof `BOX'
+        if `c'<4      matrix `BOX' = `BOX', J(1, 4-`c', .)
+        else if `c'>4 matrix `BOX' = `BOX'[1,1..4]
+    }
+    if `BOX'[1,1]<. & `BOX'[1,2]<`BOX'[1,1] {
+        di as err "{it:xmax} must be larger than {it:xmin}"
+        esit 198
+    }
+    if `BOX'[1,3]<. & `BOX'[1,4]<`BOX'[1,3] {
+        di as err "{it:ymax} must be larger than {it:ymin}"
+        esit 198
+    }
+end
+
+program __geoframe_rclip
+    args BOX line noclip strict split
+    geoframe get coordinates, local(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    gettoken X2 XY : XY // pc
+    gettoken Y2 XY : XY // pc
+    // identify points outside box
+    tempvar OUT
+    qui gen byte `OUT' = 0
+    qui replace `OUT' = . if `X'>=. | `Y'>=.
+    if "`X2'"!="" qui replace `OUT' = . if `X2'>=.
+    if "`Y2'"!="" qui replace `OUT' = . if `Y2'>=.
+    if `BOX'[1,1]<. qui replace `OUT' = 1 if `X'<`BOX'[1,1] & `OUT'==0
+    if `BOX'[1,2]<. qui replace `OUT' = 1 if `X'>`BOX'[1,2] & `OUT'==0
+    if "`X2'"!="" {
+        if `BOX'[1,1]<. qui replace `OUT' = 1 if `X2'<`BOX'[1,1] & `OUT'==0
+        if `BOX'[1,2]<. qui replace `OUT' = 1 if `X2'>`BOX'[1,2] & `OUT'==0
+    }
+    if `BOX'[1,3]<. qui replace `OUT' = 1 if `Y'<`BOX'[1,3] & `OUT'==0
+    if `BOX'[1,4]<. qui replace `OUT' = 1 if `Y'>`BOX'[1,4] & `OUT'==0
+    if "`Y2'"!="" {
+        if `BOX'[1,3]<. qui replace `OUT' = 1 if `Y2'<`BOX'[1,3] & `OUT'==0
+        if `BOX'[1,4]<. qui replace `OUT' = 1 if `Y2'>`BOX'[1,4] & `OUT'==0
+    }
+    // determine type of shapes (poly=1: polygon, line, points, poly=0: point)
+    if "`X2'"!="" local poly 0 // assume point if type is pc
+    else {
+        geoframe get id, local(id)
+        if `"`id'"'=="" local poly 0 // assume point if no ID
+        else {
+            capt assert (`id'!=`id'[_n-1])
+            if _rc==1 exit _rc
+            if _rc==0 local poly 0 // assume point if ID is unique
+            else      local poly 1
+        }
+    }
+    // select observations
+    local Nadd 0
+    if `poly' mata: _rclip("`id'", ("`X'","`Y'"), "`OUT'")
+    qui drop if `OUT' // (also drops missing)
+    c_local Ndrop_clip = r(N_drop)
+    c_local Nadd_clip `Nadd'
 end
 
 program _geoframe_generate
-    gettoken fcn 0 : 0, parse(" ,=")
-    local fcn = strlower(`"`fcn'"')
-    local l = strlen(`"`fcn'"')
-    if      `"`fcn'"'==substr("centroids", 1, max(3,`l')) local fcn centroids
-    else if `"`fcn'"'==substr("plevel", 1, max(2,`l'))    local fcn plevel
+    gettoken fnc 0 : 0, parse(" ,")
+    local fnc = strlower(`"`fnc'"')
+    local l = strlen(`"`fnc'"')
+    if      `"`fnc'"'==substr("centroids", 1, max(3,`l')) local fnc centroids
+    else if `"`fnc'"'==substr("plevel", 1, max(2,`l'))    local fnc plevel
+    else if `"`fnc'"'=="" {
+        di as err `"{it:function} required"'
+        exit 198
+    }
     else {
-        capt mata: assert(st_islmname(st_local("fcn")))
+        capt mata: assert(st_islmname(st_local("fnc")))
         if _rc==1 exit 1
         if _rc {
-            di as err `"`fcn': invalid function"'
+            di as err `"`fnc': invalid function"'
             exit 198
         }
     }
-    _geoframe_generate_`fcn' `0'
+    _geoframe_generate_`fnc' `0'
 end
 
 program _geoframe_generate_centroids
@@ -669,7 +1090,14 @@ program _geoframe_generate_pid
     local cframe `"`c(frame)'"'
     geoframe get type, l(type)
     if "`type'"=="shape" local shpframe `"`cframe'"'
-    else geoframe get shpframe, local(shpframe) strict
+    else {
+        geoframe get shpframe, local(shpframe)
+        if `"`shpframe'"'=="" {
+            di as txt "(shape frame not found;"/*
+                */ " treating current frame as shape frame)"
+            local shpframe `"`cframe'"'
+        }
+    }
     frame `shpframe' {
         if "`replace'"=="" {
             cap n confirm new variable `namelist'
@@ -703,7 +1131,7 @@ program _geoframe_generate_pid
 end
 
 program _geoframe_generate_plevel
-    syntax [name] [if] [in] [, by(varname numeric) replace noset ]
+    syntax [name] [if] [in] [, by(varname numeric) replace noset noDOTs ]
     if "`namelist'"=="" local namelist _PLEVEL
     local cframe `"`c(frame)'"'
     geoframe get type, l(type)
@@ -765,15 +1193,18 @@ program _geoframe_generate_plevel
         if "`BY'"!="" {
             qui levelsof `BY' if `touse', local(bylvls)
             foreach lvl of local bylvls {
-                mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"',/*
-                    */ "`touse'", "`BY'", `lvl') // returns N
+                if "`dots'"=="" di as txt "(processing `by'=`lvl')"
+                mata: _plevel("`dots'"!="", "`PL'", `"`ID'"', `"`PID'"',/*
+                    */ `"`XY'"', "`touse'", "`BY'", `lvl') // returns N
                 if `N'==1 local msg polygon
                 else      local msg polygons
-                di as txt "(`by'=`lvl': `N' nested `msg' found)"
+                if "`dots'"=="" di as txt "(`N' nested `msg' found)"
+                else di as txt "(`by'=`lvl': `N' nested `msg' found)"
             }
         }
         else {
-            mata: _plevel("`PL'", `"`ID'"', `"`PID'"', `"`XY'"', "`touse'")
+            mata: _plevel("`dots'"!="", "`PL'", `"`ID'"', `"`PID'"', `"`XY'"',/*
+                */ "`touse'")
             if `N'==1 local msg polygon
             else      local msg polygons
             di as txt "(`N' nested `msg' found)"
@@ -1025,7 +1456,7 @@ end
 
 program _geoframe_spjoin
     syntax [namelist(min=1 max=2)] [if] [in] [, SELect(str asis) /*
-        */ COordinates(varlist min=2 max=2) replace noset NOVARNOTE ]
+        */ COordinates(varlist min=2 max=2) replace noset NOVARNOTE noDOTs ]
     marksample touse
     gettoken shpframe namelist : namelist
     gettoken id       namelist : namelist
@@ -1080,7 +1511,7 @@ program _geoframe_spjoin
     tempvar Id
     qui gen `type' `Id' = .
     frame `shpframe': mata: _spjoin("`frame'", "`Id'", "`xy'", "`touse'",/*
-        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'")
+        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'", "`dots'"!="")
     qui count if `Id'>=. & `touse'
     if `r(N)' {
         if r(N)==1 local msg point
@@ -1759,15 +2190,113 @@ void _flip(string scalar nm)
     st_local(nm, invtokens(S[p]))
 }
 
-string scalar _strreverse(string scalar s)
+struct _rclip_expand_info {
+    pointer rowvector XY // copy of clipped polygon
+    pointer rowvector ab // range of original polygon in data
+}
+
+void _rclip(string scalar id, string rowvector xy, string scalar out)
 {
-    real scalar      n
-    string rowvector S
+    real scalar    i, r
+    real scalar    line, noclip, strict, split
+    real colvector a, b
+    real colvector ID, PID, OUT
+    real rowvector ab, bb
+    real matrix    XY, cXY
+    struct _rclip_expand_info scalar I
     
-    S = tokens(s)
-    n = length(S)
-    if (!n) return(s)
-    return(invtokens(S[n..1]))
+    line   = st_local("line")!=""
+    noclip = st_local("noclip")!=""
+    strict = st_local("strict")!=""
+    split  = st_local("split")!=""
+    st_view(ID=., ., id)
+    st_view(OUT=., ., out)
+    st_view(XY=., ., xy)
+    PID = geo_pid(ID, XY)
+    a = selectindex(_mm_uniqrows_tag((ID,PID)))
+    i = rows(a)
+    if (i<=1) b = rows(XY)
+    else      b = a[|2 \. |] :- 1 \ rows(XY)
+    if (noclip) {
+        for (;i;i--) {
+            ab = a[i] \ b[i]
+            r  = b[i] - a[i] + 1
+            if (anyof(OUT[|ab|], strict)) OUT[|ab|] = J(r, 1, strict)
+            else                          OUT[|ab|] = J(r, 1, 1-strict)
+        }
+        if (!split) {
+            a = selectindex(_mm_unique_tag(ID))
+            i = rows(a)
+            if (i<=1) b = rows(XY)
+            else      b = a[|2 \. |] :- 1 \ rows(XY)
+            for (;i;i--) {
+                ab = a[i] \ b[i]
+                r  = b[i] - a[i] + 1
+                if (anyof(OUT[|ab|], strict)) OUT[|ab|] = J(r, 1, strict)
+                else                          OUT[|ab|] = J(r, 1, 1-strict)
+            }
+        }
+    }
+    else {
+        bb = st_matrix(st_local("BOX"))
+        for (;i;i--) {
+            ab = a[i] \ b[i]
+            r  = b[i] - a[i] + 1
+            if (anyof(OUT[|ab|], 1)) {
+                if (anyof(OUT[|ab|], 0)) { // apply clipping
+                    cXY = geo_rclip(XY[|ab, (1\2)|], bb, line)
+                    if (rows(cXY)>r) {
+                        // too many observations; handle later
+                        OUT[|ab|] = J(r, 1, 0)
+                        I.XY = I.XY, &cXY[.,.]
+                        I.ab = I.ab, &ab[.]
+                        continue
+                    }
+                    OUT[|ab|] = J(r, 1, 1)
+                    r = rows(cXY)
+                    ab = ab[1] \ ab[1] + r - 1
+                    OUT[|ab|] = J(r, 1, 0)
+                    XY[|ab, (1\2)|] = cXY
+                }
+                else OUT[|ab|] = J(r, 1, 1) // all out
+            }
+            else if (anyof(OUT[|ab|], 0)) OUT[|ab|] = J(r, 1, 0) // all in
+            else OUT[|ab|] = J(r, 1, 1) // all missing
+        }
+    }
+    _rclip_expand(I.XY, I.ab, xy) // store polygons that have additional points
+}
+
+void _rclip_expand(pointer rowvector XY, pointer rowvector ab,
+    string rowvector xy)
+{
+    real scalar    l, i, r, n
+    string scalar  p, s
+    real colvector V
+    
+    l = length(ab)
+    if (!l) return // nothing to do
+    // expand data
+    s = st_tempname()
+    stata("generate double " + s + " = _n") // sort index
+    p = st_tempname()
+    stata("generate double " + p + " = 1") // count variable for expand
+    st_view(V=.,., p)
+    n = 0
+    for (i=l;i;i--) {
+        r = rows(*XY[i]) - ((*ab[i])[2] - (*ab[i])[1] + 1) // additional obs
+        V[(*ab[i])[2]] = r + 1 // expand last obs of original polygpn
+        *ab[i] = *ab[i] + (n \ n+r) // update range index
+        n = n + r
+    }
+    stata("qui expand " + p)
+    stata("sort " + s)
+    st_local("Nadd", strofreal(n, "%18.0g"))
+    // store clipped polygons
+    st_view(V=., ., xy)
+    for (i=l;i;i--) {
+        V[|*ab[i],(1\2)|] = *XY[i]
+    }
 }
 
 void _copy_by_ID(string scalar frame, string scalar ID0,
@@ -1828,8 +2357,9 @@ void _pid(string scalar pid, string scalar id, string scalar xy)
     st_store(., pid, geo_pid(ID, XY))
 }
 
-void _plevel(string scalar pl, string scalar id, string scalar pid,
-    string scalar xy, string scalar touse, | string scalar BY, real scalar lvl)
+void _plevel(real scalar nodots, string scalar pl, string scalar id,
+    string scalar pid, string scalar xy, string scalar touse,
+    | string scalar BY, real scalar lvl)
 {
     real colvector ID, PID, PL, p, L
     real matrix    XY
@@ -1839,7 +2369,7 @@ void _plevel(string scalar pl, string scalar id, string scalar pid,
         ID  = st_data(., id,  touse)[p]
         PID = st_data(., pid, touse)[p]
         XY  = st_data(., xy,  touse)[p,]
-        L = geo_plevel(1, ID, PID, XY)
+        L = geo_plevel(1, ID, PID, XY, nodots)
         st_view(PL=., ., pl,  touse)
         PL[p,] = L
     }
@@ -1847,7 +2377,7 @@ void _plevel(string scalar pl, string scalar id, string scalar pid,
         st_view(ID=.,  ., id,  touse)
         st_view(PID=., ., pid, touse)
         st_view(XY=.,  ., xy,  touse)
-        L = geo_plevel(1, ID, PID, XY)
+        L = geo_plevel(1, ID, PID, XY, nodots)
         st_store(., pl, touse, L)
     }
     st_local("N", strofreal(sum(L:!=0 :& _mm_uniqrows_tag((ID,PID))), "%18.0g"))
@@ -1855,7 +2385,7 @@ void _plevel(string scalar pl, string scalar id, string scalar pid,
 
 void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
     string scalar touse1, string scalar id, string scalar pid, string scalar xy,
-    string scalar pl, string scalar touse)
+    string scalar pl, string scalar touse, real scalar nodots)
 {
     real colvector ID, PID, PL
     real matrix    XY, XY1
@@ -1868,7 +2398,7 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
     st_framecurrent(frame)
     stata("*") // fixes an issue with frames and views; may become redundant
     st_view(XY1=., ., xy1, touse1)
-    st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL))
+    st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots))
 }
 
 void _bbox1(string scalar frame, string scalar xy, string scalar touse,

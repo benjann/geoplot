@@ -7,6 +7,7 @@
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
 *!     {helpb lgeoplot_source##geo_pointinpolygon:geo_pointinpolygon()}
+*!     {helpb lgeoplot_source##geo_rclip:geo_rclip()}
 *!     {helpb lgeoplot_source##geo_rotate:geo_rotate()}
 *!     {helpb lgeoplot_source##geo_spjoin:geo_spjoin()}
 *!     {helpb lgeoplot_source##geo_symbol:geo_symbol()}
@@ -489,7 +490,7 @@ end
 
 *! {smcl}
 *! {marker geo_pid}{bf:geo_pid()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  05oct2023  Ben Jann
 *!
 *! Generate polygon ID within unit ID
 *!
@@ -502,6 +503,9 @@ end
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
 *!          each polygon is assumed to start (or end) with a row of missings
 *!          polygons are assumed to be grouped by unit ID
+*!          if neither the first nor the last coordinate within an ID is
+*!          missing, point data is assumed (i.e. each row within the ID is
+*!          counted as a separate single-point polygon)
 *!
 
 mata:
@@ -531,6 +535,7 @@ real colvector _geo_pid(real matrix XY)
     if (n==1) return(1)
     p = rowmissing(XY):!=0             // missing starts new polygon
     if (!p[1]) p = p[n] \ p[|1 \ n-1|] // assume polygons end with missing
+    if (!p[1]) p = J(n,1,1)            // assume point data
     return(runningsum(p))
 }
 
@@ -538,7 +543,7 @@ end
 
 *! {smcl}
 *! {marker geo_plevel}{bf:geo_plevel()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  02oct2023  Ben Jann
 *!
 *! Determines plot levels of polygons: 0 = neither enclave nor exclave, 1 =
 *! enclave, 2 = exclave, 3 = enclave within exclave, 4 = exclave within
@@ -546,7 +551,7 @@ end
 *!
 *! Syntax:
 *!
-*!      result = geo_plevel(rtype, ID, PID, XY)
+*!      result = geo_plevel(rtype, ID, PID, XY [, nodots])
 *!
 *!  rtype   results type: if rtype!=0 the result is a real colvector of length
 *!          n containing repeated plot level values, else the result is a r x 2
@@ -555,6 +560,7 @@ end
 *!  ID      real colvector of unit IDs
 *!  PID     real colvector of within-unit polygon IDs
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!  nodots  do not display progress dots if nodots!=0
 *!
 
 local Bool      real scalar
@@ -563,6 +569,7 @@ local IntC      real colvector
 local RS        real scalar
 local RC        real colvector
 local RM        real matrix
+local SS        string scalar
 local POLYGON   _geo_POLYGON
 local Polygon   struct `POLYGON' scalar
 local pPolygon  pointer (`Polygon') scalar
@@ -589,24 +596,32 @@ struct `UNIT' {
     `pPolygons' p    // polygons
 }
 
-`RM' geo_plevel(`Int' rtype, `RC' ID, `RC' PID, `RM' XY)
+`RM' geo_plevel(`Int' rtype, `RC' ID, `RC' PID, `RM' XY, | `Bool' nodots)
 {
-    `Int'    i, j, a, b
+    `Int'    i, j, a, b, i0, n
     `RM'     P
     `pUnits' u
     
+    if (args()<5) nodots = 0
     // collect units and polygons
     u = _geo_collect_units(ID, PID, XY)
+    n = length(u)
     // determine within unit plot levels
-    for (i=length(u);i;i--) _geo_plevel_within(*u[i])
+   if (!nodots) i0 = _geo_progress_init("pass 1/2: ")
+    for (i=n;i;i--) {
+        _geo_plevel_within(*u[i])
+        if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
+    }
     // update plot levels based on between unit comparisons
-    for (i=length(u);i;i--) {
+    if (!nodots) i0 = _geo_progress_init("pass 2/2: ")
+    for (i=n;i;i--) {
         for (j=i-1; j; j--) _geo_plevel_between(*u[i], *u[j])
+        if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
     }
     // fill in result
     if (rtype) {
         P = J(rows(ID), 1, .)
-        for (i=length(u);i;i--) {
+        for (i=n;i;i--) {
             for (j=u[i]->n;j;j--) {
                 a = u[i]->p[j]->a
                 b = u[i]->p[j]->b
@@ -616,15 +631,40 @@ struct `UNIT' {
         return(P)
     }
     a = 0
-    for (i=length(u);i;i--) a = a + u[i]->n
+    for (i=n;i;i--) a = a + u[i]->n
     P = J(a,3,.)
-    for (i=length(u);i;i--) {
+    for (i=n;i;i--) {
         for (j=u[i]->n;j;j--) {
             P[a,] = (u[i]->id, u[i]->p[j]->id, u[i]->p[j]->l)
             a--
         }
     }
     return(P)
+}
+
+`Int' _geo_progress_init(`SS' msg)
+{
+    displayas("txt")
+    printf("(%s0%%", msg)
+    displayflush()
+    return(0)
+}
+
+void _geo_progressdots(`Int' p, `Int' j)
+{
+    while (1) {
+        if (p < (j+1)/40) break
+        j++
+        if (mod(j,4)) {
+            printf(".")
+            displayflush()
+        }
+        else {
+            printf("%g%%", j/4*10)
+            if (j==40) printf(")\n")
+            displayflush()
+        }
+    }
 }
 
 void _geo_plevel_within(`Unit' u)
@@ -828,6 +868,197 @@ real scalar _geo_rayintersect(real scalar px, real scalar py,
 end
 
 *! {smcl}
+*! {marker geo_rclip}{bf:geo_rclip()}{asis}
+*! version 1.0.0  05oct2023  Ben Jann
+*!
+*! Applies rectangular clipping to a polygon or polyline using the
+*! Sutherland–Hodgman algorithm
+*! (https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)
+*!
+*! Syntax:
+*!
+*!      result = geo_rclip(XY, bounds [, line])
+*!
+*!  result   coordinates of clipped polygon (first and/or last row equal to
+*!           missing if input started and/or ended with missing); J(0,2,.) is
+*!           returned if no points are within the bounds
+*!  YX       n x 2 real matrix containing the (X,Y) coordinates of the polygon
+*!           or polyline to be clipped (XY is interpreted as polygon if the
+*!           first point is equal to the last point, apart from leading or 
+*!           trailing missings; else the input is interpreted as polyline)
+*!  bounds   vector specifying the clipping limits: (Xmin, Xmax, Ymin, Ymax)
+*!           (missing will be interpreted as +/- infinity)
+*!  line     line!=0 enforces polyline clipping even if the input is a polygon;
+*!           polyline input implies line!=0; polyline clipping may return
+*!           multiple line segments, which will be divided by missing
+*!
+
+local Bool      real scalar
+local Int       real scalar
+local RS        real scalar
+local RC        real colvector
+local RR        real rowvector
+local RM        real matrix
+local PS        pointer (real matrix) scalar
+
+mata:
+mata set matastrict on
+
+`RM' geo_rclip(`RM' XY, `RM' bb0, | `Bool' line0)
+{
+    `Bool' line, mfirst, mlast
+    `Int'  a, b
+    `RC'   bb
+    `PS'   xy
+    
+    // defaults and checks
+    if (args()<3) line0 = 0
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    bb = vec(bb0)
+    if (length(bb)<4) bb = bb \ J(4-length(bb),1,.)
+    // handle missings and copy data
+    a = 1; b = rows(XY)
+    if (b==0) return(J(1,2,.)) // empty input
+    mlast = hasmissing(XY[b,]) // has trailing missings
+    if (mlast) { 
+        for (;b;b--) {
+            if (!hasmissing(XY[b,])) break
+        }
+        if (!b) return(J(1,2,.)) // input all missing
+    }
+    mfirst = hasmissing(XY[a,]) // has leading missings
+    if (mfirst) {
+        for (;a<=b;a++) {
+            if (!hasmissing(XY[a,])) break
+        }
+    }
+    if (isfleeting(XY)) {
+        XY = J(1,2,.) \ XY[|a,1 \ b,2|]
+        xy = &XY
+    }
+    else xy = &(J(1,2,.) \ XY[|a,1 \ b,2|])
+    // line vs polygon
+    if (!(b-a)) line = 1 // single point input
+    else line = !((*xy)[2,]==(*xy)[rows(*xy),]) // is polyline (open path)
+    if (line0 | line) {
+        if (!line) {
+            // if the input is a polygon, then rearrange points such that
+            // the path starts with an outside point; this ensures that the
+            // path inside the box will not be subdivided
+            if (_geo_rclip_larrange(*xy, bb)) {
+                // all points are inside
+                if (!mfirst) *xy = (*xy)[|2,1\.,.|]
+                if (mlast)   *xy = *xy \ J(1,2,.)
+                return(*xy) 
+            }
+        }
+        line = 1
+    }
+    // clip (xmin -> ymin -> xmay -> ymax)
+    if (bb[1]<.) *xy =  _geo_clip_sh(  *xy,           bb[1], line)
+    if (bb[3]<.) *xy =  _geo_clip_sh( (*xy)[,(2,1)],  bb[3], line)[,(2,1)]
+    if (bb[2]<.) *xy = -_geo_clip_sh(-(*xy),         -bb[2], line)
+    if (bb[4]<.) *xy = -_geo_clip_sh(-(*xy)[,(2,1)], -bb[4], line)[,(2,1)]
+    // return
+    if (rows(*xy)<2) return(J(0,2,.)) // no points are inside
+    if (!mfirst) *xy = (*xy)[|2,1\.,.|]
+    if (mlast)   *xy = *xy \ J(1,2,.)
+    return(*xy) 
+}
+
+`Bool' _geo_rclip_larrange(`RM' XY, `RC' bb)
+{   // rearrange points so that path starts with an outside point
+    if (__geo_rclip_larrange(XY, bb[1], 1, 0)) return(0)
+    if (__geo_rclip_larrange(XY, bb[3], 2, 0)) return(0)
+    if (__geo_rclip_larrange(XY, bb[2], 1, 1)) return(0)
+    if (__geo_rclip_larrange(XY, bb[4], 2, 1)) return(0)
+    return(1) // all points are inside
+}
+
+`Bool' __geo_rclip_larrange(`RM' XY, `RS' c0, `Int' j, `Bool' neg)
+{
+    `Int' i, n
+    `RS'  c
+    `RC' x
+    
+    if (c0>=.) return(0)
+    if (neg) {; c = -c0; x = -XY[,j]; }
+    else     {; c =  c0; x =  XY[,j]; }
+    n = rows(x)
+    for (i=2;i<=n;i++) {
+        if (x[i]<c) {
+            if (i>2) XY = XY[1,] \ XY[|i,1 \ .,.|] \ XY[|3,1 \ i,.|]
+            return(1)
+        }
+    }
+    return(0)
+}
+
+`RM' _geo_clip_sh(`RM' XY, `RS' c, `Bool' line)
+{   // first point assumed missing
+    `Int' i, j, J
+    `RR'  p1, p2
+    `RM'  xy
+    
+    i = rows(XY)
+    if (i<2) return(J(0,2,.)) // empty input
+    J = 2 * i // safe upper limit for final number of points
+    xy = J(J, 2, .)
+    j = J + 1
+    p2 = XY[i--,]
+    for (;i;i--) {
+        p1 = p2
+        p2 = XY[i,]
+        if (hasmissing(p2)) {
+            if (p1[1]<c) {
+                if (!line) {
+                    if (j<J) xy[--j,] = xy[J,] // close polygon
+                }
+            }
+            else xy[--j,] = p1 // add last point
+            if (j<=J) { // add missing unless missing already added
+                if (!hasmissing(xy[j,])) j--
+            }
+            while (i>1) { // move to next nonmissing point
+                p2 = XY[--i,]
+                if (!hasmissing(p2)) break
+            }
+            continue
+        }
+        if (p1[1]<c) {
+            // Case 1: both outside; edge can be skipped
+            if (p2[1]<c) continue 
+            // Case 2: origin outside, target inside
+            if (p2[1]!=c) xy[--j,] = (c, _geo_clip_sh_ipolate(c, p1, p2))
+            continue
+        }
+        // Case 3: origin inside, target outside
+        if (p2[1]<c) {
+            xy[--j,] = p1
+            if (p1[1]!=c) xy[--j,] = (c, _geo_clip_sh_ipolate(c, p1, p2))
+            // find next relevant segment of the path an rearrange data
+            if (line) j-- // add missing
+            continue
+        }
+        // Case 4: both inside
+        xy[--j,] = p1
+    }
+    // return
+    if (j>=J) return(J(0,2,.)) // all points are outside
+    return(xy[|j,1 \ .,.|])
+}
+
+`RS' _geo_clip_sh_ipolate(`RS' c, `RR' p1, `RR' p2)
+{
+    return(p1[2] + (p2[2]-p1[2]) * (c-p1[1]) / (p2[1]-p1[1]))
+}
+
+end
+
+*! {smcl}
 *! {marker geo_rotate}{bf:geo_rotate()}{asis}
 *! version 1.0.0  27jun2023  Ben Jann
 *!
@@ -868,27 +1099,30 @@ end
 
 *! {smcl}
 *! {marker geo_spjoin}{bf:geo_spjoin()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  02oct2023  Ben Jann
 *!
 *! Spatially joins the points in xy to the polygons in XY
 *!
 *! Syntax:
 *!
-*!      result = geo_spjoin(xy, ID, PID, XY [, PL])
+*!      result = geo_spjoin(xy, ID, PID, XY [, PL, nodots])
 *!
 *!  result  r x 1 colvector containing matched IDs
 *!  xy      r x 2 matrix containing points to be matched
 *!  ID      n x 1 real colvector of unit IDs
 *!  PID     n x 1 real colvector of within-unit polygon IDs
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
-*?  PL      optional n x 1 real colvector containing plot level indicator 
+*!  PL      optional n x 1 real colvector containing plot level indicator 
+*!  nodots  do not display progress dots if nodots!=0
 *!
 
+local Bool      real scalar
 local Int       real scalar
 local IntC      real colvector
 local RS        real scalar
 local RC        real colvector
 local RM        real matrix
+local SS        string scalar
 local POLYGON   _geo_POLYGON
 local Polygon   struct `POLYGON' scalar
 local pPolygon  pointer (`Polygon') scalar
@@ -899,38 +1133,45 @@ local pUnits    pointer (`Unit') vector
 mata:
 mata set matastrict on
 
-`RC' geo_spjoin(`RM' xy, `RC' ID, `RC' PID, `RM' XY, | `RC' PL)
+`RC' geo_spjoin(`RM' xy, `RC' ID, `RC' PID, `RM' XY, | `RC' PL, `Bool' nodots)
 {
-    `Int'    i
+    `Int'    i, n
     `IntC'   p, P
     `RC'     id, L
     pointer  pl
     
-    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY))
+    if (args()<6) nodots = 0
+    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, nodots, "pass 1/1: "))
     if (hasmissing(PL)) pl = &editmissing(PL, 0) // treat missing as 0
     else                pl = &PL
     L  = mm_unique(select(*pl, _mm_uniqrows_tag((ID, PID))))
+    if (length(L)) L = select(L, !mod(L,2)) // skip enclaves
     id = J(rows(xy), 1, .)
     p  = . // use all points in first round
-    for (i=length(L);i;i--) {
-        if (mod(L[i],2)) continue // skip enclaves
+    n = length(L)
+    for (i=n;i;i--) {
         P     = selectindex(*pl:==L[i])
-        id[p] = _geo_spjoin(xy[p,], ID[P], PID[P], XY[P,])
+        id[p] = _geo_spjoin(xy[p,], ID[P], PID[P], XY[P,], nodots,
+            sprintf("pass %g/%g: ", n-i+1, n))
         if (i>1) p = selectindex(id:>=.) // remaining unmatched points
     }
     return(id)
 }
 
-`RC' _geo_spjoin(`RM' xy, `RC' ID, `RC' PID, `RM' XY)
+`RC' _geo_spjoin(`RM' xy, `RC' ID, `RC' PID, `RM' XY, `Bool' nodots, `SS' msg)
 {
-    `Int'    i
+    `Int'    i, i0, n
     `RC'     id
     `pUnits' u
     
+    if (!nodots) i0 = _geo_progress_init(msg)
     u = _geo_collect_units(ID, PID, XY)
-    i = rows(xy)
-    id = J(i,1,.)
-    for (;i;i--) id[i] = __geo_spjoin(xy[i,1], xy[i,2], u)
+    n = rows(xy)
+    id = J(n,1,.)
+    for (i=n;i;i--) {
+        id[i] = __geo_spjoin(xy[i,1], xy[i,2], u)
+        if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
+    }
     return(id)
 }
 

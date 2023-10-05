@@ -219,6 +219,7 @@ program _geoplot, rclass
             char LAYER[z_reverse_`i']
             char LAYER[z_mleg_`i']
             char LAYER[z_format_`i']
+            char LAYER[nolegend_`i']
         }
         return scalar layers = `layer_n'
         char LAYER[layers]

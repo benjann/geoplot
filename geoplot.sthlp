@@ -435,28 +435,30 @@
     The syntax of {it:labelspec} is as follows. To print labels from a variable, type
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {help varname:{it:labelvar}} [{help geoplot##zvar:{it:zvar}}] ...
+    {cmd:label} {it:frame} {help varname:{it:labelvar}} [{help geoplot##zvar:{it:zvar}}]
+    {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
     where {it:labelvar} may be a numeric variable or a string variable. To print
-    custom labels by levels of {help geoplot##zvar:{it:zvar}}, type
+    custom labels, type
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {cmd:("}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]{cmd:)} {help geoplot##zvar:{it:zvar}} ...
+    {cmd:label} {it:frame} {cmd:("}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]{cmd:)}
+    [{help geoplot##zvar:{it:zvar}}] {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
-    The first {cmd:"}{it:text}{cmd:"} element will be used for the first level, the
-    second element for the second level, and so on. If {help geoplot##zvar:{it:zvar}}
-    has missing values, the first element will be used for missing value. Furthermore,
-    elements will be recycled if the number of elements is smaller than the number
-    of levels. SMCL markup directives can be used in {it:text}; see
-    {help graph_text:{bf:[G-4]} {it:text}}. Finally, to print default labels
-    by levels of {help geoplot##zvar:{it:zvar}}, as defined by
-    {helpb geoplot##label:label()} and
+    If {help geoplot##zvar:{it:zvar}} is omitted, the first {cmd:"}{it:text}{cmd:"} element 
+    will be assigned to all selected observations. Othewise
+    the elements will be assigned one-by-one to the levels determined by
+    {help geoplot##zvar:{it:zvar}} (using the first element for missing, if there
+    are missing values; elements will be recycled if there are fewer elements than
+    levels). SMCL markup directives can be used in {it:text}; see
+    {help graph_text:{bf:[G-4]} {it:text}}. Finally, to print labels
+    as defined by {helpb geoplot##label:label()} and
     {helpb geoplot##missing:missing(label())}, type
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {cmd:.} {help geoplot##zvar:{it:zvar}} ...
+    {cmd:label} {it:frame} {cmd:.} [{help geoplot##zvar:{it:zvar}}] {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
     {it:options} are as follows.
