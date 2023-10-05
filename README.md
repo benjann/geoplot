@@ -131,6 +131,17 @@ Zoom.
 
 Main changes:
 
+    05oct2023
+    - added -geoframe rclip- for rectangular clipping
+    - added -geoframe query- to obtain information on the shapes in a geoframe
+    - -geoframe generate plevel- and -geoframe spjoin- now display progress dots;
+       specify option -nodots- to suppress the progress dots
+    - -geoframe genenerate pid- no longer refuses to add a PID to a frame that has
+      not been declared as a shape frame
+    - -geoframe genenerate pid- now treats points in a unit as separate shape items
+      if there is no indication that the points form a polygon or line (i.e. if
+      neither the first nor the last coordinate is missing)
+
     30sep2023
     - layer type -label- now supports printing labels depending on zvar
 
