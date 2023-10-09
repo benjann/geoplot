@@ -131,6 +131,20 @@ Zoom.
 
 Main changes:
 
+    09oct2023
+    - -geoframe clip- added for clipping by convex shape; the clipping algorithm
+      used by -geoframe [r]clip- has been rewritten and improved; it now returns
+      divided polygons if necessary
+    - -sid- and -pid- are now updated by -geoframe [r]clip- (if sid and
+       pid have been set in the original data)
+    - -geoframe query bbox- now calls -geoframe bbox- and supports the corresponding
+      options
+    - option noshp, angle(), and noadjust added to -geoframe bbox-
+    - -geoframe bbox, circle- now asjust the radius so that the n-gram encloses the
+      circle; type noadjust to omit the adjustment
+    - now making use of -units- suboption in aspectratio() to control the aspect
+      ratio of the plot in Stata 18, born 04oct2023, or newer
+
     05oct2023
     - added -geoframe rclip- for rectangular clipping
     - added -geoframe query- to obtain information on the shapes in a geoframe

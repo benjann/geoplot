@@ -1,4 +1,4 @@
-*! version 1.1.2  05oct2023  Ben Jann
+*! version 1.1.3  09oct2023  Ben Jann
 
 program geoframe
     version 16.1
@@ -419,7 +419,7 @@ program __geoframe_query_n, rclass
     marksample touse
     geoframe get id, local(id) strict
     tempvar tmp
-    qui gen `tmp' = `id'!=`id'[_n-1]
+    qui gen `tmp' = _n==1 | `id'!=`id'[_n-1]
     su `tmp' if `touse', meanonly
     local units = r(sum)
     geoframe get shpframe, local(shpframe)
@@ -432,13 +432,13 @@ program __geoframe_query_n, rclass
             qui frget `touse' = `touse', from(`lnkvar')
             qui replace `touse' = 0 if `touse'>=.
             tempvar tmp
-            qui gen `tmp' = `id'!=`id'[_n-1]
+            qui gen `tmp' = _n==1 | `id'!=`id'[_n-1]
             su `tmp' if `touse', meanonly
             local units_shp = r(sum)
             qui replace `tmp' = (`PID'!=`PID'[_n-1]) | `tmp'
             su `tmp' if `touse', meanonly
             local shapes = r(sum)
-            su `PID' if `touse' & `id'!=`id'[_n+1], meanonly
+            su `PID' if `touse' & (_n==_N | `id'!=`id'[_n+1]), meanonly
             local min = r(min)
             local max = r(max)
             if `units_shp'<`units' local min 0
@@ -456,7 +456,7 @@ program __geoframe_query_n, rclass
         qui replace `tmp' = ( `PID'!=`PID'[_n-1]) | `tmp'
         su `tmp' if `touse', meanonly
         local shapes = r(sum)
-        su `PID' if `touse' & `id'!=`id'[_n+1], meanonly
+        su `PID' if `touse' & (_n==_N | `id'!=`id'[_n+1]), meanonly
         local min = r(min)
         local max = r(max)
     }
@@ -475,92 +475,50 @@ program __geoframe_query_n, rclass
 end
 
 program __geoframe_query_bbox, rclass
-    syntax [if] [in] [, PADding(real 0) ABSolute noShp ]
-    // handle frames
-    marksample touse
-    if "`shp'"=="" {
-        geoframe get type, l(type) 
-        if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+    syntax [if] [in] [, noShp ROTate CIRcle hull PADding(passthru)/*
+        */ n(passthru) ANGle(passthru) noADJust ]
+    // obtain bounding box
+    tempname bbox
+    qui geoframe bbox `bbox' `if' `in', `shp' `rotate' `circle' `hull'/*
+        */ `padding' `n' `angle' `noadjust' 
+    tempname BBOX LIMITS R
+    frame `bbox' {
+        mat `LIMITS' = J(1,4,.)
+        mat coln `LIMITS' = xmin xmax ymin ymax
+        su _X, meanonly
+        mat `LIMITS'[1,1] = r(min)
+        mat `LIMITS'[1,2] = r(max)
+        su _Y, meanonly
+        mat `LIMITS'[1,3] = r(min)
+        mat `LIMITS'[1,4] = r(max)
+        mkmat _X _Y in 2/l, matrix(`BBOX')
+        mat coln `BBOX' = X Y
     }
-    if `"`shpframe'"'=="" {
-        geoframe get coordinates, l(XY) strict
-        local frame `"`c(frame)'"'
-    }
-    else {
-        geoframe get linkname, local(lnkvar) strict
-        frame `shpframe' {
-            qui frget `touse' = `touse', from(`lnkvar')
-            qui replace `touse' = 0 if `touse'>=.
-            geoframe get coordinates, l(XY) strict
-        }
-        local frame `"`shpframe'"'
-    }
-    // compute min max
-    tempname BOX R
-    frame `frame' {
-        gettoken X XY : XY
-        gettoken Y XY : XY
-        gettoken X2 XY : XY // pc
-        gettoken Y2 XY : XY // pc
-        matrix `BOX' = J(1,4,.)
-        mat coln `BOX' = xmin xmax ymin ymax
-        qui su `X' if `touse', meanonly
-        mat `BOX'[1,1] = r(min)
-        mat `BOX'[1,2] = r(max)
-        if "`X2'"!="" {
-            qui su `X2' if `touse', meanonly
-            mat `BOX'[1,1] = min(`BOX'[1,1],r(min))
-            mat `BOX'[1,2] = min(`BOX'[1,2],r(max))
-        }
-        qui su `Y' if `touse', meanonly
-        mat `BOX'[1,3] = r(min)
-        mat `BOX'[1,4] = r(max)
-        if "`Y2'"!="" {
-            qui su `Y2' if `touse', meanonly
-            mat `BOX'[1,3] = min(`BOX'[1,3],r(min))
-            mat `BOX'[1,4] = min(`BOX'[1,4],r(max))
-        }
-    }
-    // apply padding and copy results
-    mat `R' = J(2,4,.)
-    mat coln `R' = Minimum Maximum Midpoint Padding
-    mat rown `R' = X Y
-    if `padding'!=0 {
-        if "`absolute'"!="" {
-            mat `R'[1,4] = `padding'
-            mat `R'[2,4] = `padding'
-        }
-        else {
-            mat `R'[1,4] = (`padding' / 100) * (`BOX'[1,2]-`BOX'[1,1])
-            mat `R'[2,4] = (`padding' / 100) * (`BOX'[1,4]-`BOX'[1,3])
-        }
-        mat `BOX'[1,1] = `BOX'[1,1] - `R'[1,4]
-        mat `BOX'[1,2] = `BOX'[1,2] + `R'[1,4]
-        mat `BOX'[1,3] = `BOX'[1,3] - `R'[2,4]
-        mat `BOX'[1,4] = `BOX'[1,4] + `R'[2,4]
-    }
-    else {
-        mat `R'[1,4] = 0
-        mat `R'[2,4] = 0
-    }
-    mat `R'[1,1] = `BOX'[1,1]
-    mat `R'[1,2] = `BOX'[1,2]
-    mat `R'[1,3] = (`BOX'[1,1] + `BOX'[1,2])/2
-    mat `R'[2,1] = `BOX'[1,3]
-    mat `R'[2,2] = `BOX'[1,4]
-    mat `R'[2,3] = (`BOX'[1,3] + `BOX'[1,4])/2
     // display
-    matlist `R', title(Bounding box) border(rows)
+    mat `R' = J(2,3,.)
+    mat coln `R' = Minimum Maximum Midpoint
+    mat rown `R' = X Y
+    mat `R'[1,1] = `LIMITS'[1,1]
+    mat `R'[1,2] = `LIMITS'[1,2]
+    mat `R'[1,3] = (`LIMITS'[1,1] + `LIMITS'[1,2])/2
+    mat `R'[2,1] = `LIMITS'[1,3]
+    mat `R'[2,2] = `LIMITS'[1,4]
+    mat `R'[2,3] = (`LIMITS'[1,3] + `LIMITS'[1,4])/2
+    // display
+    di _n as txt "Coordinates of bounding box saved in "/*
+        */ "{stata mat list r(bbox):{bf:r(bbox)}}."
+    di as txt "Limits of bounding box saved in "/*
+        */ "{stata mat list r(limits):{bf:r(limits)}}."
+    matlist `R', border(rows) rowtitle(Limits)
     // returns
-    ret scalar ypad = `R'[2,4]
     ret scalar ymid = `R'[2,3]
     ret scalar ymax = `R'[2,2]
     ret scalar ymin = `R'[2,1]
-    ret scalar xpad = `R'[1,4]
     ret scalar xmid = `R'[1,3]
     ret scalar xmax = `R'[1,2]
     ret scalar xmin = `R'[1,1]
-    ret matrix limits = `BOX'
+    ret matrix limits = `LIMITS'
+    ret matrix bbox = `BBOX'
 end
 
 program _geoframe_describe
@@ -738,13 +696,64 @@ program _geoframe_select
     if "`describe'"=="" _geoframe_describe `newname'
 end
 
-program _geoframe_rclip
+program _geoframe_clip
     // syntax
-    syntax anything(name=limits id="limits") [if] [in] [,/*
+    syntax anything(name=bbox id="bbox") [if] [in] [,/*
         */ Line noCLip STrict SPlit /*
-        */ into(namelist max=2) replace noDEScribe noCURrent ]
+        */ into(passthru) replace noDEScribe noCURrent ]
     tempname BOX
-    __geoframe_rclip_parse_limits `BOX' `limits'
+    confirm matrix `bbox'
+    mat `BOX' = `bbox'
+    __geoframe_clip `if' `in', bbox(`BOX') `line' `clip' `strict'/*
+        */ `split' `into' `replace' `describe' `current'
+end
+
+program _geoframe_rclip
+    syntax anything(name=limits id="limits") [if] [in] [,/*
+        */ Line noCLip STrict SPlit/*
+        */ into(passthru) replace noDEScribe noCURrent ]
+    tempname BOX
+    local ismat 0
+    if `: list sizeof limits'==1 {
+        capt confirm matrix `limits'
+        if _rc==0 local ismat 1
+    }
+    if !`ismat' {
+        numlist `"`limits'"', min(0) max(4) missingokay
+        gettoken xmin limits : limits
+        if "`xmin'"=="" local xmin .
+        gettoken xmax limits : limits
+        if "`xmax'"=="" local xmax .
+        gettoken ymin limits : limits
+        if "`ymin'"=="" local ymin .
+        gettoken ymax limits : limits
+        if "`ymax'"=="" local ymax .
+        matrix `BOX' = (`xmin', `xmax', `ymin', `ymax')
+    }
+    else {
+        matrix `BOX' = `limits : limits'
+        if rowsof(`BOX')!=1 matrix `BOX' = vec(`BOX'')'
+        local c: colsof `BOX'
+        if `c'<4      matrix `BOX' = `BOX', J(1, 4-`c', .)
+        else if `c'>4 matrix `BOX' = `BOX'[1,1..4]
+    }
+    if `BOX'[1,1]<. & `BOX'[1,2]<`BOX'[1,1] {
+        di as err "{it:xmax} must be larger than {it:xmin}"
+        esit 198
+    }
+    if `BOX'[1,3]<. & `BOX'[1,4]<`BOX'[1,3] {
+        di as err "{it:ymax} must be larger than {it:ymin}"
+        esit 198
+    }
+    __geoframe_clip `if' `in', bbox(`BOX') rclip `line' `clip' `strict'/*
+        */ `split' `into' `replace' `describe' `current'
+end
+
+program __geoframe_clip
+    // syntax
+    syntax [if] [in], bbox(str) [ rclip/*
+        */ line noclip strict split /*
+        */ into(namelist max=2) replace nodescribe nocurrent ]
     local hasIF = `"`if'`in'"'!=""
     // get settings of current frame
     local frame `"`c(frame)'"'
@@ -838,14 +847,15 @@ program _geoframe_rclip
     // apply clipping
     if `hasSHP'==0 {
         frame `newname' {
-            __geoframe_rclip `BOX' "`line'" "`clip'" "`strict'" "`split'"
+            ___geoframe_clip `bbox' "`rclip'" "`line'" "`clip'" "`strict'"/*
+                */ "`split'"
             local Ndrop = `Ndrop' + `Ndrop_clip'
         }
     }
     else {
-        // apply selection
         frame `newshpname' {
-            __geoframe_rclip `BOX' "`line'" "`clip'" "`strict'" "`split'"
+            ___geoframe_clip `bbox' "`rclip'" "`line'" "`clip'" "`strict'"/*
+                */ "`split'"
             local Ndropshp = `Ndropshp' + `Ndrop_clip'
         }
         // create reverse link from shapeframe and drop unmatched units
@@ -892,85 +902,76 @@ program _geoframe_rclip
     if "`describe'"=="" _geoframe_describe `newname'
 end
 
-program __geoframe_rclip_parse_limits
-    gettoken BOX 0 : 0
-    local ismat 0
-    if `: list sizeof 0'==1 {
-        capt confirm matrix `0'
-        if _rc==0 local ismat 1
-    }
-    if !`ismat' {
-        numlist `"`0'"', min(0) max(4) missingokay
-        gettoken xmin 0 : 0
-        if "`xmin'"=="" local xmin .
-        gettoken xmax 0 : 0
-        if "`xmax'"=="" local xmax .
-        gettoken ymin 0 : 0
-        if "`ymin'"=="" local ymin .
-        gettoken ymax 0 : 0
-        if "`ymax'"=="" local ymax .
-        matrix `BOX' = (`xmin', `xmax', `ymin', `ymax')
-    }
-    else {
-        matrix `BOX' = `0'
-        if rowsof(`BOX')!=1 matrix `BOX' = vec(`BOX'')'
-        local c: colsof `BOX'
-        if `c'<4      matrix `BOX' = `BOX', J(1, 4-`c', .)
-        else if `c'>4 matrix `BOX' = `BOX'[1,1..4]
-    }
-    if `BOX'[1,1]<. & `BOX'[1,2]<`BOX'[1,1] {
-        di as err "{it:xmax} must be larger than {it:xmin}"
-        esit 198
-    }
-    if `BOX'[1,3]<. & `BOX'[1,4]<`BOX'[1,3] {
-        di as err "{it:ymax} must be larger than {it:ymin}"
-        esit 198
-    }
-end
-
-program __geoframe_rclip
-    args BOX line noclip strict split
+program ___geoframe_clip
+    args BOX rclip line noclip strict split
     geoframe get coordinates, local(XY) strict
     gettoken X XY : XY
     gettoken Y XY : XY
     gettoken X2 XY : XY // pc
     gettoken Y2 XY : XY // pc
-    // identify points outside box
-    tempvar OUT
-    qui gen byte `OUT' = 0
-    qui replace `OUT' = . if `X'>=. | `Y'>=.
-    if "`X2'"!="" qui replace `OUT' = . if `X2'>=.
-    if "`Y2'"!="" qui replace `OUT' = . if `Y2'>=.
-    if `BOX'[1,1]<. qui replace `OUT' = 1 if `X'<`BOX'[1,1] & `OUT'==0
-    if `BOX'[1,2]<. qui replace `OUT' = 1 if `X'>`BOX'[1,2] & `OUT'==0
-    if "`X2'"!="" {
-        if `BOX'[1,1]<. qui replace `OUT' = 1 if `X2'<`BOX'[1,1] & `OUT'==0
-        if `BOX'[1,2]<. qui replace `OUT' = 1 if `X2'>`BOX'[1,2] & `OUT'==0
+    // determine type of shapes and type of clipping
+    tempname pid
+    qui geoframe generate pid `pid', noset
+    geoframe get id, local(id)
+    if `"`id'"'=="" { // assume all obs belong to the same unit
+        tempname id
+        qui gen byte `id' = 1
     }
-    if `BOX'[1,3]<. qui replace `OUT' = 1 if `Y'<`BOX'[1,3] & `OUT'==0
-    if `BOX'[1,4]<. qui replace `OUT' = 1 if `Y'>`BOX'[1,4] & `OUT'==0
-    if "`Y2'"!="" {
-        if `BOX'[1,3]<. qui replace `OUT' = 1 if `Y2'<`BOX'[1,3] & `OUT'==0
-        if `BOX'[1,4]<. qui replace `OUT' = 1 if `Y2'>`BOX'[1,4] & `OUT'==0
-    }
-    // determine type of shapes (poly=1: polygon, line, points, poly=0: point)
-    if "`X2'"!="" local poly 0 // assume point if type is pc
+    if "`X2'"!="" local point point // assume point data if pc
     else {
-        geoframe get id, local(id)
-        if `"`id'"'=="" local poly 0 // assume point if no ID
-        else {
-            capt assert (`id'!=`id'[_n-1])
-            if _rc==1 exit _rc
-            if _rc==0 local poly 0 // assume point if ID is unique
-            else      local poly 1
+        capt assert (`id'!=`id'[_n-1] | `pid'!=`pid'[_n-1])
+        if _rc==1 exit _rc
+        if _rc==0 local point point // assume point data if PID is unique
+    }
+    if "`point'"!="" local noclip noclip // point data implies noclip
+    local poly 1 // 0 = individual observation, 1 = groups of observations
+    if "`noclip'"!="" {
+        if "`point'"!="" {
+            if "`split'"!="" local poly 0
+            else {
+                capt assert (_n==1 | `id'!=`id'[_n-1])
+                if _rc==1 exit _rc
+                if _rc==0 local poly 0 // only one obs per unit
+            }
         }
     }
-    // select observations
+    // identify points outside box
+    tempvar OUT
+    if "`rclip'"!="" {
+        qui gen byte `OUT' = 0
+        qui replace `OUT' = . if `X'>=. | `Y'>=.
+        if `BOX'[1,1]<. qui replace `OUT' = 1 if `X'<`BOX'[1,1] & `OUT'==0
+        if `BOX'[1,2]<. qui replace `OUT' = 1 if `X'>`BOX'[1,2] & `OUT'==0
+        if `BOX'[1,3]<. qui replace `OUT' = 1 if `Y'<`BOX'[1,3] & `OUT'==0
+        if `BOX'[1,4]<. qui replace `OUT' = 1 if `Y'>`BOX'[1,4] & `OUT'==0
+    }
+    else {
+        qui gen byte `OUT' = .
+    }
+    // apply clipping
     local Nadd 0
-    if `poly' mata: _rclip("`id'", ("`X'","`Y'"), "`OUT'")
+    if `poly' {
+        if "`noclip'"!="" {
+            mata: _noclip("`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
+                */ ("`X'","`Y'"), "`BOX'", "`strict'"!="", "`split'"!="")
+        }
+        else {
+            mata: _clip("`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
+                */ ("`X'","`Y'"), "`BOX'", "`line'"!="")
+        }
+    }
     qui drop if `OUT' // (also drops missing)
     c_local Ndrop_clip = r(N_drop)
     c_local Nadd_clip `Nadd'
+    // update PID and shape_order (if set)
+    geoframe get sid, local(sid)
+    if `"`sid'"'!="" {
+        qui replace `sid' = cond(_n==1 | `id'!=`id'[_n-1], 1, 1 + `sid'[_n-1])
+    }
+    geoframe get pid, local(pid)
+    if `"`pid'"'!="" {
+        qui geoframe generate pid `pid', replace
+    }
 end
 
 program _geoframe_generate
@@ -1224,8 +1225,9 @@ program _geoframe_generate_plevel
 end
 
 program _geoframe_bbox
-    syntax name(id="newname" name=newname) [if] [in] [, by(varname numeric)/*
-        */ ROTate CIRcle n(numlist int max=1 >0) hull PADding(real 0) replace ]
+    syntax name(id="newname" name=newname) [if] [in] [, noShp/*
+        */ by(varname numeric) ROTate CIRcle hull PADding(real 0)/*
+        */ n(numlist int max=1 >0) ANGle(real 0) noADJust replace ]
     if "`hull'"!="" & "`circle'"!="" {
         di as err "only one of {bf:circle} and {bf:hull} allowed"
         exit 198
@@ -1242,8 +1244,10 @@ program _geoframe_bbox
     // find shapes
     local cframe `"`c(frame)'"'
     geoframe get id, l(ID0)
-    geoframe get type, l(type) 
-    if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+    if "`shp'"=="" {
+        geoframe get type, l(type) 
+        if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+    }
     if `"`shpframe'"'=="" {
         geoframe get coordinates, l(XY) strict
         markout `touse' `XY'
@@ -1276,19 +1280,21 @@ program _geoframe_bbox
         if "`BY'"!="" {
             if "`BY'"=="`ID'" {
                 mata: _bbox2("`newframe'", `"`XY'"', "`touse'",/*
-                     */ `btype', `n', `padding', "`BY'")
+                     */ `btype', `n', `padding', "`adjust'"=="",/*
+                     */ `angle', "`BY'")
             }
             else {
                 qui levelsof `BY' if `touse', local(bylvls)
                 foreach lvl of local bylvls {
                     mata: _bbox1("`newframe'", `"`XY'"', "`touse'",/*
-                         */ `btype', `n', `padding', "`BY'", `lvl')
+                         */ `btype', `n', `padding', "`adjust'"=="",/*
+                         */ `angle', "`BY'", `lvl')
                 }
             }
         }
         else {
             mata: _bbox1("`newframe'", `"`XY'"', "`touse'",/*
-                 */ `btype', `n', `padding')
+                 */ `btype', `n', `padding',"`adjust'"=="", `angle')
         }
     }
     // cleanup
@@ -2190,84 +2196,109 @@ void _flip(string scalar nm)
     st_local(nm, invtokens(S[p]))
 }
 
-struct _rclip_expand_info {
-    pointer rowvector XY // copy of clipped polygon
-    pointer rowvector ab // range of original polygon in data
-}
-
-void _rclip(string scalar id, string rowvector xy, string scalar out)
+void _noclip(string scalar id, string scalar pid, real scalar rclip,
+    string scalar out, string rowvector xy, string scalar box,
+    real scalar strict, real scalar split)
 {
-    real scalar    i, r
-    real scalar    line, noclip, strict, split
+    real scalar    i, r, n
     real colvector a, b
-    real colvector ID, PID, OUT
-    real rowvector ab, bb
-    real matrix    XY, cXY
-    struct _rclip_expand_info scalar I
-    
-    line   = st_local("line")!=""
-    noclip = st_local("noclip")!=""
-    strict = st_local("strict")!=""
-    split  = st_local("split")!=""
+    real colvector ID, PID, OUT, p
+    real matrix    XY
+    real rowvector ab
+
     st_view(ID=., ., id)
+    st_view(PID=., ., pid)
     st_view(OUT=., ., out)
-    st_view(XY=., ., xy)
-    PID = geo_pid(ID, XY)
+    if (!rclip) {
+        st_view(XY=., ., xy)
+        p = selectindex(!rowmissing(XY))
+        OUT[p] = !__geo_clip_point(XY[p,], _geo_clip_bbox(st_matrix(box)))
+    }
+    n = rows(OUT)
     a = selectindex(_mm_uniqrows_tag((ID,PID)))
     i = rows(a)
-    if (i<=1) b = rows(XY)
-    else      b = a[|2 \. |] :- 1 \ rows(XY)
-    if (noclip) {
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        ab = a[i] \ b[i]
+        r  = b[i] - a[i] + 1
+        if (anyof(OUT[|ab|], strict)) OUT[|ab|] = J(r, 1, strict)
+        else                          OUT[|ab|] = J(r, 1, 1-strict)
+    }
+    if (!split) {
+        a = selectindex(_mm_unique_tag(ID))
+        i = rows(a)
+        if (i<=1) b = n
+        else      b = a[|2 \. |] :- 1 \ n
         for (;i;i--) {
             ab = a[i] \ b[i]
             r  = b[i] - a[i] + 1
             if (anyof(OUT[|ab|], strict)) OUT[|ab|] = J(r, 1, strict)
             else                          OUT[|ab|] = J(r, 1, 1-strict)
         }
-        if (!split) {
-            a = selectindex(_mm_unique_tag(ID))
-            i = rows(a)
-            if (i<=1) b = rows(XY)
-            else      b = a[|2 \. |] :- 1 \ rows(XY)
-            for (;i;i--) {
-                ab = a[i] \ b[i]
-                r  = b[i] - a[i] + 1
-                if (anyof(OUT[|ab|], strict)) OUT[|ab|] = J(r, 1, strict)
-                else                          OUT[|ab|] = J(r, 1, 1-strict)
-            }
-        }
     }
-    else {
-        bb = st_matrix(st_local("BOX"))
-        for (;i;i--) {
-            ab = a[i] \ b[i]
-            r  = b[i] - a[i] + 1
-            if (anyof(OUT[|ab|], 1)) {
-                if (anyof(OUT[|ab|], 0)) { // apply clipping
-                    cXY = geo_rclip(XY[|ab, (1\2)|], bb, line)
-                    if (rows(cXY)>r) {
-                        // too many observations; handle later
-                        OUT[|ab|] = J(r, 1, 0)
-                        I.XY = I.XY, &cXY[.,.]
-                        I.ab = I.ab, &ab[.]
-                        continue
-                    }
-                    OUT[|ab|] = J(r, 1, 1)
-                    r = rows(cXY)
-                    ab = ab[1] \ ab[1] + r - 1
-                    OUT[|ab|] = J(r, 1, 0)
-                    XY[|ab, (1\2)|] = cXY
-                }
-                else OUT[|ab|] = J(r, 1, 1) // all out
-            }
-            else if (anyof(OUT[|ab|], 0)) OUT[|ab|] = J(r, 1, 0) // all in
-            else OUT[|ab|] = J(r, 1, 1) // all missing
-        }
-    }
-    _rclip_expand(I.XY, I.ab, xy) // store polygons that have additional points
 }
 
-void _rclip_expand(pointer rowvector XY, pointer rowvector ab,
+struct _clip_expand_info {
+    pointer rowvector XY // copy of clipped polygon
+    pointer rowvector ab // range of original polygon in data
+}
+
+void _clip(string scalar id, string scalar pid, real scalar rclip,
+    string scalar out, string rowvector xy, string scalar box,
+    real scalar line)
+{
+    real scalar    i, n, r, run
+    real colvector a, b
+    real colvector ID, PID, OUT
+    real rowvector ab
+    real matrix    bb, XY, XYi
+    struct _clip_expand_info scalar I
+    
+    if (rclip) bb = vec(st_matrix(box))
+    else       bb = _geo_clip_bbox(st_matrix(box))
+    st_view(ID=., ., id)
+    st_view(PID=., ., pid)
+    st_view(OUT=., ., out)
+    st_view(XY=., ., xy)
+    n = rows(OUT)
+    a = selectindex(_mm_uniqrows_tag((ID,PID)))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        ab = a[i] \ b[i]
+        r  = b[i] - a[i] + 1
+        run = rclip ? anyof(OUT[|ab|], 1) : 1
+        if (run) { // has points outside (or !rclip)
+            run = rclip ? anyof(OUT[|ab|], 0) : 1
+            if (run) { // has points inside (or !rclip)
+                XYi = _geo_clip(XY[|ab, (1\2)|], bb, line)
+                if (rows(XYi)>r) {
+                    // too many observations; handle later
+                    OUT[|ab|] = J(r, 1, 0)
+                    I.XY = I.XY, &XYi[.,.]
+                    I.ab = I.ab, &ab[.]
+                    continue
+                }
+                OUT[|ab|] = J(r, 1, 1)
+                r = rows(XYi)
+                if (!r) continue // (should not happen if rclip)
+                ab = ab[1] \ ab[1] + r - 1
+                OUT[|ab|] = J(r, 1, 0)
+                XY[|ab, (1\2)|] = XYi
+                continue
+            }
+            OUT[|ab|] = J(r, 1, 1) // all points outside (rclip only)
+            continue
+        }
+        if (anyof(OUT[|ab|], 0)) OUT[|ab|] = J(r, 1, 0) // all out (rclip only)
+        else OUT[|ab|] = J(r, 1, 1) // all points missing (rclip only)
+    }
+    _clip_expand(I.XY, I.ab, xy) // store polygons that have additional points
+}
+
+void _clip_expand(pointer rowvector XY, pointer rowvector ab,
     string rowvector xy)
 {
     real scalar    l, i, r, n
@@ -2402,8 +2433,8 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
 }
 
 void _bbox1(string scalar frame, string scalar xy, string scalar touse,
-     real scalar btype, real scalar k, real scalar pad,
-     | string scalar BY, real scalar id)
+     real scalar btype, real scalar k, real scalar pad, real scalar adj,
+     real scalar angle, | string scalar BY, real scalar id)
 {
     string scalar  cframe
     real scalar    n, n0, n1
@@ -2413,7 +2444,7 @@ void _bbox1(string scalar frame, string scalar xy, string scalar touse,
     if (BY!="") XY = select(st_data(., xy, touse), st_data(., BY, touse):==id)
     else        st_view(XY=., ., xy, touse)
     if      (btype==3) PT = __bbox_hull(XY, pad)
-    else if (btype==2) PT = __bbox_mec(XY, k, pad)
+    else if (btype==2) PT = __bbox_mec(XY, k, pad, adj, angle)
     else               PT = __bbox(XY, btype, pad)
     // store shape
     cframe = st_framecurrent()
@@ -2428,7 +2459,8 @@ void _bbox1(string scalar frame, string scalar xy, string scalar touse,
 }
 
 void _bbox2(string scalar frame, string scalar xy, string scalar touse,
-     real scalar btype, real scalar k, real scalar pad, string scalar BY)
+     real scalar btype, real scalar k, real scalar pad, real scalar adj,
+     real scalar angle, string scalar BY)
 {   // BY equal to ID; assuming data ordered by ID
     string scalar  cframe
     real scalar    n, n0, n1, i
@@ -2448,7 +2480,8 @@ void _bbox2(string scalar frame, string scalar xy, string scalar touse,
     PT = J(n,1,NULL)
     for (i=n;i;i--) {
         if      (btype==3) PT[i] = &__bbox_hull(XY[|a[i],1\b[i],.|], pad)
-        else if (btype==2) PT[i] = &__bbox_mec(XY[|a[i],1\b[i],.|], k, pad)
+        else if (btype==2) PT[i] = &__bbox_mec(XY[|a[i],1\b[i],.|], k, pad,
+                                    adj, angle)
         else               PT[i] = &__bbox(XY[|a[i],1\b[i],.|], btype, pad)
         N[i] = rows(*PT[i])
     }
@@ -2479,13 +2512,18 @@ real matrix __bbox_hull(real matrix XY, real scalar pad)
     return((.,.) \ xy)
 }
 
-real matrix __bbox_mec(real matrix XY, real scalar n, real scalar pad)
+real matrix __bbox_mec(real matrix XY, real scalar n, real scalar pad,
+    real scalar adj, real scalar angle)
 {
     real rowvector c
+    real matrix    xy
     
     c = geo_welzl(XY)
+    if (adj) c[3] = sqrt(c[3]^2 / (1-sin(pi()/n)^2))
     if (pad) c[3] = c[3] * (1 + pad/100)
-    return((.,.) \ c[(1,2)] :+ c[3] * _geo_symbol_circle(n))
+    xy = _geo_symbol_circle(n)
+    _geo_rotate(xy, angle)
+    return((.,.) \ c[(1,2)] :+ c[3] * xy)
 }
 
 real matrix __bbox(real matrix XY, real scalar type, real scalar pad)

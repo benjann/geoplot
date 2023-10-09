@@ -1,5 +1,5 @@
 {smcl}
-{* 05oct2023}{...}
+{* 09oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -33,6 +33,8 @@
 
 {syntab :Manipulation}
 {p2col :{helpb geoframe##select:{ul:sel}ect}}select units and shapes
+    {p_end}
+{p2col :{helpb geoframe##clip:clip}}clip shapes using convex window
     {p_end}
 {p2col :{helpb geoframe##rclip:rclip}}clip shapes using rectangular window
     {p_end}
@@ -289,7 +291,7 @@
 {pstd}
     obtains information about the number of selected units and corresponding
     shape items (depending on context, a shape item can be a polygon, a line,
-    or a point). The following scalars will be returned in {cmd:r()}.
+    or a point). The following scalars are returned in {cmd:r()}.
 
 {p2colset 9 22 22 2}{...}
 {p2col : {cmd:r(units)}}number of units
@@ -307,51 +309,36 @@
 {pstd}{ul:Bounding box of shapes}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {opt q:uery} [{opt bb:ox}] {ifin} [{cmd:,} {it:options} ]
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {opt q:uery} {opt bb:ox} {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
     obtains the bounding box of the selected shapes and returns
-    it in {cmd:r()}. {it:options} are as follows.
-
-{phang}
-    {opt pad:ding(#)} adds padding to the bounding box. Argument {it:#}
-    is in percent of the size in each dimension. For example,
-    type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
-
-{phang}
-    {opt abs:olute} treats {cmd:padding()} as an absolute value, not a percentage.
-
-{phang}
-    {opt nos:hp} obtains the bounding box from the coordinates found in the
-    current frame even if the current frame is linked to a shape frame. The default
-    is to base the bounding box on the coordinates in the shape frame.
-
-{pstd}
-    The following results will be returned in {cmd:r()}.
+    it in {cmd:r()}. {it:options} are {opt rot:ate}, {opt cir:cle}, {opt hull},
+    {opt pad:ing(#)}, {opt n(#)}, {opt ang:le(#)}, {opt noadj:ust}, and
+    {opt nos:hp} as described in {helpb geoframe##bbox:geoframe bbox}. The following
+    results are returned in {cmd:r()}.
 
 {pmore} Scalars:
 
 {p2colset 9 22 22 2}{...}
-{p2col : {cmd:r(xmin)}}lower limit of X
+{p2col : {cmd:r(xmin)}}lower X limit of the bounding box
     {p_end}
-{p2col : {cmd:r(xmax)}}upper limit if X
+{p2col : {cmd:r(xmax)}}upper X limit of the bounding box
     {p_end}
 {p2col : {cmd:r(xmid)}}midpoint between {cmd:r(xmin)} and {cmd:r(xmax)}
     {p_end}
-{p2col : {cmd:r(xpad)}}amount if padding applied to X
+{p2col : {cmd:r(ymin)}}lower Y limit of the bounding box
     {p_end}
-{p2col : {cmd:r(ymin)}}lower limit of Y
-    {p_end}
-{p2col : {cmd:r(ymax)}}upper limit if Y
+{p2col : {cmd:r(ymax)}}upper Y limit of the bounding box
     {p_end}
 {p2col : {cmd:r(ymid)}}midpoint between {cmd:r(ymin)} and {cmd:r(ymax)}
-    {p_end}
-{p2col : {cmd:r(ypad)}}amount if padding applied to Y
     {p_end}
 
 {pmore} Matrix:
 
-{p2col : {cmd:r(limits)}}row vector containing limits (xmin, xmax, ymin, ymax)
+{p2col : {cmd:r(bbox)}}(X,Y) coordinates of the bounding box
+    {p_end}
+{p2col : {cmd:r(limits)}}row vector containing limits of the bounding box (xmin, xmax, ymin, ymax)
     {p_end}
 
 {marker describe}{...}
@@ -415,6 +402,63 @@
 {phang}
     {opt nocur:rent} does not make the created frame the current frame.
 
+{marker clip}{...}
+{dlgtab:geoframe clip}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:clip} {it:matname} {ifin}
+    [{cmd:,} {it:options} ]
+
+{pstd}
+    clips or selects the shapes by a convex mask (and removes shapes
+    that do not satisfy the {it:if} and {it:in} qualifiers), where {it:matname}
+    is a matrix containing the (X,Y) coordinates of the clipping mask. For example,
+    you could type {cmd:geoframe rclip r(bbox)} to apply clipping by the bounding box
+    returned by {helpb geoframe##q_bbox:geoframe query bbox}. {it:options} are as
+    follows.
+
+{phang}
+    {opt l:ine} enforces line clipping for polygons. By default,
+    a polygon is clipped in such a way that the result is a
+    (closed) polygon again. Specify {cmd:line}, to clip a polygon
+    to a set of one or more (unclosed) lines. Polygons that lie completely within
+    the clipping window remain intact in any case. {cmd:line} has no effect
+    if {cmd:noclip} is specified.
+
+{phang}
+    {opt nocl:ip} applies selection rather than clipping. All shapes that
+    are at least partially inside the clipping window will be selected. {cmd:noclip}
+    is implied when processing point data or paired-coordinate data. For
+    paired-coordinate data, an item is considered inside if the origin coordinate
+    is within the clipping window.
+
+{phang}
+    {opt st:rict} changes the behavior of {cmd:noclip}. By default, {cmd:noclip}
+    selects all shapes that are at least partially inside the clipping
+    window. Specify {cmd:strict} together with {cmd:noclip} to select the
+    shapes that are completely within the window.
+
+{phang}
+    {opt sp:lit} changes the behavior of {cmd:noclip}. By default, {cmd:noclip}
+    selects or excludes all shape items together
+    that belong to the same unit (e.g. main territory and exclaves). Specify
+    {cmd:split} together with {cmd:noclip} to select or exclude each shape item individually.
+
+{phang}
+    {opt into(newname [newshpname])} copies the clipped or selected shapes
+    into a frame called {it:newname} (and possibly a linked shape
+    frame called {it:newshpname}) and leaves the current frame (and its linked
+    shape frame) unchanged. The default for {it:newshpname} is {it:newname}{cmd:_shp}.
+
+{phang}
+    {opt replace} allows {cmd:into()} to overwrite existing frames.
+
+{phang}
+    {opt nodes:cribe} suppresses the description of the created frame.
+
+{phang}
+    {opt nocur:rent} does not make the created frame the current frame.
+
 {marker rclip}{...}
 {dlgtab:geoframe rclip}
 
@@ -433,51 +477,13 @@
 
 {pstd}
     Specify {cmd:.} (missing) to set a boundary to (minus)
-    infinity. Alternatively,
-    specify {it:limits} as {it:matname} where {it:matname} is the name of a
-    {helpb matrix} (row or column vector) containing the limits (in the
-    same order as above). For example, you could type
-    {cmd:geoframe rclip r(limits)} to apply clipping by the bounding box
-    returned by {helpb geoframe##q_bbox:geoframe query bbox}. {it:options} are as
-    follows.
-
-{phang}
-    {opt l:ine} enforces line clipping for polygons. By default,
-    a polygon is clipped in such a way that the result is a
-    (closed) polygon again. Specify {cmd:line}, to clip a polygon
-    to a set of one or more (unclosed) lines. Polygons that lie completely within
-    the clipping window remain intact in any case. {cmd:line} has no effect
-    if {cmd:noclip} is specified.
-
-{phang}
-    {opt nocl:ip} applies selection rather than clipping. All shapes that
-    are at least partially inside the clipping window will be selected.
-
-{phang}
-    {opt st:rict} changes the behavior of {cmd:noclip}. Specify {cmd:strict}
-    together with {cmd:noclip} to select the shapes that are completely
-    within the window.
-
-{phang}
-    {opt st:rict} changes the behavior of {cmd:noclip}. By default, {cmd:noclip}
-    selects or excludes all shape items together
-    that belong to the same unit (e.g. main territory and exclaves). Specify
-    {cmd:split} to select or exclude each shape item individually.
-
-{phang}
-    {opt into(newname [newshpname])} copies the clipped or selected shapes
-    into a frame called {it:newname} (and possibly a linked shape
-    frame called {it:newshpname}) and leaves the current frame (and its linked
-    shape frame) unchanged. The default for {it:newshpname} is {it:newname}{cmd:_shp}.
-
-{phang}
-    {opt replace} allows {cmd:into()} to overwrite existing frames.
-
-{phang}
-    {opt nodes:cribe} suppresses the description of the created frame.
-
-{phang}
-    {opt nocur:rent} does not make the created frame the current frame.
+    infinity. Alternatively, specify {it:limits} as {it:matname} where
+    {it:matname} is the name of a {helpb matrix} (row or column vector)
+    containing the limits (in the same order as above). For example, you
+    could type {cmd:geoframe rclip r(limits)} to apply clipping by the
+    (limits of the) bounding box returned by
+    {helpb geoframe##q_bbox:geoframe query bbox}. {it:options} are as
+    described for {helpb geoframe##clip:geoframe clip}.
 
 {marker generate}{...}
 {dlgtab:geoframe generate}
@@ -736,6 +742,11 @@
     shape frame. {it:options} are as follows.
 
 {phang}
+    {opt nos:hp} obtains the bounding box from the coordinates found in the
+    current frame even if the current frame is linked to a shape frame. The default
+    is to base the bounding box on the coordinates in the shape frame.
+
+{phang}
     {cmd:by(}{help varname:{it:byvar}}{cmd:)} computes a separate bounding box
     for each group of units defined by the levels of {it:byvar}. In the new
     frame, the levels of {it:byvar} will be used as values of the ID variable.
@@ -761,6 +772,18 @@
 {phang}
     {opt n(n)} sets the number of points used to construct a circle. This is only
     relevant if {cmd:circle} has been specified. The default is {cmd:n(100)}.
+
+{phang}
+    {opt ang:le(angle)} rotates the coordinates of the minimum enclosing circle
+    by {it:angle} degrees (counterclockwise). This may be useful when using
+    {cmd:circle} with a small value for {cmd:n()}.
+
+{phang}
+    {opt noadj:ust} omits radius adjustment for the minimum enclosing circle. By
+    default, the radius is adjusted so that the true circle is enclosed in
+    the n-gram used to form the circle. Specify {cmd:noadjust} if, conversely,
+    you want the n-gram to be enclosed within the true circle. {cmd:noadjust} is only
+    relevant if {cmd:circle} has been specified.
 
 {phang}
     {opt replace} allows overwriting an existing frame.

@@ -1,4 +1,4 @@
-*! version 1.1.2  30sep2023  Ben Jann
+*! version 1.1.3  06oct2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -52,7 +52,7 @@ program _geoplot, rclass
     local legend  = `"`legend'`legend2'"'!=""
     local clegend = `"`clegend'`clegend2'"'!=""
     if !`legend' & !`clegend' & "`nolegend'"=="" local legend 1
-    _parse_aspectratio `aspectratio' // returns aspectratio, aspectratio_opts
+    _parse_aspectratio `aspectratio' // returns ar, ar_opts
     if "`margin'"=="" local margin 0 0 0 0
     else              _parse_margin `margin'
     _parse_refdim `refdim'
@@ -157,12 +157,14 @@ program _geoplot, rclass
         local plots `plots' `plot'
         
     // graph dimensions
-        _grdim, margin(`margin') refdim(`refdim') aratio(`aspectratio')/*
-            */ `options' // returns refsize Ymin Ymax Xmin Xmax aratio options
-        local aspectratio aspectratio(`aratio'`aspectratio_opts')
+        _grdim, margin(`margin') refdim(`refdim') aratio(`ar') `options'
+            // => refsize Ymin Ymax Xmin Xmax ar ar_units yxratio options
+        local ar_opts `ar_units' `ar_opts'
+        if `"`ar_opts'"'!="" local ar_opts `", `ar_opts'"'
+        local aspectratio aspectratio(`ar'`ar_opts')
         if "`tight'"!="" {
             // update ysize and ysize
-            _grdim_tight, aratio(`aratio') `scheme' `ysize' `xsize'
+            _grdim_tight, aratio(`yxratio') `scheme' `ysize' `xsize'
         }
         
     // scale bar
@@ -275,14 +277,15 @@ program _parse_plottype
 end
 
 program _parse_aspectratio
-    _parse comma lhs rhs : 0
+    _parse comma lhs 0 : 0
     if `"`lhs'"'!="" {
         numlist "`lhs'", max(1)
         local lhs `r(numlist)'
     }
     else local lhs 1 // default
-    c_local aspectratio `lhs'
-    c_local aspectratio_opts `rhs'
+    syntax [, UNITs * ]
+    c_local ar `lhs'
+    c_local ar_opts `options'
 end
 
 program _parse_margin
@@ -628,7 +631,7 @@ program _grdim
         local `v'MAX = ``v'MAX' + `refsize' * (`m'/100)
         local `v'max ``v'MAX'
     }
-    // update dimensions depending in x/yscale(), xylabel()
+    // update dimensions depending on x/yscale(), xylabel()
     foreach V in X Y {
         local v = strlower("`V'") 
         _grdim_parse_scale `V' ``V'min' ``V'max', ``v'scale'
@@ -656,7 +659,14 @@ program _grdim
     c_local Xmax `Xmax'
     c_local Ymin `Ymin'
     c_local Ymax `Ymax'
-    c_local aratio = (`Ymax'-`Ymin') / (`Xmax'-`Xmin') * `aratio'
+    local units units
+    if      c(stata_version)<18            local units
+    else if d(`c(born_date)')<d(04oct2023) local units
+    local yxratio = (`Ymax'-`Ymin') / (`Xmax'-`Xmin')
+    if "`units'"!="" c_local ar = 1 * `aratio'
+    else             c_local ar = `yxratio' * `aratio'
+    c_local ar_units `units'
+    c_local yxratio = `yxratio' * `aratio'
     c_local options xscale(range(`Xmin' `Xmax') `Xscale_opts')/*
         */ yscale(range(`Ymin' `Ymax') `Yscale_opts')/*
         */ xlabel(none, labsize(vsmall)) ylabel(none, labsize(vsmall))/*

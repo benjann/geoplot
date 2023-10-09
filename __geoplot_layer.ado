@@ -1251,6 +1251,7 @@ void _generate_mlabels(string scalar var, string scalar VAR, string scalar fmt,
     if (isstr) L = st_sdata(., VAR, touse)
     else {
         X = st_data(., VAR, touse)
+        if (!rows(X)) return
         vl = st_varvaluelabel(VAR)
         if (vl!="") {
             if (!st_vlexists(vl)) vl = ""

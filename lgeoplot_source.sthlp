@@ -3,11 +3,12 @@
 *!     {helpb lgeoplot_source##geo_area:geo_area()}
 *!     {helpb lgeoplot_source##geo_centroid:geo_centroid()}
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
+*!     {helpb lgeoplot_source##geo_clip:geo_clip()}
+*!     {helpb lgeoplot_source##geo_direction:geo_direction()}
 *!     {helpb lgeoplot_source##geo_hull:geo_hull()}
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
 *!     {helpb lgeoplot_source##geo_pointinpolygon:geo_pointinpolygon()}
-*!     {helpb lgeoplot_source##geo_rclip:geo_rclip()}
 *!     {helpb lgeoplot_source##geo_rotate:geo_rotate()}
 *!     {helpb lgeoplot_source##geo_spjoin:geo_spjoin()}
 *!     {helpb lgeoplot_source##geo_symbol:geo_symbol()}
@@ -384,6 +385,593 @@ mata set matastrict on
              (c1[1] - c1[3] * sin(alpha2), c1[2] - c1[3] * cos(alpha2)) \
              (c2[1] - c2[3] * sin(alpha2), c2[2] - c2[3] * cos(alpha2))
     return(P)
+}
+
+end
+
+*! {smcl}
+*! {marker geo_clip}{bf:geo_clip()}{asis}
+*! version 1.0.1  09oct2023  Ben Jann
+*!
+*! Applies convex polygon or polyline clipping using a modified
+*! Sutherland–Hodgman algorithm (divided polygons will be returned 
+*! if appropriate)
+*! (https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)
+*!
+*! Syntax:
+*!
+*!      result = geo_clip(XY, bb [, line])
+*!
+*!  result   coordinates of clipped polygons (first and/or last row equal to
+*!           missing if input started and/or ended with missing); separate shapes
+*!           divided by missing; J(0,2,.) is returned if no points are inside
+*!           clipping mask 
+*!  XY       n x 2 real matrix containing the (X,Y) coordinates of the polygons
+*!           or polylines to be clipped; separate shapes divided by missing;
+*!           a shape is interpreted as a polygon if its first point is equal
+*!           to its last point, else the shape is interpreted as polyline; point
+*!           data is assumed if XY does not contain missing
+*!  bb       n x 2 real matrix containing the (X,Y) coordinates of the convex
+*!           clipping mask; invalid results will be returned if the clipping
+*!           mask is not convex
+*!  line     line!=0 enforces polyline clipping for polygons (i.e. do not
+*!           close the clipped polygons)
+*!
+*! For rectangular clipping, you may also use the following function:
+*!
+*!      result = geo_rclip(XY, limits [, line])
+*!
+*!  limits   vector specifying the clipping limits: (Xmin, Xmax, Ymin, Ymax)
+*!           (missing will be interpreted as +/- infinity)
+*!
+*!  other arguments as for geo_clip()
+*!
+
+local Bool      real scalar
+local BoolC     real colvector
+local Int       real scalar
+local IntC      real colvector
+local RS        real scalar
+local RC        real colvector
+local RR        real rowvector
+local RM        real matrix
+local PS        pointer scalar
+local PC        pointer colvector
+
+mata:
+mata set matastrict on
+
+`RM' geo_clip(`RM' XY, `RM' bb, | `Bool' line)
+{
+    if (args()<3) line = 0
+    return(_geo_clip(XY, _geo_clip_bbox(bb), line))
+}
+
+`RM' _geo_clip_bbox(`RM' bb0)
+{
+    `RM' bb
+    
+    if (cols(bb0)!=2) {
+        errprintf("{it:bb} must have two columns\n")
+        exit(3200)
+    }
+    bb = select(bb0, !rowmissing(bb0))
+    if (rows(bb)) {
+        bb = bb \ bb[1,]      // wrap around
+        bb = _mm_uniqrows(bb) // remove repetitions
+    }
+    if (rows(bb)<3) {
+        errprintf("{it:bb} must contain at least two unique points\n")
+        exit(3200)
+    }
+    return(bb)
+}
+
+`RM' geo_rclip(`RM' XY, `RM' limits, | `Bool' line)
+{
+    if (args()<3) line = 0
+    return(_geo_clip(XY, _geo_rclip_limits(limits), line))
+}
+
+`RC' _geo_rclip_limits(`RM' limits)
+{
+    `RC' bb
+ 
+    bb = vec(limits)
+    if (length(bb)<4) bb = bb \ J(4-length(bb),1,.)
+    return(bb)
+}
+
+`RM' _geo_clip(`RM' XY, `RM' bb, `Bool' line)
+{
+    `Bool'  mfirst, mlast, hasmis
+    `Int'   a, b
+    `RM'    xy
+    
+    // defaults and checks
+    if (args()<3) line = 0
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    // handle missings
+    a = 1; b = rows(XY)
+    if (b==0) return(J(1,2,.))  // empty input
+    mfirst = hasmissing(XY[a,]) // has leading missings
+    mlast  = hasmissing(XY[b,]) // has trailing missings
+    if (mfirst) {
+        for (++a;a<=b;a++) {
+            if (!hasmissing(XY[a,])) break
+        }
+        if (a>b) return(J(1,2,.)) // input all missing
+    }
+    if (mlast) {
+        for (--b;b;b--) {
+            if (!hasmissing(XY[b,])) break
+        }
+    }
+    hasmis = hasmissing(XY[|a,1 \ b,2|])
+    // apply clipping
+    if (hasmis) { // multiple shape items
+        xy = _geo_clip_apply(&__geo_clip(), XY, bb, line, a, b)
+    }
+    else { // single shape item
+        if (!mfirst & !mlast) return(_geo_clip_point(XY, bb)) // point data
+        xy = __geo_clip(J(1,2,.) \ XY[|a,1 \ b,2|], bb, line)
+    }
+    // return
+    if (rows(xy)) {
+        if (!mfirst) xy = xy[|2,1\.,.|]
+        if (mlast)   xy = xy \ J(1,2,.)
+    }
+    return(xy)
+}
+
+`RM' _geo_clip_apply(`PS' f, `RM' XY, `RM' bb, `Bool' line, `Int' a, `Int' b)
+{
+    `BoolC' mis
+    `Int'   i, j, J
+    `IntC'  A, B
+    `RM'    xy
+    `PC'    I
+    
+    // collect indices of shape items
+    mis = selectindex(rowmissing(XY[|a,1 \ b,2|])) :+ (a - 1)
+    i = rows(mis) + 1
+    A = B = J(i, 1, .)
+    A[1] = a; B[i] = b
+    for (--i;i;i--) {
+        A[i+1] = mis[i] + 1
+        B[i]   = mis[i] - 1
+    }
+    // process each item 
+    i = rows(A)
+    I = J(i, 1, NULL)
+    J = 0
+    for (;i;i--) {
+        I[i] = &(*f)(J(1,2,.) \ XY[|A[i],1 \ B[i],2|], bb, line)
+        J = J + rows(*I[i])
+    }
+    // collect results
+    xy = J(J, 2, .)
+    for (i=length(I);i;i--) {
+        j = rows(*I[i])
+        if (!j) continue // empty shape item
+        xy[|J-j+1,. \ J,.|] = *I[i]
+        J = J - j
+    }
+    return(xy)
+}
+
+`RM' _geo_clip_point(`RM' XY, `RM' bb)
+{
+    `Int' i, n
+    `RC'  in
+
+    if (cols(bb)==1) return(select(XY, __geo_rclip_point(XY, bb)))
+    return(select(XY, __geo_clip_point(XY, bb)))
+}
+
+`BoolC' __geo_rclip_point(`RM' XY, `RM' bb)
+{
+    `RC'  in
+
+    in = J(rows(XY),1,1)
+    if (bb[1]<.) in = in :& (_geo_clip_outside(XY, bb[1]):<=0)
+    if (bb[3]<.) in = in :& (_geo_clip_outside(XY[,(2,1)], bb[3]):<=0)
+    if (bb[2]<.) in = in :& (-_geo_clip_outside(XY, bb[2]):<=0)
+    if (bb[4]<.) in = in :& (-_geo_clip_outside(XY[,(2,1)], bb[4]):<=0)
+    return(in)
+}
+
+`BoolC' __geo_clip_point(`RM' XY, `RM' bb)
+{
+    `Int' i, n
+    `RC'  in
+
+    in = J(rows(XY),1,1)
+    n = rows(bb)
+    for (i=1;i<n;i++) {
+        in = in :& (_geo_clip_outside(XY, bb[|i,1 \ i+1,2|]):<=0)
+    }
+    return(in)
+}
+
+`RM' __geo_clip(`RM' XY, `RM' bb, `Bool' line)
+{
+    `Bool' polygon, clockdir
+    `Int'  i, n
+    `PS'   f
+
+    // line vs polygon
+    if (rows(XY)==2) polygon = 0 // single point input
+    else             polygon = (XY[2,]==XY[rows(XY),]) // closed path
+    // line clipping
+    if (line | !polygon) {
+        if (polygon) {
+            // rearrange points so that polygon does not start inside
+            if (_geo_clip_larrange(XY, bb)) return(XY) // all points inside
+        }
+        f = &_geo_clip_line()
+        clockdir = 0
+    }
+    else {
+        f = &_geo_clip_area()
+        clockdir = _geo_direction(XY[|2,1 \ .,.|])==1
+        if (clockdir) XY = J(1,2,.) \ XY[rows(XY)::2,.] // flip direction
+    }
+    if (cols(bb)==1) { // rclip
+        if (bb[1]<.) { // xmin
+            XY = (*f)(XY, bb[1])
+        }
+        if (bb[3]<.) { // ymin (-90° rotation)
+            XY = (*f)((XY[,2], -XY[,1]), bb[3])
+            XY = (-XY[,2], XY[,1])
+        }
+        if (bb[2]<.) { // xmax (-180° rotation)
+            XY = -(*f)(-XY, -bb[2])
+        }
+        if (bb[4]<.) { // ymax (-270° rotation)
+            XY = (*f)((-XY[,2], XY[,1]), -bb[4])
+            XY = (XY[,2], -XY[,1])
+        }
+    }
+    else {
+        n = rows(bb)
+        for (i=1;i<n;i++) XY = (*f)(XY, bb[|i,1 \ i+1,2|])
+    }
+    // returns
+    if (clockdir) {
+        if (rows(XY)) {
+            XY = J(1,2,.) \ XY[rows(XY)::2,.] // flip direction
+        }
+    }
+    return(XY)
+}
+
+`Bool' _geo_clip_larrange(`RM' XY, `RM' bb)
+{
+    `Int'  i, n
+    
+    if (cols(bb)==1) { // rclip
+        if (_geo_rclip_larrange(XY, bb[1], 1, 0)) return(0)
+        if (_geo_rclip_larrange(XY, bb[3], 2, 0)) return(0)
+        if (_geo_rclip_larrange(XY, bb[2], 1, 1)) return(0)
+        if (_geo_rclip_larrange(XY, bb[4], 2, 1)) return(0)
+    }
+    else {
+        n = rows(bb)
+        for (i=1;i<n;i++) {
+            if (__geo_clip_larrange(XY,
+                _geo_clip_outside(XY, bb[|i,1 \ i+1,2|]))) return(0)
+        }
+    }
+    return(1) // all points are inside
+}
+
+`Bool' _geo_rclip_larrange(`RM' XY, `RS' c, `Int' j, `Bool' neg)
+{
+    `IntC' out
+    
+    if (c>=.) return(0)
+    if (neg) out = XY[,j] :> c
+    else     out = XY[,j] :< c
+    return(__geo_clip_larrange(XY, out))
+}
+
+`Bool' __geo_clip_larrange(`RM' XY, `IntC' out)
+{
+    `Int'  i, n
+
+    n = rows(out)
+    for (i=2;i<=n;i++) {
+        if (out[i]==1) {
+            if (i>2) XY = XY[1,] \ XY[|i,1 \ .,.|] \ XY[|3,1 \ i,.|]
+            return(1)
+        }
+    }
+    return(0)
+}
+
+`RM' _geo_clip_line(`RM' XY, `RM' c)
+{   // first point assumed missing
+    `Int'  i, j
+    `IntC' out
+    `RM'   xy
+    
+    // checks
+    i = rows(XY)
+    if (i<2) return(J(0,2,.)) // empty input
+    out = _geo_clip_outside(XY, c)
+    if (!anyof(out,1)) return(XY) // all points inside
+    if (!any(out:<=0)) return(J(0,2,.)) // all points outside
+    // apply clipping
+    j = 2 * i
+    xy = J(j++, 2, .)
+    for (;i;i--) {
+        if (out[i]>0) { // point is outside or missing
+            if (out[i]>=.) continue // skip point if missing
+            for (--i;i;i--) { // find first inside point or end of path
+                if (out[i]<=0) { // inside point found
+                    if (out[i]) // add point on edge
+                        xy[--j,] = _geo_clip_intersect(c, XY[i+1,], XY[i,])
+                    i++ // move back one point
+                    break
+                }
+                if (out[i]>=.) break // end of path
+            }
+        }
+        else { // point is inside
+            xy[--j,] = XY[i,] // add inside point
+            for (--i;i;i--) { // find first outside point or end of path
+                if (out[i]<=0) { // point is inside
+                    xy[--j,] = XY[i,] // add inside point
+                    continue
+                }
+                // point is outside or missing (end of path)
+                if (out[i]==1) { // point is outside
+                    i++ // move back one point
+                    if (out[i]) // add point on edge
+                        xy[--j,] = _geo_clip_intersect(c, XY[i,], XY[i-1,])
+                }
+                break
+            }
+            j-- // add missing (terminate path)
+        }
+    }
+    // return
+    return(xy[|j,1 \ .,.|])
+}
+
+`RM' _geo_clip_area(`RM' XY, `RM' c)
+{   // first point assumed missing
+    `Int'   i, j
+    `Bool'  hasexit
+    `BoolC' isexit
+    `IntC'  out
+    `RM'    xy
+    
+    // checks
+    i = rows(XY)
+    if (i<2) return(J(0,2,.)) // empty input
+    out = _geo_clip_outside(XY, c)
+    if (!anyof(out,1)) return(XY) // all points inside
+    if (!any(out:<=0)) return(J(0,2,.)) // all points outside
+    _geo_clip_area_arrange(XY, out)
+    // apply clipping
+    j = 2 * i
+    isexit = J(j, 1, .)
+    hasexit = 0
+    xy = J(j++, 2, .)
+    for (;i;i--) {
+        if (out[i]>0) { // point is outside or missing
+            if (out[i]>=.) continue // skip point if missing
+            for (--i;i;i--) { // find first inside point or end of path
+                if (out[i]<=0) { // inside point found
+                    if (out[i]) { // add point on edge; this is the exit point
+                        xy[--j,] = _geo_clip_intersect(c, XY[i+1,], XY[i,])
+                        isexit[j] = 1
+                    }
+                    else isexit[j-1] = 1 // next point is the exit point
+                    i++ // move back one point
+                    hasexit = 1
+                    break
+                }
+                if (out[i]>=.) break // end of path
+            }
+        }
+        else { // point is inside
+            xy[--j,]  = XY[i,] // add inside point
+            if (isexit[j]>=.) isexit[j] = 0 // only if not set yet
+            for (--i;i;i--) { // find first outside point or end of path
+                if (out[i]<=0) { // point is inside
+                    xy[--j,]  = XY[i,] // add inside point
+                    isexit[j] = 0
+                    continue
+                }
+                // point is outside or missing (end of path)
+                if (out[i]==1) { // point is outside
+                    i++ // move back one point
+                    if (out[i]) { // add point on edge
+                        xy[--j,]  = _geo_clip_intersect(c, XY[i,], XY[i-1,])
+                        isexit[j] = 0
+                    }
+                }
+                break
+            }
+            j-- // add missing (terminate path)
+        }
+    }
+    // return
+    if (hasexit) return(_geo_clip_area_join(xy[|j,1 \ .,.|], c, isexit[|j \. |]))
+    return(xy[|j,1 \ .,.|])
+}
+
+void _geo_clip_area_arrange(`RM' XY, `IntC' out)
+{   // rearrange points so that each path starts with an outside point
+    // (unless the path is fully inside)
+    `Int' i, j, i1
+    
+    i = rows(out)
+    for (;i;i--) {
+        i1 = i
+        for (;i;i--) {
+            if (out[i]>=.) break // end of path
+            if (out[i]==1) {
+                j = i
+                for (--i;i;i--) {
+                    if (out[i]>=.) break // end of path
+                }
+                if (j<i1 & j>(i+1)) {
+                    out[|i\i1|] = out[i] \ out[|j\i1|] \ out[|i+2\j|]
+                    XY[|i,1\i1,.|] = XY[i,] \ XY[|j,1\i1,.|] \ XY[|i+2,1\j,.|]
+                }
+                break
+            }
+        }
+    }
+}
+
+`RM' _geo_clip_area_join(`RM' XY, `RM' c, `BoolC' isexit)
+{   // join pieces of paths crossing the boundary and close the polygons
+    `Int' j, j1, k, K, i
+    `RC'  yin, yout
+    `RM'  ab
+    `Int' p
+    
+    K = sum(isexit:==1)
+    ab = J(K,4,.)
+    j = rows(XY)
+    p = J(j + K, 1, .)
+    k = 0
+    i = 1
+    for (;j;j--) {
+        j1 = j--
+        while (isexit[j]<.) j--
+        if (isexit[j1]==0) { // path is completely inside
+            p[|i \ i + j1 - j|] = j::j1
+            i = i + j1 - j + 1
+            continue
+        }
+        ab[++k,] = 
+            j, j1, _geo_clip_clpos(c, XY[j+1,]), _geo_clip_clpos(c, XY[j1,])
+    }
+    _sort(ab, 3)
+    while (1) {
+        p[|i \ i + ab[1,2] - ab[1,1]|] = ab[1,1]::ab[1,2]
+        i = i + ab[1,2] - ab[1,1] + 1
+        yin  = ab[1,3] // ylo
+        yout = ab[1,4] // yup
+        while (1) {
+            K = rows(ab)
+            for (k=K;k>1;k--) {
+                if (ab[k,3]<=ab[k,4]) continue // wrong direction
+                if (ab[k,3]>yout | ab[k,3]<yin) continue // above or below 
+                p[|i \ i + ab[k,2] - ab[k,1] - 1|] = (ab[k,1]+1)::ab[k,2]
+                i = i + ab[k,2] - ab[k,1] // (missing is skipped)
+                yout = ab[k,4]
+                ab = select(ab, (1::K):!=k)
+                break
+            }
+            if (k<2) break
+        }
+        p[i++] = ab[1,1] + 1 // close polygon
+        if (K==1) break
+        ab = ab[|2,1 \ .,.|]
+    }
+    return(XY[p[|1 \ i-1|],])
+}
+
+`IntC' _geo_clip_outside(`RM' XY, `RM' c)
+{   // result: 1 outside, -1 inside, 0 on edge, . missing
+    if (length(c)==1) {
+        // c is the lower limit of X; point is outside if x-value < c
+        // (additionally make sure that missing if y-value is missing)
+        return(sign(c :- XY[,1]) :* XY[,2]:^0)
+    }
+    // c is and edge: c = p1 \ p2 with p1 = (x1,y1) and p2 = (x2,x2)
+    // check whether path p1 -> p2 -> XY[i,] turns left (inside)
+    // or right (outside)
+    return(sign((XY[,1] :- c[1,1]) * (c[2,2] - c[1,2])
+              - (XY[,2] :- c[1,2]) * (c[2,1] - c[1,1])))
+}
+
+`RR' _geo_clip_intersect(`RM' c, `RR' p1, `RR' p2)
+{   // obtain intersection between two lines
+    // https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+    if (length(c)==1) {
+        // c is the lower limit of X; compute y at which p1->p2 crosses c
+        return((c, p1[2] + (p2[2]-p1[2]) * (c-p1[1]) / (p2[1]-p1[1])))
+    }
+    return(((c[1,1] * c[2,2] - c[1,2] * c[2,1]) :* (p1    - p2)
+          - (p1[1]  * p2[2]  - p1[2]  * p2[1])  :* (c[1,] - c[2,]))
+        / ((c[1,1]-c[2,1])*(p1[2]-p2[2]) - (c[1,2]-c[2,2])*(p1[1]-p2[1])))
+}
+
+`RS' _geo_clip_clpos(`RM' c, `RR' p)
+{   // obtain position of point along clipping line
+    real scalar r
+    
+    if (length(c)==1) return(p[2]) // c is the lower limit of X
+    // rotate system
+    r = atan2(c[2,2]-c[1,2], c[2,1]-c[1,1]) - pi()
+    return(p[1]*sin(r) + p[2]*cos(r))
+}
+
+end
+
+*! {smcl}
+*! {marker geo_direction}{bf:geo_direction()}{asis}
+*! version 1.0.0  09oct2023  Ben Jann
+*!
+*! Determine direction of polygon
+*! see https://en.wikipedia.org/wiki/Curve_orientation
+*!
+*! Syntax:
+*!
+*!      result = geo_direction(XY)
+*!
+*!  result  1 if clockwise, -1 if counterclockwise, 0 if undefined
+*!  XY      n x 2 real matrix containing points of polygon; rows containing
+*!          missing will be ignored
+*!
+
+mata
+mata set matastrict on
+
+real scalar geo_direction(real matrix XY)
+{   // orientation of polygon ()
+    if (cols(XY)!=2) {
+        errprintf("input must have two columns\n")
+        exit(3200)
+    }
+    if (!rows(XY)) return(0) // no data; direction undefined
+    if (hasmissing(XY)) return(_geo_direction(select(XY, !rowmissing(XY))))
+    return(_geo_direction(XY))
+}
+
+real scalar _geo_direction(real matrix XY)
+{   // result: 1 = clockwise, -1 = counterclockwise, 0 = undefined
+    real scalar    n, i, a
+    real colvector A, B, C
+  
+    n = rows(XY)
+    if (!n) return(0) // no data; direction undefined
+    a = _geo_hull_refpoint(XY)
+    A = XY[a,]
+    for (i=1;i<n;i++) {
+        B = XY[mod(a + i - 1, n) + 1,]
+        if (B!=A) break
+    }
+    if (i==n) return(0) // second point not found; direction undefined
+    for (i=1;i<n;i++) {
+        C = XY[mod(a - i - 1, n) + 1,]
+        if (C!=A) {
+            if (C!=B) break
+        }
+    }
+    if (i==n) return(0) // third point not found; direction undefined
+    return(sign((C[1] - A[1]) * (B[2] - A[2]) - (B[1] - A[1]) * (C[2] - A[2])))
 }
 
 end
@@ -868,197 +1456,6 @@ real scalar _geo_rayintersect(real scalar px, real scalar py,
 end
 
 *! {smcl}
-*! {marker geo_rclip}{bf:geo_rclip()}{asis}
-*! version 1.0.0  05oct2023  Ben Jann
-*!
-*! Applies rectangular clipping to a polygon or polyline using the
-*! Sutherland–Hodgman algorithm
-*! (https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)
-*!
-*! Syntax:
-*!
-*!      result = geo_rclip(XY, bounds [, line])
-*!
-*!  result   coordinates of clipped polygon (first and/or last row equal to
-*!           missing if input started and/or ended with missing); J(0,2,.) is
-*!           returned if no points are within the bounds
-*!  YX       n x 2 real matrix containing the (X,Y) coordinates of the polygon
-*!           or polyline to be clipped (XY is interpreted as polygon if the
-*!           first point is equal to the last point, apart from leading or 
-*!           trailing missings; else the input is interpreted as polyline)
-*!  bounds   vector specifying the clipping limits: (Xmin, Xmax, Ymin, Ymax)
-*!           (missing will be interpreted as +/- infinity)
-*!  line     line!=0 enforces polyline clipping even if the input is a polygon;
-*!           polyline input implies line!=0; polyline clipping may return
-*!           multiple line segments, which will be divided by missing
-*!
-
-local Bool      real scalar
-local Int       real scalar
-local RS        real scalar
-local RC        real colvector
-local RR        real rowvector
-local RM        real matrix
-local PS        pointer (real matrix) scalar
-
-mata:
-mata set matastrict on
-
-`RM' geo_rclip(`RM' XY, `RM' bb0, | `Bool' line0)
-{
-    `Bool' line, mfirst, mlast
-    `Int'  a, b
-    `RC'   bb
-    `PS'   xy
-    
-    // defaults and checks
-    if (args()<3) line0 = 0
-    if (cols(XY)!=2) {
-        errprintf("{it:XY} must have two columns\n")
-        exit(3200)
-    }
-    bb = vec(bb0)
-    if (length(bb)<4) bb = bb \ J(4-length(bb),1,.)
-    // handle missings and copy data
-    a = 1; b = rows(XY)
-    if (b==0) return(J(1,2,.)) // empty input
-    mlast = hasmissing(XY[b,]) // has trailing missings
-    if (mlast) { 
-        for (;b;b--) {
-            if (!hasmissing(XY[b,])) break
-        }
-        if (!b) return(J(1,2,.)) // input all missing
-    }
-    mfirst = hasmissing(XY[a,]) // has leading missings
-    if (mfirst) {
-        for (;a<=b;a++) {
-            if (!hasmissing(XY[a,])) break
-        }
-    }
-    if (isfleeting(XY)) {
-        XY = J(1,2,.) \ XY[|a,1 \ b,2|]
-        xy = &XY
-    }
-    else xy = &(J(1,2,.) \ XY[|a,1 \ b,2|])
-    // line vs polygon
-    if (!(b-a)) line = 1 // single point input
-    else line = !((*xy)[2,]==(*xy)[rows(*xy),]) // is polyline (open path)
-    if (line0 | line) {
-        if (!line) {
-            // if the input is a polygon, then rearrange points such that
-            // the path starts with an outside point; this ensures that the
-            // path inside the box will not be subdivided
-            if (_geo_rclip_larrange(*xy, bb)) {
-                // all points are inside
-                if (!mfirst) *xy = (*xy)[|2,1\.,.|]
-                if (mlast)   *xy = *xy \ J(1,2,.)
-                return(*xy) 
-            }
-        }
-        line = 1
-    }
-    // clip (xmin -> ymin -> xmay -> ymax)
-    if (bb[1]<.) *xy =  _geo_clip_sh(  *xy,           bb[1], line)
-    if (bb[3]<.) *xy =  _geo_clip_sh( (*xy)[,(2,1)],  bb[3], line)[,(2,1)]
-    if (bb[2]<.) *xy = -_geo_clip_sh(-(*xy),         -bb[2], line)
-    if (bb[4]<.) *xy = -_geo_clip_sh(-(*xy)[,(2,1)], -bb[4], line)[,(2,1)]
-    // return
-    if (rows(*xy)<2) return(J(0,2,.)) // no points are inside
-    if (!mfirst) *xy = (*xy)[|2,1\.,.|]
-    if (mlast)   *xy = *xy \ J(1,2,.)
-    return(*xy) 
-}
-
-`Bool' _geo_rclip_larrange(`RM' XY, `RC' bb)
-{   // rearrange points so that path starts with an outside point
-    if (__geo_rclip_larrange(XY, bb[1], 1, 0)) return(0)
-    if (__geo_rclip_larrange(XY, bb[3], 2, 0)) return(0)
-    if (__geo_rclip_larrange(XY, bb[2], 1, 1)) return(0)
-    if (__geo_rclip_larrange(XY, bb[4], 2, 1)) return(0)
-    return(1) // all points are inside
-}
-
-`Bool' __geo_rclip_larrange(`RM' XY, `RS' c0, `Int' j, `Bool' neg)
-{
-    `Int' i, n
-    `RS'  c
-    `RC' x
-    
-    if (c0>=.) return(0)
-    if (neg) {; c = -c0; x = -XY[,j]; }
-    else     {; c =  c0; x =  XY[,j]; }
-    n = rows(x)
-    for (i=2;i<=n;i++) {
-        if (x[i]<c) {
-            if (i>2) XY = XY[1,] \ XY[|i,1 \ .,.|] \ XY[|3,1 \ i,.|]
-            return(1)
-        }
-    }
-    return(0)
-}
-
-`RM' _geo_clip_sh(`RM' XY, `RS' c, `Bool' line)
-{   // first point assumed missing
-    `Int' i, j, J
-    `RR'  p1, p2
-    `RM'  xy
-    
-    i = rows(XY)
-    if (i<2) return(J(0,2,.)) // empty input
-    J = 2 * i // safe upper limit for final number of points
-    xy = J(J, 2, .)
-    j = J + 1
-    p2 = XY[i--,]
-    for (;i;i--) {
-        p1 = p2
-        p2 = XY[i,]
-        if (hasmissing(p2)) {
-            if (p1[1]<c) {
-                if (!line) {
-                    if (j<J) xy[--j,] = xy[J,] // close polygon
-                }
-            }
-            else xy[--j,] = p1 // add last point
-            if (j<=J) { // add missing unless missing already added
-                if (!hasmissing(xy[j,])) j--
-            }
-            while (i>1) { // move to next nonmissing point
-                p2 = XY[--i,]
-                if (!hasmissing(p2)) break
-            }
-            continue
-        }
-        if (p1[1]<c) {
-            // Case 1: both outside; edge can be skipped
-            if (p2[1]<c) continue 
-            // Case 2: origin outside, target inside
-            if (p2[1]!=c) xy[--j,] = (c, _geo_clip_sh_ipolate(c, p1, p2))
-            continue
-        }
-        // Case 3: origin inside, target outside
-        if (p2[1]<c) {
-            xy[--j,] = p1
-            if (p1[1]!=c) xy[--j,] = (c, _geo_clip_sh_ipolate(c, p1, p2))
-            // find next relevant segment of the path an rearrange data
-            if (line) j-- // add missing
-            continue
-        }
-        // Case 4: both inside
-        xy[--j,] = p1
-    }
-    // return
-    if (j>=J) return(J(0,2,.)) // all points are outside
-    return(xy[|j,1 \ .,.|])
-}
-
-`RS' _geo_clip_sh_ipolate(`RS' c, `RR' p1, `RR' p2)
-{
-    return(p1[2] + (p2[2]-p1[2]) * (c-p1[1]) / (p2[1]-p1[1]))
-}
-
-end
-
-*! {smcl}
 *! {marker geo_rotate}{bf:geo_rotate()}{asis}
 *! version 1.0.0  27jun2023  Ben Jann
 *!
@@ -1066,15 +1463,15 @@ end
 *!
 *! Syntax:
 *!
-*!      result = geo_rotate(YX, angle)
+*!      result = geo_rotate(XY, angle)
 *!
 *!  result  n x 2 real matrix of rotated (X,Y) coordinates
-*!  YX      n x 2 real matrix of (X,Y) coordinates
+*!  XY      n x 2 real matrix of (X,Y) coordinates
 *!  angle   real scalar specifying angle
 *!
 *! Rotate in place:
 *!
-*!      _geo_rotate(YX, angle)
+*!      _geo_rotate(XY, angle)
 *!
 
 mata:
