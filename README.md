@@ -131,6 +131,27 @@ Zoom.
 
 Main changes:
 
+    12oct2023
+    - -geoframe translate- added (wrapper for spshape2dta)
+    - -geoframe query orientation- added
+    - -geoframe query gtype- added
+    - -geoframe generate shpmatch- added
+    - -geoframe copy- has been revised; can now specify custom IDs; can now copy
+      data between any type of frames
+    - option scale() in -geoframe generate area- and in -geoplot, sbar()- now has
+      a different interpretation; it now specified the number of units of the
+      underlying coordinates that form the base unit for the areas or the scale bar
+    - -geoframe- no longer leaves undocumented resulte behind in r() 
+    - -geoframe [r]clip- now has option -nodrop- to keep empty shapes in the data;
+      various smaller improvements to code implementing clipping
+    - -geoframe create- now also drops unmatched units, not only empty shapes (unless
+      nodrop is specified)
+    - -geoframe clean- classified shapes as empty if they consisted a single
+      missing opservations; this is changed; all shapes that only contain missing
+      are now considered empty
+    - categorization of zvar in geoplot is now more efficient
+    - a note is now displayed if zvar contains values not covered by cuts()
+
     09oct2023
     - -geoframe clip- added for clipping by convex shape; the clipping algorithm
       used by -geoframe [r]clip- has been rewritten and improved; it now returns

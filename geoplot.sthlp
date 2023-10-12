@@ -1,5 +1,5 @@
 {smcl}
-{* 30sep2023}{...}
+{* 12oct2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -1410,13 +1410,13 @@
     are as follows.
 
 {phang2}
-    {opt s:cale(exp)} determines how coordinates will be translated into the units
-    of the scale bar. Default is {cmd:scale(1/1000)} (that is, by default, if
-    coordinates are in meters, the scale bar will be in kilometers).
+    {opt s:cale(#)}, {it:#}>0, determines the size of units of the scale bar. Default is
+    {cmd:scale(1000)}. That is, by default, if coordinates are in meters, the
+    scale bar will be in kilometers.
 
 {phang2}
-    {opt l:ength(#)}, {it:#}>0, set the length of the scale bar in units
-    depending on {cmd:scale()}. {cmd:geoplot} will abort with error
+    {opt l:ength(#)}, {it:#}>0, set the length of the scale bar in units of
+    the scale bar. {cmd:geoplot} will abort with error
     if the resulting scale bar is too large (i.e., has
     coordinates outside of the plotregion). An appropriate
     length is determined automatically if {cmd:length()} is omitted.

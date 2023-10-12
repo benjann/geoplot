@@ -1,4 +1,4 @@
-*! version 1.1.2  30sep2023  Ben Jann
+*! version 1.1.3  12oct2023  Ben Jann
 
 /*
     Syntax:
@@ -194,26 +194,23 @@ program _layer
                 local ORG `ORG' `plevel'
                 local TGT `TGT' PLV
             }
-            if "`TYPE'"=="shape" & "`id'"=="" geoframe get id, local(id)
         }
         // handle weights
         local hasWGT = "`weight'"!=""
         if `hasWGT' {
-            tempname wvar
-            qui gen double `wvar' = abs(`exp') if `touse'
-            markout `touse' `wvar' // excludes obs with missing weight!
+            tempname WVAR
+            qui gen double `WVAR' = abs(`exp') if `touse'
+            markout `touse' `WVAR' // excludes obs with missing weight!
             if `"`wmax2'"'=="" {
-                su `wvar' if `touse', meanonly
+                su `WVAR' if `touse', meanonly
                 if "`wmax'"!="" local wmax2 = r(max)
                 else            local wmax2 = max(1, r(max)) 
             }
-            qui replace `wvar' = `wvar' / `wmax2' if `touse'
+            qui replace `WVAR' = `WVAR' / `wmax2' if `touse'
             if `hasSHP' {
-                tempname WVAR
-                local org `org' `wvar'
+                local org `org' `WVAR'
                 local tgt `tgt' `WVAR'
             }
-            else local WVAR `wvar'
             local ORG `ORG' `WVAR'
             local TGT `TGT' W
         }
@@ -221,23 +218,37 @@ program _layer
         // handle Z
         if `hasZ' {
             local zfmt: format `zvar'
-            tempname ZVAR
-            if `hasSHP' {
-                local org `org' `zvar'
-                local tgt `tgt' `ZVAR'
-                local Zvar `ZVAR'
+            if "`TYPE'"=="shape" & "`id'"=="" geoframe get id, local(id)
+            if "`id'"!="" {
+                // tag first obs per ID if type is shape and id is available
+                tempname ztouse
+                qui gen byte `ztouse' = `touse'
+                qui replace `ztouse' = 0/*
+                    */ if `id'==`id'[_n-1] & `touse'==`touse'[_n-1]
             }
-            else local Zvar `zvar'
+            else local ztouse `touse'
+            tempname ZVAR CUTS NOBS NMIS
+            mata: _z_cuts("`CUTS'", "`zvar'", "`l_wvar'", "`ztouse'") /*
+                fills in CUTS, returns levels */
+            if "`discrete'"!="" & "`nolabel'"=="" {
+                _z_labels `zvar' `levels' `CUTS' // => zlabels
+            }
+            _z_categorize `CUTS' `NOBS' `NMIS', levels(`levels') zvar(`zvar')/*
+                */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
+                /* returns zlevels discrete */
+            if `"`cuts'"'!="" { // check for unmatched obs if cuts() specified
+                qui count if `ZVAR'>=. & `touse'
+                if r(N) {
+                    di as txt "(layer `layer': `zvar' contains values not"/*
+                        */ " covered by cuts())"
+                }
+            }
+            if `hasSHP' {
+                local org `org' `ZVAR'
+                local tgt `tgt' `ZVAR'
+            }
             local ORG `ORG' `ZVAR'
             local TGT `TGT' Z
-            if "`l_wvar'"!="" {
-                if `hasSHP' {
-                    tempname L_WVAR
-                    local org `org' `l_wvar'
-                    local tgt `tgt' `L_WVAR'
-                }
-                else local L_WVAR `l_wvar'
-           }
         }
         else {
             if `hasMLAB' {
@@ -263,32 +274,27 @@ program _layer
                         */ " found; computing areas on the fly"
                     di as txt "generate/declare area variable using " /*
                         */ "{helpb geoframe} to avoid such extra computations"
-                    tempvar AREA
+                    tempname AREA
                     qui geoframe gen area `AREA', noset
                 }
             }
-            tempname svar
-            qui gen double `svar' = abs(`size') / `AREA' if `touse'
+            tempname SVAR
+            qui gen double `SVAR' = abs(`size') / `AREA' if `touse'
             if `"`s_max'"'=="" {
-                su `svar' if `touse', meanonly
+                su `SVAR' if `touse', meanonly
                 local s_max = r(max)
             }
-            qui replace `svar' = `svar' * (`s_scale'/`s_max') if `touse'
+            qui replace `SVAR' = `SVAR' * (`s_scale'/`s_max') if `touse'
             if `hasSHP' {
-                tempname SVAR
-                local Svar `SVAR'
-                local org `org' `svar'
+                local org `org' `SVAR'
                 local tgt `tgt' `SVAR'
             }
-            else {
-                local SVAR `svar'
-                tepname Svar
-            }
             local ORG `ORG' `SVAR'
-            local TGT `TGT' `Svar' // tempvar only
+            local TGT `TGT' `SVAR' // tempvar only
         }
         // get centroids (used by weights and size() in area/line)
         if (`hasWGT' & ("`TYPE'"=="shape")) | `hasSIZE' | "`lock'"!="" {
+            tempname CY CX
             if "`centroids'"!="" geoframe flip `centroids', local(cYX)
             else {
                 geoframe get centroids, flip local(cYX)
@@ -297,33 +303,21 @@ program _layer
                         */ " computing centroids on the fly"
                     di as txt "generate/declare centroids using " /*
                         */ "{helpb geoframe} to avoid such extra computations"
-                    tempvar tmp_CX tmp_CY
-                    qui geoframe gen centroids `tmp_CX' `tmp_CY', noset
-                    local cYX `tmp_CY' `tmp_CX'
+                    qui geoframe gen centroids `CX' `CY', noset
+                    local cYX `CY' `CX'
                 }
             }
             if `hasSHP' {
-                tempname CY CX
                 local org `org' `cYX'
                 local tgt `tgt' `CY' `CX'
+                local ORG `ORG' `CY' `CX'
             }
-            else {
-                gettoken CY cYX : cYX
-                gettoken CX cYX : cYX
-            }
+            else local ORG `ORG' `cYX'
             if "`lock'"!="" {
-                local cY cY
-                local cX cX
+                local CY cY
+                local CX cX
             }
-            else if `hasSHP' {
-                local cY `CY'
-                local cX `CX'
-            }
-            else {
-                tempname cY cX
-            }
-            local ORG `ORG' `CY' `CX'
-            local TGT `TGT' `cY' `cX'
+            local TGT `TGT' `CY' `CX'
         }
         // handle marker labels
         if `hasMLAB' {
@@ -344,47 +338,18 @@ program _layer
         else local mlabcolor
         // select option
         if `"`select'"'!="" {
-            tempname touse2
-            qui gen byte `touse2' = 0
-            qui replace `touse2' = 1 if `touse' & (`select')
-            if `hasSHP' {
-                local org `org' `touse2'
-                local tgt `tgt' `touse2'
-            }
+            qui replace `touse' = 0 if `touse' & !(`select')
         }
         // inject colors
         _process_coloropts options, `lcolor' `options'
         if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
     }
-    // put frames together and categorize zvar
-    frame `shpframe' {
-        if `hasSHP' {
-            // copy relevant variables from unit frame into shpframe
+    // copy relevant variables from unit frame into shpframe
+    if `hasSHP' {
+        frame `shpframe' {
             geoframe copy `frame' `org', target(`tgt') quietly
-            qui replace `touse' = 0 if `touse'>=. 
+            qui replace `touse' = 0 if `touse'>=.
         }
-        // categorize zvar
-        if `hasZ' {
-            if "`id'"!="" {
-                // tag first obs per ID
-                tempname ztouse
-                qui gen byte `ztouse' = `touse'
-                qui replace `ztouse' = 0/*
-                    */ if `id'==`id'[_n-1] & `touse'==`touse'[_n-1]
-            }
-            else local ztouse `touse'
-            tempname CUTS NOBS NMIS
-            mata: _z_cuts("`CUTS'", "`Zvar'", "`L_WVAR'", "`ztouse'") /*
-                fills in CUTS, returns levels */
-            if "`discrete'"!="" & "`nolabel'"=="" {
-                _z_labels `Zvar' `levels' `CUTS' // => zlabels
-            }
-            _z_categorize `CUTS' `NOBS' `NMIS', levels(`levels') zvar(`Zvar')/*
-                */ gen(`ZVAR') touse(`touse') ztouse(`ztouse') `discrete'
-                /* returns zlevels discrete */
-        }
-        // select
-        if `"`select'"'!="" local touse `touse2'
     }
     // copy data into main frame
     local n0 = _N + 1
@@ -404,13 +369,13 @@ program _layer
     qui replace LAYER = `layer' `in'
     // process size (area/line only)
     if `hasSIZE' {
-        qui replace Y = `cY' + (Y-`cY') * sqrt(`Svar') if `Svar'<. `in'
-        qui replace X = `cX' + (X-`cX') * sqrt(`Svar') if `Svar'<. `in'
+        qui replace Y = `CY' + (Y-`CY') * sqrt(`SVAR') if `SVAR'<. `in'
+        qui replace X = `CX' + (X-`CX') * sqrt(`SVAR') if `SVAR'<. `in'
     }
     // process weights (area/line only)
     if `hasWGT' & ("`TYPE'"=="shape") {
-        qui replace Y = `cY' + (Y-`cY') * sqrt(W) if W<. & `cY'<. & `cX'<. `in'
-        qui replace X = `cX' + (X-`cX') * sqrt(W) if W<. & `cY'<. & `cX'<. `in'
+        qui replace Y = `CY' + (Y-`CY') * sqrt(W) if W<. & `CY'<. & `CX'<. `in'
+        qui replace X = `CX' + (X-`CX') * sqrt(W) if W<. & `CY'<. & `CX'<. `in'
     }
     // prepare PLV
     if `hasPLV' {
@@ -792,6 +757,10 @@ end
 
 program _z_labels
     args var levels CUTS
+    if !`levels' {
+        c_local zlabels
+        exit
+    }
     local labname: value label `var'
     if `"`labname'"'=="" {
         mata: st_local("labels", invtokens(strofreal(st_matrix("`CUTS'"),/*

@@ -1,4 +1,4 @@
-*! version 1.1.3  06oct2023  Ben Jann
+*! version 1.1.4  12oct2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -1229,7 +1229,8 @@ end
 program _scalebar
     // syntax
     syntax anything [,/*
-        */ Length(numlist max=1 >0) Scale(str) n(numlist max=1 int >0) even/*
+        */ Length(numlist max=1 >0) Scale(numlist max=1 >0)/*
+        */ n(numlist max=1 int >0) even/*
         */ Units(str) NOLABel LABel(str) TItle(str)/*
         */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
         */ Height(numlist max=1 >=0 <=100) POSition(str)/*
@@ -1240,12 +1241,7 @@ program _scalebar
     gettoken Ymax    anything : anything // (includes margin)
     gettoken Xmin    anything : anything // (includes margin)
     gettoken Xmax    anything : anything // (includes margin)
-    if `"`scale'"'=="" local scale 0.001 // 1/1000
-    else               local scale = `scale'
-    if `scale'>=. | `scale'<=0 {
-        di as err "invalid syntax in scale()"
-        exit 198
-    }
+    if `"`scale'"'=="" local scale 1000
     if "`n'"=="" local n 5
     _parse_scalerbar_label, `label'
     _parse_scalerbar_title `title'
@@ -1269,13 +1265,13 @@ program _scalebar
             di as err "scalebar(): could not determine length; specify length()"
             exit 498
         }
-        local length = `LENGTH' * `scale'
+        local length = `LENGTH' / `scale'
     }
     else {
-        local LENGTH = `length' / `scale'
+        local LENGTH = `length' * `scale'
         if `LENGTH '>`lmax' {
             di as err "scalebar(): length too large; "/*
-                */ "maximum available length is " `lmax'*`scale'
+                */ "maximum available length is " `lmax' / `scale'
             exit 498
         }
         local delta = `LENGTH' / `n'
@@ -1331,8 +1327,8 @@ program _scalebar
         else {
             local LABEL `Ylab' `X0' "0"
             forv i=1/`=`n'-1' {
-                local x1 = `X0' + `i'*`delta'
-                local x1lab = `i'*`delta'*`scale'
+                local x1 = `X0' + `i' * `delta'
+                local x1lab = `i' * `delta' / `scale'
                 local x1lab `: di `lab_format' `x1lab''
                 local LABEL `LABEL' `Ylab' `x1' "`x1lab'"
             }

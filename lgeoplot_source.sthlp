@@ -4,8 +4,8 @@
 *!     {helpb lgeoplot_source##geo_centroid:geo_centroid()}
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
 *!     {helpb lgeoplot_source##geo_clip:geo_clip()}
-*!     {helpb lgeoplot_source##geo_direction:geo_direction()}
 *!     {helpb lgeoplot_source##geo_hull:geo_hull()}
+*!     {helpb lgeoplot_source##geo_orientation:geo_orientation()}
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
 *!     {helpb lgeoplot_source##geo_pointinpolygon:geo_pointinpolygon()}
@@ -391,7 +391,7 @@ end
 
 *! {smcl}
 *! {marker geo_clip}{bf:geo_clip()}{asis}
-*! version 1.0.1  09oct2023  Ben Jann
+*! version 1.0.2  10oct2023  Ben Jann
 *!
 *! Applies convex polygon or polyline clipping using a modified
 *! Sutherland–Hodgman algorithm (divided polygons will be returned 
@@ -400,7 +400,7 @@ end
 *!
 *! Syntax:
 *!
-*!      result = geo_clip(XY, bb [, line])
+*!      result = geo_clip(XY, mask [, line])
 *!
 *!  result   coordinates of clipped polygons (first and/or last row equal to
 *!           missing if input started and/or ended with missing); separate shapes
@@ -411,7 +411,7 @@ end
 *!           a shape is interpreted as a polygon if its first point is equal
 *!           to its last point, else the shape is interpreted as polyline; point
 *!           data is assumed if XY does not contain missing
-*!  bb       n x 2 real matrix containing the (X,Y) coordinates of the convex
+*!  mask     n x 2 real matrix containing the (X,Y) coordinates of the convex
 *!           clipping mask; invalid results will be returned if the clipping
 *!           mask is not convex
 *!  line     line!=0 enforces polyline clipping for polygons (i.e. do not
@@ -435,36 +435,41 @@ local RS        real scalar
 local RC        real colvector
 local RR        real rowvector
 local RM        real matrix
+local SS        string scalar
 local PS        pointer scalar
 local PC        pointer colvector
 
 mata:
 mata set matastrict on
 
-`RM' geo_clip(`RM' XY, `RM' bb, | `Bool' line)
+`RM' geo_clip(`RM' XY, `RM' mask, | `Bool' line)
 {
     if (args()<3) line = 0
-    return(_geo_clip(XY, _geo_clip_bbox(bb), line))
+    return(_geo_clip(XY, _geo_clip_mask(mask), line))
 }
 
-`RM' _geo_clip_bbox(`RM' bb0)
+`RM' _geo_clip_mask(`RM' mask0, | `SS' nm)
 {
-    `RM' bb
+    `RM' mask
     
-    if (cols(bb0)!=2) {
-        errprintf("{it:bb} must have two columns\n")
+    if (args()<2) nm = "mask"
+    if (cols(mask0)!=2) {
+        errprintf("{it:%s} must have two columns\n", nm)
         exit(3200)
     }
-    bb = select(bb0, !rowmissing(bb0))
-    if (rows(bb)) {
-        bb = bb \ bb[1,]      // wrap around
-        bb = _mm_uniqrows(bb) // remove repetitions
+    mask = select(mask0, !rowmissing(mask0))
+    if (rows(mask)) {
+        mask = mask \ mask[1,]    // wrap around
+        mask = _mm_uniqrows(mask) // remove repetitions
     }
-    if (rows(bb)<3) {
-        errprintf("{it:bb} must contain at least two unique points\n")
+    if (rows(mask)<3) {
+        errprintf("{it:%s} must contain at least two unique points\n", nm)
         exit(3200)
     }
-    return(bb)
+    if (_geo_orientation(mask)==-1) {
+        mask = mask[1::rows(mask),] // make counterclockwise
+    }
+    return(mask)
 }
 
 `RM' geo_rclip(`RM' XY, `RM' limits, | `Bool' line)
@@ -475,14 +480,14 @@ mata set matastrict on
 
 `RC' _geo_rclip_limits(`RM' limits)
 {
-    `RC' bb
+    `RC' mask
  
-    bb = vec(limits)
-    if (length(bb)<4) bb = bb \ J(4-length(bb),1,.)
-    return(bb)
+    mask = vec(limits)
+    if (length(mask)<4) mask = mask \ J(4-length(mask),1,.)
+    return(mask)
 }
 
-`RM' _geo_clip(`RM' XY, `RM' bb, `Bool' line)
+`RM' _geo_clip(`RM' XY, `RM' mask, `Bool' line)
 {
     `Bool'  mfirst, mlast, hasmis
     `Int'   a, b
@@ -513,11 +518,11 @@ mata set matastrict on
     hasmis = hasmissing(XY[|a,1 \ b,2|])
     // apply clipping
     if (hasmis) { // multiple shape items
-        xy = _geo_clip_apply(&__geo_clip(), XY, bb, line, a, b)
+        xy = _geo_clip_apply(&__geo_clip(), XY, mask, line, a, b)
     }
     else { // single shape item
-        if (!mfirst & !mlast) return(_geo_clip_point(XY, bb)) // point data
-        xy = __geo_clip(J(1,2,.) \ XY[|a,1 \ b,2|], bb, line)
+        if (!mfirst & !mlast) return(_geo_clip_point(XY, mask)) // point data
+        xy = __geo_clip(J(1,2,.) \ XY[|a,1 \ b,2|], mask, line)
     }
     // return
     if (rows(xy)) {
@@ -527,7 +532,7 @@ mata set matastrict on
     return(xy)
 }
 
-`RM' _geo_clip_apply(`PS' f, `RM' XY, `RM' bb, `Bool' line, `Int' a, `Int' b)
+`RM' _geo_clip_apply(`PS' f, `RM' XY, `RM' mask, `Bool' line, `Int' a, `Int' b)
 {
     `BoolC' mis
     `Int'   i, j, J
@@ -549,7 +554,7 @@ mata set matastrict on
     I = J(i, 1, NULL)
     J = 0
     for (;i;i--) {
-        I[i] = &(*f)(J(1,2,.) \ XY[|A[i],1 \ B[i],2|], bb, line)
+        I[i] = &(*f)(J(1,2,.) \ XY[|A[i],1 \ B[i],2|], mask, line)
         J = J + rows(*I[i])
     }
     // collect results
@@ -563,43 +568,40 @@ mata set matastrict on
     return(xy)
 }
 
-`RM' _geo_clip_point(`RM' XY, `RM' bb)
+`RM' _geo_clip_point(`RM' XY, `RM' mask)
 {
-    `Int' i, n
-    `RC'  in
-
-    if (cols(bb)==1) return(select(XY, __geo_rclip_point(XY, bb)))
-    return(select(XY, __geo_clip_point(XY, bb)))
+    if (cols(mask)==1) return(select(XY, __geo_rclip_point(XY, mask)))
+    return(select(XY, __geo_clip_point(XY, mask)))
 }
 
-`BoolC' __geo_rclip_point(`RM' XY, `RM' bb)
+`BoolC' __geo_rclip_point(`RM' XY, `RC' mask)
 {
-    `RC'  in
+    `RC' in
 
     in = J(rows(XY),1,1)
-    if (bb[1]<.) in = in :& (_geo_clip_outside(XY, bb[1]):<=0)
-    if (bb[3]<.) in = in :& (_geo_clip_outside(XY[,(2,1)], bb[3]):<=0)
-    if (bb[2]<.) in = in :& (-_geo_clip_outside(XY, bb[2]):<=0)
-    if (bb[4]<.) in = in :& (-_geo_clip_outside(XY[,(2,1)], bb[4]):<=0)
+    if (mask[1]<.) in = in :& (_geo_clip_outside(XY, mask[1]):<=0)
+    if (mask[3]<.) in = in :& (_geo_clip_outside(XY[,(2,1)], mask[3]):<=0)
+    if (mask[2]<.) in = in :& (-_geo_clip_outside(XY, mask[2]):<=0)
+    if (mask[4]<.) in = in :& (-_geo_clip_outside(XY[,(2,1)], mask[4]):<=0)
     return(in)
 }
 
-`BoolC' __geo_clip_point(`RM' XY, `RM' bb)
+`BoolC' __geo_clip_point(`RM' XY, `RM' mask)
 {
     `Int' i, n
     `RC'  in
 
     in = J(rows(XY),1,1)
-    n = rows(bb)
+    n = rows(mask)
     for (i=1;i<n;i++) {
-        in = in :& (_geo_clip_outside(XY, bb[|i,1 \ i+1,2|]):<=0)
+        in = in :& (_geo_clip_outside(XY, mask[|i,1 \ i+1,2|]):<=0)
     }
     return(in)
 }
 
-`RM' __geo_clip(`RM' XY, `RM' bb, `Bool' line)
+`RM' __geo_clip(`RM' XY, `RM' mask, `Bool' line)
 {
-    `Bool' polygon, clockdir
+    `Bool' polygon, flip
     `Int'  i, n
     `PS'   f
 
@@ -610,60 +612,60 @@ mata set matastrict on
     if (line | !polygon) {
         if (polygon) {
             // rearrange points so that polygon does not start inside
-            if (_geo_clip_larrange(XY, bb)) return(XY) // all points inside
+            if (_geo_clip_larrange(XY, mask)) return(XY) // all points inside
         }
         f = &_geo_clip_line()
-        clockdir = 0
+        flip = 0
     }
     else {
         f = &_geo_clip_area()
-        clockdir = _geo_direction(XY[|2,1 \ .,.|])==1
-        if (clockdir) XY = J(1,2,.) \ XY[rows(XY)::2,.] // flip direction
+        flip = _geo_orientation(XY[|2,1 \ .,.|])==1 // is counterclockwise
+        if (flip) XY = J(1,2,.) \ XY[rows(XY)::2,.] // flip orientation
     }
-    if (cols(bb)==1) { // rclip
-        if (bb[1]<.) { // xmin
-            XY = (*f)(XY, bb[1])
+    if (cols(mask)==1) { // rclip
+        if (mask[1]<.) { // xmin
+            XY = (*f)(XY, mask[1])
         }
-        if (bb[3]<.) { // ymin (-90° rotation)
-            XY = (*f)((XY[,2], -XY[,1]), bb[3])
+        if (mask[3]<.) { // ymin (-90° rotation)
+            XY = (*f)((XY[,2], -XY[,1]), mask[3])
             XY = (-XY[,2], XY[,1])
         }
-        if (bb[2]<.) { // xmax (-180° rotation)
-            XY = -(*f)(-XY, -bb[2])
+        if (mask[2]<.) { // xmax (-180° rotation)
+            XY = -(*f)(-XY, -mask[2])
         }
-        if (bb[4]<.) { // ymax (-270° rotation)
-            XY = (*f)((-XY[,2], XY[,1]), -bb[4])
+        if (mask[4]<.) { // ymax (-270° rotation)
+            XY = (*f)((-XY[,2], XY[,1]), -mask[4])
             XY = (XY[,2], -XY[,1])
         }
     }
     else {
-        n = rows(bb)
-        for (i=1;i<n;i++) XY = (*f)(XY, bb[|i,1 \ i+1,2|])
+        n = rows(mask)
+        for (i=1;i<n;i++) XY = (*f)(XY, mask[|i,1 \ i+1,2|])
     }
     // returns
-    if (clockdir) {
+    if (flip) {
         if (rows(XY)) {
-            XY = J(1,2,.) \ XY[rows(XY)::2,.] // flip direction
+            XY = J(1,2,.) \ XY[rows(XY)::2,.] // restore orientation
         }
     }
     return(XY)
 }
 
-`Bool' _geo_clip_larrange(`RM' XY, `RM' bb)
+`Bool' _geo_clip_larrange(`RM' XY, `RM' mask)
 {
     `Int'  i, n
     
-    if (cols(bb)==1) { // rclip
-        if (_geo_rclip_larrange(XY, bb[1], 1, 0)) return(0)
-        if (_geo_rclip_larrange(XY, bb[3], 2, 0)) return(0)
-        if (_geo_rclip_larrange(XY, bb[2], 1, 1)) return(0)
-        if (_geo_rclip_larrange(XY, bb[4], 2, 1)) return(0)
+    if (cols(mask)==1) { // rclip
+        if (_geo_rclip_larrange(XY, mask[1], 1, 0)) return(0)
+        if (_geo_rclip_larrange(XY, mask[3], 2, 0)) return(0)
+        if (_geo_rclip_larrange(XY, mask[2], 1, 1)) return(0)
+        if (_geo_rclip_larrange(XY, mask[4], 2, 1)) return(0)
     }
     else {
-        n = rows(bb)
+        n = rows(mask)
         for (i=1;i<n;i++) {
             if (__geo_clip_larrange(XY,
-                _geo_clip_outside(XY, bb[|i,1 \ i+1,2|]))) return(0)
+                _geo_clip_outside(XY, mask[|i,1 \ i+1,2|]))) return(0)
         }
     }
     return(1) // all points are inside
@@ -746,8 +748,8 @@ mata set matastrict on
 `RM' _geo_clip_area(`RM' XY, `RM' c)
 {   // first point assumed missing
     `Int'   i, j
-    `Bool'  hasexit
-    `BoolC' isexit
+    `Bool'  hasentr
+    `BoolC' isentr
     `IntC'  out
     `RM'    xy
     
@@ -760,21 +762,21 @@ mata set matastrict on
     _geo_clip_area_arrange(XY, out)
     // apply clipping
     j = 2 * i
-    isexit = J(j, 1, .)
-    hasexit = 0
+    isentr = J(j, 1, 0)
+    hasentr = 0
     xy = J(j++, 2, .)
     for (;i;i--) {
         if (out[i]>0) { // point is outside or missing
             if (out[i]>=.) continue // skip point if missing
             for (--i;i;i--) { // find first inside point or end of path
                 if (out[i]<=0) { // inside point found
-                    if (out[i]) { // add point on edge; this is the exit point
+                    if (out[i]) { // add point on edge; this is the entry point
                         xy[--j,] = _geo_clip_intersect(c, XY[i+1,], XY[i,])
-                        isexit[j] = 1
+                        isentr[j] = 1
                     }
-                    else isexit[j-1] = 1 // next point is the exit point
+                    else isentr[j-1] = 1 // next point is the entry point
                     i++ // move back one point
-                    hasexit = 1
+                    hasentr = 1
                     break
                 }
                 if (out[i]>=.) break // end of path
@@ -782,11 +784,9 @@ mata set matastrict on
         }
         else { // point is inside
             xy[--j,]  = XY[i,] // add inside point
-            if (isexit[j]>=.) isexit[j] = 0 // only if not set yet
             for (--i;i;i--) { // find first outside point or end of path
                 if (out[i]<=0) { // point is inside
                     xy[--j,]  = XY[i,] // add inside point
-                    isexit[j] = 0
                     continue
                 }
                 // point is outside or missing (end of path)
@@ -794,17 +794,17 @@ mata set matastrict on
                     i++ // move back one point
                     if (out[i]) { // add point on edge
                         xy[--j,]  = _geo_clip_intersect(c, XY[i,], XY[i-1,])
-                        isexit[j] = 0
                     }
                 }
                 break
             }
-            j-- // add missing (terminate path)
+            isentr[--j] = . // add missing (terminate path)
         }
     }
     // return
-    if (hasexit) return(_geo_clip_area_join(xy[|j,1 \ .,.|], c, isexit[|j \. |]))
-    return(xy[|j,1 \ .,.|])
+    xy = xy[|j,1 \ .,.|]
+    if (hasentr) xy = _geo_clip_area_join(xy, c, isentr[|j \. |])
+    return(xy)
 }
 
 void _geo_clip_area_arrange(`RM' XY, `IntC' out)
@@ -832,14 +832,14 @@ void _geo_clip_area_arrange(`RM' XY, `IntC' out)
     }
 }
 
-`RM' _geo_clip_area_join(`RM' XY, `RM' c, `BoolC' isexit)
+`RM' _geo_clip_area_join(`RM' XY, `RM' c, `BoolC' isentr)
 {   // join pieces of paths crossing the boundary and close the polygons
     `Int' j, j1, k, K, i
     `RC'  yin, yout
     `RM'  ab
     `Int' p
     
-    K = sum(isexit:==1)
+    K = sum(isentr:==1)
     ab = J(K,4,.)
     j = rows(XY)
     p = J(j + K, 1, .)
@@ -847,8 +847,8 @@ void _geo_clip_area_arrange(`RM' XY, `IntC' out)
     i = 1
     for (;j;j--) {
         j1 = j--
-        while (isexit[j]<.) j--
-        if (isexit[j1]==0) { // path is completely inside
+        while (isentr[j]<.) j--
+        if (isentr[j1]==0) { // path is completely inside
             p[|i \ i + j1 - j|] = j::j1
             i = i + j1 - j + 1
             continue
@@ -856,17 +856,17 @@ void _geo_clip_area_arrange(`RM' XY, `IntC' out)
         ab[++k,] = 
             j, j1, _geo_clip_clpos(c, XY[j+1,]), _geo_clip_clpos(c, XY[j1,])
     }
-    _sort(ab, 3)
+    _sort(ab, -3)
     while (1) {
         p[|i \ i + ab[1,2] - ab[1,1]|] = ab[1,1]::ab[1,2]
         i = i + ab[1,2] - ab[1,1] + 1
-        yin  = ab[1,3] // ylo
-        yout = ab[1,4] // yup
+        yin  = ab[1,3]
+        yout = ab[1,4]
         while (1) {
             K = rows(ab)
             for (k=K;k>1;k--) {
-                if (ab[k,3]<=ab[k,4]) continue // wrong direction
-                if (ab[k,3]>yout | ab[k,3]<yin) continue // above or below 
+                if (ab[k,3]>=ab[k,4]) continue // wrong orientation
+                if (ab[k,3]<yout | ab[k,3]>yin) continue // above or below 
                 p[|i \ i + ab[k,2] - ab[k,1] - 1|] = (ab[k,1]+1)::ab[k,2]
                 i = i + ab[k,2] - ab[k,1] // (missing is skipped)
                 yout = ab[k,4]
@@ -916,62 +916,6 @@ void _geo_clip_area_arrange(`RM' XY, `IntC' out)
     // rotate system
     r = atan2(c[2,2]-c[1,2], c[2,1]-c[1,1]) - pi()
     return(p[1]*sin(r) + p[2]*cos(r))
-}
-
-end
-
-*! {smcl}
-*! {marker geo_direction}{bf:geo_direction()}{asis}
-*! version 1.0.0  09oct2023  Ben Jann
-*!
-*! Determine direction of polygon
-*! see https://en.wikipedia.org/wiki/Curve_orientation
-*!
-*! Syntax:
-*!
-*!      result = geo_direction(XY)
-*!
-*!  result  1 if clockwise, -1 if counterclockwise, 0 if undefined
-*!  XY      n x 2 real matrix containing points of polygon; rows containing
-*!          missing will be ignored
-*!
-
-mata
-mata set matastrict on
-
-real scalar geo_direction(real matrix XY)
-{   // orientation of polygon ()
-    if (cols(XY)!=2) {
-        errprintf("input must have two columns\n")
-        exit(3200)
-    }
-    if (!rows(XY)) return(0) // no data; direction undefined
-    if (hasmissing(XY)) return(_geo_direction(select(XY, !rowmissing(XY))))
-    return(_geo_direction(XY))
-}
-
-real scalar _geo_direction(real matrix XY)
-{   // result: 1 = clockwise, -1 = counterclockwise, 0 = undefined
-    real scalar    n, i, a
-    real colvector A, B, C
-  
-    n = rows(XY)
-    if (!n) return(0) // no data; direction undefined
-    a = _geo_hull_refpoint(XY)
-    A = XY[a,]
-    for (i=1;i<n;i++) {
-        B = XY[mod(a + i - 1, n) + 1,]
-        if (B!=A) break
-    }
-    if (i==n) return(0) // second point not found; direction undefined
-    for (i=1;i<n;i++) {
-        C = XY[mod(a - i - 1, n) + 1,]
-        if (C!=A) {
-            if (C!=B) break
-        }
-    }
-    if (i==n) return(0) // third point not found; direction undefined
-    return(sign((C[1] - A[1]) * (B[2] - A[2]) - (B[1] - A[1]) * (C[2] - A[2])))
 }
 
 end
@@ -1072,6 +1016,63 @@ real scalar _geo_hull_leftturn(real rowvector p1, real rowvector p2,
     
     d = (p2[2] - p1[2]) * (p3[1] - p2[1]) - (p2[1] - p1[1]) * (p3[2] - p2[2])
     return(d<0)
+}
+
+end
+
+*! {smcl}
+*! {marker geo_orientation}{bf:geo_orientation()}{asis}
+*! version 1.0.1  10oct2023  Ben Jann
+*!
+*! Determine orientation of polygon
+*! see https://en.wikipedia.org/wiki/Curve_orientation
+*!
+*! Syntax:
+*!
+*!      result = geo_orientation(XY)
+*!
+*!  result  1 if orientation is positive (counterclockwise), -1 if negative
+*!          (clockwise), 0 if undefined
+*!  XY      n x 2 real matrix containing points of polygon; rows containing
+*!          missing will be ignored
+*!
+
+mata
+mata set matastrict on
+
+real scalar geo_orientation(real matrix XY)
+{   // orientation of polygon
+    if (cols(XY)!=2) {
+        errprintf("input must have two columns\n")
+        exit(3200)
+    }
+    if (!rows(XY)) return(0) // no data; orientation undefined
+    if (hasmissing(XY)) return(_geo_orientation(select(XY, !rowmissing(XY))))
+    return(_geo_orientation(XY))
+}
+
+real scalar _geo_orientation(real matrix XY)
+{   // result: -1 = clockwise, 1 = counterclockwise, 0 = undefined
+    real scalar    n, i, a
+    real colvector A, B, C
+  
+    n = rows(XY)
+    if (!n) return(0) // no data; orientation undefined
+    a = _geo_hull_refpoint(XY)
+    A = XY[a,]
+    for (i=1;i<n;i++) {
+        B = XY[mod(a + i - 1, n) + 1,]
+        if (B!=A) break
+    }
+    if (i==n) return(0) // second point not found; orientation undefined
+    for (i=1;i<n;i++) {
+        C = XY[mod(a - i - 1, n) + 1,]
+        if (C!=A) {
+            if (C!=B) break
+        }
+    }
+    if (i==n) return(0) // third point not found; orientation undefined
+    return(sign((B[1]-A[1]) * (C[2]-A[2]) - (C[1]-A[1]) * (B[2]-A[2])))
 }
 
 end
