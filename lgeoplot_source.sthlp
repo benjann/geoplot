@@ -1,6 +1,8 @@
 *! Source of lgeoplot.mlib
 *! {smcl}
 *!     {helpb lgeoplot_source##geo_area:geo_area()}
+*!     {helpb lgeoplot_source##geo_bbox:geo_bbox()}
+*!     {helpb lgeoplot_source##geo_bshare:geo_bshare()}
 *!     {helpb lgeoplot_source##geo_centroid:geo_centroid()}
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
 *!     {helpb lgeoplot_source##geo_clip:geo_clip()}
@@ -10,6 +12,7 @@
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
 *!     {helpb lgeoplot_source##geo_pointinpolygon:geo_pointinpolygon()}
 *!     {helpb lgeoplot_source##geo_rotate:geo_rotate()}
+*!     {helpb lgeoplot_source##geo_simplify:geo_simplify()}
 *!     {helpb lgeoplot_source##geo_spjoin:geo_spjoin()}
 *!     {helpb lgeoplot_source##geo_symbol:geo_symbol()}
 *!     {helpb lgeoplot_source##geo_welzl:geo_welzl()}
@@ -265,6 +268,503 @@ void _geo_bbox_rearrange(real matrix XY)
 end
 
 *! {smcl}
+*! {marker geo_bshare}{bf:geo_bshare()}{asis}
+*! version 1.0.0  17oct2023  Ben Jann
+*!
+*! Algorithm to identify points that lie on shared borders between shape items
+*!
+*! Syntax:
+*!
+*!      result = geo_bshare(ID, PID, XY [, rtype, nodots ])
+*!
+*!  result  n x 1 colvector tagging points that lie on shared border (0 no,
+*!          1 yes)
+*!  ID      real colvector of unit IDs
+*!  PID     real colvector of within-unit shape item IDs
+*!  XY      n x 2 real matrix containing the (X,Y) coordinates of the shape
+*!          items; shape items may have leading or trailing missings but are
+*!          assumed non-missing in between
+*!  rtype   rtype==0: tag all points that are on shared borders
+*!          rtype>0:  tag only start and end points of shared borders
+*!          rtype<0:  tag points that are not on shared borders (except
+*!                    start and end points of line segments)
+*!  nodots  nodots!=0 suppresses progress dots
+*!
+
+local Bool  real scalar
+local BoolC real colvector
+local Int   real scalar
+local IntC  real colvector
+local RS    real scalar
+local RC    real colvector
+local RR    real rowvector
+local RM    real matrix
+local POLYGON   _geo_bshare_POLYGON
+local Polygon   struct `POLYGON' scalar
+local pPolygons pointer (`Polygon') vector
+
+mata:
+
+struct `POLYGON' {
+    `Int'  a, b   // data range of polygon
+    `Int'  mtop   // missing rows at top
+    `Int'  mbot   // missing rows at bottom
+    `RM'   XY     // coordinates (without missing at top/bottom)
+    `RS'   xmin, xmax, ymin, ymax
+}
+
+`BoolC' geo_bshare(`RC' ID, `RC' PID, `RM' XY, | `Int' rtype, `Bool' nodots)
+{
+    `Int'       i, j, d0, dn, d
+    `BoolC'     B
+    `pPolygons' p
+    
+    if (args()<4) rtype = 0
+    if (args()<5) nodots = 0
+    // collect polygons
+    p = _geo_bshare_polygons(runningsum(_mm_uniqrows_tag((ID,PID))), XY)
+    // tag points on common borders
+    i = length(p)
+    if (!nodots) {
+        displayas("txt")
+        printf("(search for shared borders among %g shape items)\n", i)
+        d0 = _geo_progress_init("(")
+        dn = comb(i, 2)
+        d = 0
+    }
+    B = J(rows(XY),1,0)
+    for (;i;i--) {
+        for (j=i-1;j;j--) {
+            _geo_bshare_tag(B, *p[i], *p[j], rtype>0)
+            if (!nodots) _geo_progressdots(++d/dn, d0)
+        }
+    }
+    if (!nodots) display(")")
+    // handle rtype<0 (non-borders)
+    if (rtype<0) {
+        for (i=length(p);i;i--) _bshare_not(B, *p[i])
+    }
+    // handle missing rows
+    for (i=length(p);i;i--) _geo_bshare_mis(B, *p[i])
+    // return
+    return(B)
+}
+
+`pPolygons' _geo_bshare_polygons(`RC' PID, `RM' XY)
+{
+    `Int'       i, n
+    `IntC'      a, b
+    `pPolygons' p
+    
+    n = rows(XY)
+    a = selectindex(_mm_uniqrows_tag(PID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    p = J(i, 1, NULL)
+    for (;i;i--) {
+        p[i] = &(_geo_bshare_polygon(XY, a[i], b[i]))
+    }
+    return(p)
+}
+
+`Polygon' _geo_bshare_polygon(`RM' XY, `Int' a, `Int' b)
+{
+    `Int'     i0, i1
+    `RM'      minmax
+    `Polygon' p
+    
+    p.a = a
+    p.b = b
+    for (i0=a;i0<=b;i0++) {
+        if (!hasmissing(XY[i0,])) break
+    }
+    p.mtop = i0 - a
+    if (i0>b) { // all missing
+        p.XY = J(0,2,.)
+        p.mbot = 0
+        return(p)
+    }
+    for (i1=b; i1; i1--) {
+        if (!missing(XY[i1,])) break
+    }
+    p.mbot = b - i1
+    p.XY = XY[|i0,1 \ i1,2|]
+    minmax = colminmax(p.XY)
+    p.xmin = minmax[1,1]
+    p.xmax = minmax[2,1]
+    p.ymin = minmax[1,2]
+    p.ymax = minmax[2,2]
+    return(p)
+}
+
+void _bshare_not(`BoolC' B0, `Polygon' p)
+{
+    `Int'   n
+    `BoolC' B
+    
+    B = B0[|p.a+p.mtop \ p.b-p.mbot|]
+    n = rows(B)
+    if (!n) return // empty shape
+    if (all(B))       B = J(n,1,0) // all points on shared border
+    else if (!any(B)) B = J(n,1,1) // no points on shared border
+    else {
+        if (p.XY[1,]==p.XY[n,]) B = _bshare_not_wrap(B, n)   // polygon
+        else                    B = _bshare_not_nowrap(B, n) // line
+    }
+    B0[|p.a+p.mtop \ p.b-p.mbot|] = B
+}
+
+`BoolC' _bshare_not_wrap(`BoolC' B0, `Int' n)
+{
+    `Int'   i, j, ni
+    `BoolC' B
+    
+    B = B0
+    ni = n - 1 // skip last point
+    for (j=1;j<=ni;j++) {
+        i = mod(j-1, ni) + 1
+        if (!B[i]) continue
+        if      (!B0[mod(i-2, ni)+1]) B[i] = 0 // last point of shared border
+        else if (!B0[mod(i,   ni)+1]) B[i] = 0 // first point of stared border
+    }
+    B[n] = B[1]
+    return(!B)
+}
+
+`BoolC' _bshare_not_nowrap(`BoolC' B0, `Int' n)
+{
+    `Int'   i
+    `BoolC' B
+    
+    B = B0
+    // handle first and last point
+    if (B[1] & !B0[2])   B[1] = 0
+    if (B[n] & !B0[n-1]) B[n] = 0
+    // handle rest
+    for (i=2;i<n;i++) {
+        if (!B[i]) continue
+        if      (!B0[i+1]) B[i] = 0 // last point of shared border
+        else if (!B0[i-1]) B[i] = 0 // first point of stared border
+    }
+    return(!B)
+}
+
+void _geo_bshare_mis(`IntC' B, `Polygon' p)
+{
+    if (!p.mtop & !p.mbot) return
+    if (!any(B[|p.a+p.mtop \ p.b-p.mbot|])) return // no points on shared border
+    // turn missing rows on
+    if (p.mtop) B[|p.a \ p.a+p.mtop-1|] = J(p.mtop, 1, 1)
+    if (p.mbot) B[|p.b-p.mbot+1 \ p.b|] = J(p.mbot, 1, 1)
+}
+
+void _geo_bshare_tag(`IntC' B, `Polygon' pi, `Polygon' pj, `Bool' limits)
+{   // limits!=0: only mark start and end
+    `Int'   i, ni, j, nj, dir
+    `IntC'  ab
+    `RR'    xy
+    `IntC'  Bi, Bj
+    
+    if (pi.ymax < pj.ymin) return
+    if (pi.xmax < pj.xmin) return
+    if (pj.ymax < pi.ymin) return
+    if (pj.xmax < pi.xmin) return
+    ni = rows(pi.XY)
+    Bi = J(ni,1,0)
+    nj = rows(pj.XY)
+    Bj = J(nj,1,0)
+    for (i=ni;i;i--) {
+        xy = pi.XY[i,]
+        if (xy[1] < pj.xmin) continue
+        if (xy[2] < pj.ymin) continue
+        if (xy[1] > pj.xmax) continue
+        if (xy[2] > pj.ymax) continue
+        for (j = nj; j; j--) {
+            if (xy==pj.XY[j,]) {
+                // common point found
+                Bi[i] = j; Bj[j] = i
+                if (i==1) break // done; no more points in pi
+                // get direction of common path in pj
+                dir = _geo_bshare_tag_dir(pi.XY[i-1,], pj.XY, j, nj)
+                if (dir==0) break // single common point; move to next i
+                // follow common path
+                _geo_bshare_tag_path(dir, Bi, pi.XY, i, Bj, pj.XY, j, nj)
+                break 
+            }
+        }
+    }
+    if (!any(Bi)) return // no matching points
+    // select start and end of segments if limits!=0
+    _geo_bshare_tag_limits(Bi, pi.XY, ni, Bj, pj.XY, nj, limits)
+    // return
+    ab = pi.a + pi.mtop \ pi.a + pi.mtop + ni - 1
+    B[|ab|] = B[|ab|] :| Bi
+    ab = pj.a + pj.mtop \ pj.a + pj.mtop + nj - 1
+    B[|ab|] = B[|ab|] :| Bj
+}
+
+`Int' _geo_bshare_tag_dir(`RR' xy, `RM' XY, `Int' j, `Int' nj)
+{
+    if (j<nj) {
+        if (XY[j+1,]==xy) return(1)  // up
+    }
+    if (j>1) {
+        if (XY[j-1,]==xy) return(-1) // down
+    }
+    return(0)
+}
+
+void _geo_bshare_tag_path(`Int' dir, `IntC' Bi, `RM' XYi, `Int' i,
+                                 `IntC' Bj, `RM' XYj, `Int' j, `Int' nj)
+{
+    `Int' i0, j0
+    
+    i0 = --i
+    if (dir>0) {
+        j0 = ++j
+        for (;j<=nj;j++) {
+            if (XYi[i,]!=XYj[j,]) break
+            if (!(--i)) {; j++; break; }
+        }
+        j--
+        i++
+        Bj[|j0 \ j|] = i0::i
+        Bi[|i \ i0|] = j::j0
+        return
+    }
+    j0 = --j
+    for (;j;j--) {
+        if (XYi[i,]!=XYj[j,]) break
+        if (!(--i)) {; j--; break; }
+    }
+    j++
+    i++
+    Bj[|j \ j0|] = i::i0
+    Bi[|i \ i0|] = j::j0
+}
+
+void _geo_bshare_tag_limits(`IntC' Bi, `RM' XYi, `Int' ni, 
+                        `IntC' Bj, `RM' XYj, `Int' nj, `Bool' limits)
+{
+    `Bool' polyi, polyj
+    
+    // update first point if pj is a polygon
+    polyj = XYj[1,]==XYj[nj,]
+    if (polyj) {
+        if (Bj[nj]) Bj[1] = 1
+    }
+    if (!limits) return
+    // select limits
+    polyi = XYi[1,]==XYi[ni,]
+    if (polyi) {
+        if (all(Bi)) {
+            if (polyj) {
+                if (all(Bj)) _geo_bshare_tag_limits_1(Bi, ni, Bj, nj) // 1
+                else         _geo_bshare_tag_limits_2(Bi, ni, Bj, nj) // 2
+            }
+            else {
+                if (all(Bj)) _geo_bshare_tag_limits_3(Bi, ni, Bj, nj) // 3
+                else         _geo_bshare_tag_limits_4(Bi, ni, Bj, nj) // 4
+            }
+        }
+        else {
+            if (polyj) {
+                if (all(Bj)) _geo_bshare_tag_limits_2(Bj, nj, Bi, ni) // 5->2
+                else         _geo_bshare_tag_limits_6(Bi, ni, Bj, nj) // 6
+            }
+            else {
+                if (all(Bj)) _geo_bshare_tag_limits_7(Bi, ni, Bj, nj) // 7
+                else         _geo_bshare_tag_limits_8(Bi, ni, Bj, nj) // 8
+            }
+        }
+    }
+    else {
+        if (all(Bi)) {
+            if (polyj) {
+                if (all(Bj)) _geo_bshare_tag_limits_3(Bj, nj, Bi, ni) //  9->3
+                else         _geo_bshare_tag_limits_7(Bj, nj, Bi, ni) // 10->7
+            }
+            else {
+                if (all(Bj)) _geo_bshare_tag_limits_11(Bi, ni, Bj, nj) // 11
+                else         _geo_bshare_tag_limits_12(Bi, ni, Bj, nj) // 12
+            }
+        }
+        else {
+            if (polyj) {
+                if (all(Bj)) _geo_bshare_tag_limits_4(Bj, nj, Bi, ni) // 13->4
+                else         _geo_bshare_tag_limits_8(Bj, nj, Bi, ni) // 14->8
+            }
+            else {
+                if (all(Bj)) _geo_bshare_tag_limits_12(Bj, nj, Bi, ni) // 15->12
+                else         _geo_bshare_tag_limits_16(Bi, ni, Bj, nj) // 16
+            }
+        }
+    }
+}
+
+void _geo_bshare_tag_limits_1(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon with all points matched
+    // j is polygon with all points matched
+    // set start in both to first point of polygon i
+    `Int'  j0
+    
+    Bj = Bj * 0
+    j0 = Bi[1]
+    if (anyof((1,nj), j0)) Bj[1]  = Bj[nj] = 1
+    else                   Bj[j0] = 1
+    Bi = Bi * 0
+    Bi[1] = Bi[ni] = 1
+}
+
+void _geo_bshare_tag_limits_2(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon with all points matched
+    // j is polygon without all points matched
+    // set start in i to first match after gap in polygon j
+    // (this case should never occur)
+    `Int'  i0
+    
+    i0 = _geo_bshare_tag_limits_poly(Bj, nj)
+    Bi = Bi * 0
+    if (anyof((1,ni), i0)) Bi[1]  = Bi[ni] = 1
+    else                   Bi[i0] = 1
+}
+
+void _geo_bshare_tag_limits_3(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon with all points matched
+    // j is line with all points matched
+    // mark first and last point in j; set start in i to first point in j 
+    `Int'  i0
+    
+    i0 = Bj[1]
+    Bj = Bj * 0
+    Bj[1] = Bj[nj] = 1
+    Bi = Bi * 0
+    if (anyof((1,ni), i0)) Bi[1]  = Bi[ni] = 1
+    else                   Bi[i0] = 1
+}
+
+void _geo_bshare_tag_limits_4(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon with all points matched
+    // j is line without all points matched
+    // mark start and end of each segment in j; set start in i to first
+    // matched point in j
+    `Int'  i0
+    
+    i0 = _geo_bshare_tag_limits_line(Bj, nj, 1)
+    Bi = Bi * 0
+    if (anyof((1,ni), i0)) Bi[1]  = Bi[ni] = 1
+    else                   Bi[i0] = 1
+}
+
+void _geo_bshare_tag_limits_6(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon without all points matched
+    // j is polygon without all points matched
+    // mark start/end individually
+    (void) _geo_bshare_tag_limits_poly(Bi, ni)
+    (void) _geo_bshare_tag_limits_poly(Bj, nj)
+}
+
+void _geo_bshare_tag_limits_7(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon without all points matched
+    // j is line with all points matched
+    // mark start/end in i individually; mark first and last point in j
+    (void) _geo_bshare_tag_limits_poly(Bi, ni)
+    Bj = Bj * 0
+    Bj[1] = Bj[nj] = 1
+}
+
+void _geo_bshare_tag_limits_8(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is polygon without all points matched
+    // j is line without all points matched
+    // mark start/end individually
+    (void) _geo_bshare_tag_limits_poly(Bi, ni)
+    (void) _geo_bshare_tag_limits_line(Bj, nj, 0)
+}
+
+void _geo_bshare_tag_limits_11(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is line with all points matched
+    // j is line with all points matched
+    // mark first and last point in i and in j
+    Bi = Bi * 0
+    Bi[1] = Bi[ni] = 1
+    Bj = Bj * 0
+    Bj[1] = Bj[nj] = 1
+}
+
+void _geo_bshare_tag_limits_12(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is line with all points matched
+    // j is line without all points matched
+    // mark first and last point in i; mark start/end of segments in j
+    Bi = Bi * 0
+    Bi[1] = Bi[ni] = 1
+    (void) _geo_bshare_tag_limits_line(Bj, nj, 0)
+}
+
+void _geo_bshare_tag_limits_16(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
+{   // i is line without all points matched
+    // j is line without all points matched
+    // mark start/end of segments in in an j
+    (void) _geo_bshare_tag_limits_line(Bi, ni, 0)
+    (void) _geo_bshare_tag_limits_line(Bj, nj, 0)
+}
+
+`Int' _geo_bshare_tag_limits_poly(`IntC' B, `Int' n)
+{
+    `Int'   i, i0, j, ni
+    `BoolC' B0
+    
+    // find point after gap
+    i = n
+    if (B[i]) {
+        for (--i;i;i--) {
+            if (!B[i]) break
+        }
+        i0 = i + 1
+    }
+    else {
+        for (--i;i;i--) {
+            if (B[i]) break
+        }
+        for (--i;i;i--) {
+            if (!B[i]) break
+        }
+        i0 = i + 1
+    }
+    // mark start and end of segments
+    B0 = B
+    ni = n - 1 // skip last point
+    for (j=1;j<ni;j++) {
+        i = mod(j+i0-1, ni) + 1
+        if (!B0[i])              continue // target point
+        if (!B0[mod(i-2, ni)+1]) continue // point above
+        if (!B0[mod(i,   ni)+1]) continue // point below
+        B[i] = 0
+    }
+    // fix last point
+    B[n] = B[1]
+    return(B0[i0])
+}
+
+`Int' _geo_bshare_tag_limits_line(`IntC' B, `Int' n, `Bool' id)
+{
+    `Int'   i
+    `BoolC' B0
+
+    B0 = B
+    for (i=n-2;i;i--) {
+        if (!B0[i+1]) continue // target point
+        if (!B0[i+2]) continue // point above
+        if (!B0[i])   continue // point below
+        B[i] = 0
+    }
+    if (id) return(select(B0, B)[1])
+    return(.)
+}
+
+end
+
+*! {smcl}
 *! {marker geo_centroid}{bf:geo_centroid()}{asis}
 *! version 1.0.1  30jun2023  Ben Jann
 *!
@@ -501,7 +1001,7 @@ mata set matastrict on
     }
     // handle missings
     a = 1; b = rows(XY)
-    if (b==0) return(J(1,2,.))  // empty input
+    if (b==0) return(J(0,2,.))  // empty input
     mfirst = hasmissing(XY[a,]) // has leading missings
     mlast  = hasmissing(XY[b,]) // has trailing missings
     if (mfirst) {
@@ -1149,7 +1649,7 @@ end
 *!  ID      real colvector of unit IDs
 *!  PID     real colvector of within-unit polygon IDs
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
-*!  nodots  do not display progress dots if nodots!=0
+*!  nodots  nodots!=0 suppresses progress dots 
 *!
 
 local Bool      real scalar
@@ -1196,17 +1696,19 @@ struct `UNIT' {
     u = _geo_collect_units(ID, PID, XY)
     n = length(u)
     // determine within unit plot levels
-   if (!nodots) i0 = _geo_progress_init("pass 1/2: ")
+    if (!nodots) i0 = _geo_progress_init("(pass 1/2: ")
     for (i=n;i;i--) {
         _geo_plevel_within(*u[i])
         if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
     }
+    if (!nodots) display(")")
     // update plot levels based on between unit comparisons
-    if (!nodots) i0 = _geo_progress_init("pass 2/2: ")
+    if (!nodots) i0 = _geo_progress_init("(pass 2/2: ")
     for (i=n;i;i--) {
         for (j=i-1; j; j--) _geo_plevel_between(*u[i], *u[j])
         if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
     }
+    if (!nodots) display(")")
     // fill in result
     if (rtype) {
         P = J(rows(ID), 1, .)
@@ -1234,7 +1736,7 @@ struct `UNIT' {
 `Int' _geo_progress_init(`SS' msg)
 {
     displayas("txt")
-    printf("(%s0%%", msg)
+    printf("%s0%%", msg)
     displayflush()
     return(0)
 }
@@ -1250,7 +1752,6 @@ void _geo_progressdots(`Int' p, `Int' j)
         }
         else {
             printf("%g%%", j/4*10)
-            if (j==40) printf(")\n")
             displayflush()
         }
     }
@@ -1496,6 +1997,269 @@ void _geo_rotate(real matrix XY, real scalar angle)
 end
 
 *! {smcl}
+*! {marker geo_simplify}{bf:geo_simplify()}{asis}
+*! version 1.0.0  16oct2023  Ben Jann
+*!
+*! Simplify polygons using Visvalingam–Whyatt algorithm
+*! see: https://en.wikipedia.org/wiki/Visvalingam%E2%80%93Whyatt_algorithm
+*!
+*! Syntax:
+*!
+*!      result = geo_simplify(XY, delta [, B ])
+*!
+*!  result  n x 1 colvector tagging points to be kept (0 drop, 1 keep)
+*!  XY      n x 2 real matrix containing the (X,Y) coordinates of the shape
+*!          items to be simplifies; separate shape items divided by missing
+*!  delta   real scalar specifying threshold for dropping points (minimum
+*!          triangle area)
+*!  B       n x 1 real colvector tagging start and end points of shared
+*!          borders (0 regular point, !0 start or end point of shared border);
+*!          simplification will then operate by segments formed by these points,
+*!          ensuring consistent simplification of shared borders across shape
+*!          items
+*!
+
+local Bool  real scalar
+local BoolC real colvector
+local Int   real scalar
+local IntC  real colvector
+local RS    real scalar
+local RC    real colvector
+local RR    real rowvector
+local RM    real matrix
+local PC    pointer colvector
+
+mata:
+
+`BoolC' geo_simplify(`RM' XY, `RS' delta, | `BoolC' B)
+{
+    `Bool'  mfirst, mlast
+    `Int'   a, b, n
+    `BoolC' I
+    
+    // checks
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    // handle missings
+    a = 1; n = b = rows(XY)
+    if (n==0) return(J(0,1,.))  // empty input
+    mfirst = hasmissing(XY[a,]) // has leading missings
+    mlast  = hasmissing(XY[b,]) // has trailing missings
+    if (mfirst) {
+        for (++a;a<=b;a++) {
+            if (!hasmissing(XY[a,])) break
+        }
+        if (a>b) return(J(b,1,0)) // input all missing; drop all
+    }
+    if (mlast) {
+        for (--b;b;b--) {
+            if (!hasmissing(XY[b,])) break
+        }
+    }
+    if (mfirst & mlast) mlast = 0 // mfirst takes precedence
+    // select points
+    if (hasmissing(XY[|a,1 \ b,2|]))
+        I = _geo_simplify_apply(XY, delta, mlast, a, b, B)
+    else if (rows(B))
+        I = _geo_simplify(XY[|a,1 \ b,2|], delta, mfirst+mlast ? mlast : .,
+            B[|a \ b|])
+    else
+        I = _geo_simplify(XY[|a,1 \ b,2|], delta, mfirst+mlast ? mlast : .)
+    // return
+    if      (mfirst) a--
+    else if (mlast)  b++
+    if (a>1) I = I[1] \ J(a-1, 1, 0) \ I[|2\.|] // drop extra missings at start
+    if (b<n) I = I \ J(n-b, 1, 0) // drop extra missings at end
+    return(I)
+}
+
+`BoolC' _geo_simplify_apply(`RM' XY, `RS' delta, `Bool' mlast, `Int' a, `Int' b,
+    `BoolC' BB)
+{
+    `BoolC' mis, I
+    `Int'   i, j, J
+    `IntC'  A, B
+    `PC'    Ij
+    
+    // collect indices of shape items
+    mis = selectindex(rowmissing(XY[|a,1 \ b,2|])) :+ (a - 1)
+    i = rows(mis) + 1
+    A = B = J(i, 1, .)
+    A[1] = a; B[i] = b
+    for (--i;i;i--) {
+        A[i+1] = mis[i] + 1
+        B[i]   = mis[i] - 1
+    }
+    // process each item 
+    i = rows(A)
+    Ij = J(i, 1, NULL)
+    for (;i;i--) {
+        if (rows(BB))
+            Ij[i] = &_geo_simplify(XY[|A[i],1 \ B[i],2|], delta, mlast,
+                BB[|A[i] \ B[i]|])
+        else
+            Ij[i] = &_geo_simplify(XY[|A[i],1 \ B[i],2|], delta, mlast)
+    }
+    // collect results
+    J = b - a + 2
+    I = J(J, 1, .)
+    for (i=length(Ij);i;i--) {
+        j = rows(*Ij[i])
+        I[|J-j+1 \ J|] = *Ij[i]
+        J = J - j
+    }
+    return(I)
+}
+
+`BoolC' _geo_simplify(`RM' XY, `RS' delta, `Bool' mlast, | `BoolC' B)
+{
+    `Int'   r
+    `BoolC' I
+    
+    if (rows(B)) {
+        if (any(B)) I = __geo_simplify(XY, delta, B, r = rows(XY))
+                    //if (r>=3) { // check total area and drop if < delta
+                    //    if (_geo_area(select(XY,I))<delta) r = 2
+                    //}
+        else        I = _geo_vwhyatt(XY, delta, r = rows(XY))
+    }
+    else I = _geo_vwhyatt(XY, delta, r = rows(XY))
+    if (r<3) { // only two points left; drop all
+        if (mlast>=.) return(J(rows(XY), 1, 0))   // no missing row
+                      return(J(rows(XY)+1, 1, 0)) // add missing row
+    }
+    if (mlast>=.) return(I)     // no missing row
+    if (mlast)    return(I \ 1) // add missing row at end
+                  return(1 \ I) // add missing row at start
+}
+
+`BoolC' __geo_simplify(`RM' XY, `RS' delta, `BoolC' B, `Int' n)
+{
+    `Int'   a, b, i, r, ri
+    `BoolC' I
+    
+    if (n<3) return(J(n,1,1))
+    // check whether need to wrap around
+    if (!B[1]) { // first not tagged
+        if (XY[1,]==XY[n,]) { // is polygon
+            for (i=1;i<=n;i++) { // find first tagged point
+                if (B[i]) break
+            }
+            r = n
+            I = __geo_simplify(XY[|i,1\n,2|] \ XY[|2,1\i,2|], delta,
+                B[|i\n|] \ B[|2\i|], n)
+            return(I[|r-i+1\.|] \ I[|2\r-i+1|])
+        }
+    }
+    // process segments, except last
+    I = J(n, 1, .)
+    r = 0
+    b = 1
+    for (i=2;i<n;i++) {
+        if (!B[i]) continue
+        a = b; b = i
+        I[|a\b|] = _geo_vwhyatt(XY[|a,1 \ b,2|], delta, ri = b - a + 1)
+        r = r + ri - 1
+    }
+    // process last segment and return
+    a = b; b = n
+    I[|a\b|] = _geo_vwhyatt(XY[|a,1 \ b,2|], delta, ri = b-a+1)
+    n = r + ri
+    return(I)
+}
+
+`BoolC' _geo_vwhyatt(`RM' XY, `RS' delta, `Int' r) // r will be modified
+{   // tags points to be dropped
+    `Int'  i, i0, i1, n
+    `IntC' I
+    `RC'   A
+    
+    n = r
+    if (n<3)      return(J(n,1,1))
+    if (delta>=.) return(1 \ J(n-2,1,0) \ 1) // delta = infinity; drop all
+    A = . \ _geo_vwhyatt_A(XY) \ .
+    I = J(n, 1, 1)
+    i = _geo_vwhyatt_imin(A)
+    while (A[i]<delta) {
+        // remove point
+        A[i] = .
+        I[i] = 0
+        r--
+        // update area of point above and below
+        i1 = _geo_vwhyatt_i1(I, i)
+        i0 = _geo_vwhyatt_i0(I, i)
+        if (i1<n) {
+            i = i1
+            i1 = _geo_vwhyatt_i1(I, i)
+            A[i] = _geo_vwhyatt_a(XY[i,], XY[i0,], XY[i1,])
+            if (i0>1) {
+                i1 = i
+                i = i0
+                i0 = _geo_vwhyatt_i0(I, i)
+                A[i] = _geo_vwhyatt_a(XY[i,], XY[i0,], XY[i1,])
+            }
+        }
+        else if (i0>1) {
+            i = i0
+            i0 = _geo_vwhyatt_i0(I, i)
+            A[i] = _geo_vwhyatt_a(XY[i,], XY[i0,], XY[i1,])
+        }
+        else break // only 2 points left
+        // get index of new minimum
+        i = _geo_vwhyatt_imin(A)
+    }
+    return(I)
+}
+
+`Int' _geo_vwhyatt_imin(A)
+{
+    transmorphic i, w
+    pragma unset i
+    pragma unset w
+    
+    minindex(A, 1, i, w)
+    return(i[1]) // will return error if A is all missing
+}
+
+`Int' _geo_vwhyatt_i1(`IntC' I, `Int' i)
+{
+    `Int' i1
+    
+    i1 = i + 1
+    while (!I[i1]) i1++
+    return(i1)
+}
+
+`Int' _geo_vwhyatt_i0(`IntC' I, `Int' i)
+{
+    `Int' i0
+    
+    i0 = i - 1
+    while (!I[i0]) i0--
+    return(i0)
+}
+
+`RC' _geo_vwhyatt_A(`RM' XY)
+{
+    `RM' xy, lo, up
+    
+    xy = lo = up = (2,1 \ rows(XY)-1,2)
+    lo[,1] = lo[,1] :- 1
+    up[,1] = up[,1] :+ 1
+    return(_geo_vwhyatt_a(XY[|xy|], XY[|lo|], XY[|up|]))
+}
+
+`RC' _geo_vwhyatt_a(`RM' xy, `RM' lo, `RM' up)
+{
+    return(abs((up[,1]-xy[,1]) :* (lo[,2]-xy[,2])
+             - (lo[,1]-xy[,1]) :* (up[,2]-xy[,2])))
+}
+
+end
+
+*! {smcl}
 *! {marker geo_spjoin}{bf:geo_spjoin()}{asis}
 *! version 1.0.1  02oct2023  Ben Jann
 *!
@@ -1511,7 +2275,7 @@ end
 *!  PID     n x 1 real colvector of within-unit polygon IDs
 *!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
 *!  PL      optional n x 1 real colvector containing plot level indicator 
-*!  nodots  do not display progress dots if nodots!=0
+*!  nodots  nodots!=0 suppresses progress dots
 *!
 
 local Bool      real scalar
@@ -1539,7 +2303,7 @@ mata set matastrict on
     pointer  pl
     
     if (args()<6) nodots = 0
-    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, nodots, "pass 1/1: "))
+    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, nodots, "(pass 1/1: "))
     if (hasmissing(PL)) pl = &editmissing(PL, 0) // treat missing as 0
     else                pl = &PL
     L  = mm_unique(select(*pl, _mm_uniqrows_tag((ID, PID))))
@@ -1550,7 +2314,7 @@ mata set matastrict on
     for (i=n;i;i--) {
         P     = selectindex(*pl:==L[i])
         id[p] = _geo_spjoin(xy[p,], ID[P], PID[P], XY[P,], nodots,
-            sprintf("pass %g/%g: ", n-i+1, n))
+            sprintf("(pass %g/%g: ", n-i+1, n))
         if (i>1) p = selectindex(id:>=.) // remaining unmatched points
     }
     return(id)
@@ -1570,6 +2334,7 @@ mata set matastrict on
         id[i] = __geo_spjoin(xy[i,1], xy[i,2], u)
         if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
     }
+    if (!nodots) display(")")
     return(id)
 }
 

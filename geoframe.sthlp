@@ -1,5 +1,5 @@
 {smcl}
-{* 12oct2023}{...}
+{* 17oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -39,6 +39,10 @@
 {p2col :{helpb geoframe##clip:clip}}clip shapes using convex window
     {p_end}
 {p2col :{helpb geoframe##rclip:rclip}}clip shapes using rectangular window
+    {p_end}
+{p2col :{helpb geoframe##simplify:simplfy}}simplify (generalize) shapes
+    {p_end}
+{p2col :{helpb geoframe##bshare:bshare}}select shared borders
     {p_end}
 {p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variables
     {p_end}
@@ -486,8 +490,7 @@
     [{cmd:,} {it:options} ]
 
 {pstd}
-    clips or selects the shapes by a convex mask (and removes shapes
-    that do not satisfy the {it:if} and {it:in} qualifiers), where {it:matname}
+    clips the selected shapes by a convex mask, where {it:matname}
     is a matrix containing the (X,Y) coordinates of the clipping mask. For example,
     you could type {bind:{cmd:geoframe rclip r(bbox)}} to apply clipping by the bounding box
     returned by {helpb geoframe##q_bbox:geoframe query bbox}. {it:options} are as
@@ -502,7 +505,7 @@
     if {cmd:noclip} is specified.
 
 {phang}
-    {opt nocl:ip} applies selection rather than clipping. All shapes that
+    {opt nocl:ip} applies selection rather than clipping. Shapes that
     are at least partially inside the clipping window will be selected. {cmd:noclip}
     is implied when processing point data or paired-coordinate data. For
     paired-coordinate data, an item is considered inside if the origin coordinate
@@ -510,7 +513,7 @@
 
 {phang}
     {opt st:rict} changes the behavior of {cmd:noclip}. By default, {cmd:noclip}
-    selects all shapes that are at least partially inside the clipping
+    selects shapes that are at least partially inside the clipping
     window. Specify {cmd:strict} together with {cmd:noclip} to select the
     shapes that are completely within the window.
 
@@ -522,20 +525,21 @@
 
 {phang}
     {opt nodrop} retains empty-shape units in the data. The default is to keep only
-    those units that remain non-empty. Units that do not satisfy the {it:if}
-    and {it:in} qualifiers will be dropped in any case.
+    those units that remain non-empty after the modification.
 
 {phang}
-    {opt into(newname [newshpname])} copies the clipped or selected shapes
+    {opt nodot:s} suppresses the progress dots that are displayed by default.
+
+{phang}
+    {opt into(newname [newshpname])} copies the processed shapes
     into a frame called {it:newname} (and possibly a linked shape
     frame called {it:newshpname}) and leaves the current frame (and its linked
-    shape frame) unchanged. The default for {it:newshpname} is {it:newname}{cmd:_shp}.
+    shape frame) unchanged. The default for {it:newshpname} is
+    {it:newname}{cmd:_shp}. Only observations that satisfy the {it:if} and {it:in}
+    qualifiers will be copied.
 
 {phang}
     {opt replace} allows {cmd:into()} to overwrite existing frames.
-
-{phang}
-    {opt nodes:cribe} suppresses the description of the created frame.
 
 {phang}
     {opt nocur:rent} does not make the created frame the current frame.
@@ -548,8 +552,7 @@
     [{cmd:,} {it:options} ]
 
 {pstd}
-    clips or selects the shapes by a rectangular window (and removes shapes
-    that do not satisfy the {it:if} and {it:in} qualifiers), where {it:limits}
+    clips the selected shapes by a rectangular window, where {it:limits}
     specifies the boundaries of the window. {it:limits} can be specified as a
     {it:{help numlist}} providing the minimum and maximum
     of X and Y in the following order:
@@ -570,7 +573,91 @@
 
 {pstd}
     You can also use {helpb geoframe##clip:geoframe clip} for rectangular clipping, but
-    {cmd:geoframe rclip} may be more convenient and, in some situations, faster.
+    {cmd:geoframe rclip} may be more convenient (and, in some situations, faster).
+
+{marker simplify}{...}
+{dlgtab:geoframe simplify}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:simplify} [{it:delta}] {ifin}
+    [{cmd:,} {it:options} ]
+
+{pstd}
+    simplifies (generalizes) the selected shapes (using a Visvalingam–Whyatt
+    algorithm), where {it:delta} specifies the degree of simplification. The
+    larger {it:delta}, the stronger the simplification. The default value for
+    {it:delta} is one. {it:options} are as follows.
+
+{phang}
+    {opt joint:ly} causes the selected shapes to be simplified
+    jointly, taking into account shared borders. By default, each
+    shape item is simplified individually, which may lead to inconsistencies
+    in shared borders (i.e., different points may be selected for each
+    item). Such inconsistencies are visually insignificant with moderate
+    degrees of simplification, and this is why {cmd:jointly} is turned off
+    by default. Specify {cmd:jointly} if you want to enforce shared borders
+    to be simplified in the same way for all involved shape items. This may be
+    time consuming in large datasets.
+
+{phang}
+    {opt abs:solute} causes {it:delta} to be interpreted as an absolute
+    threshold (minimum triangle area by which points are dropped). {cmd:absolute}
+    only has an effect if {it:delta} is specified.
+
+{pmore}
+    By default, {it:delta} is interpreted as a multiplier for the base threshold, which
+    is determined from the coordinates of the selected shapes as
+    0.5 * (Xmax-Xmin)/1000 * (Ymax-Ymin)/1000 (corresponding to half a pixel
+    in a one megapixel image). This default is chosen so
+    that the simplification will be barely visible when plotting the shapes, but
+    thousands of data points may still be removed depending on the complexity of
+    the original data. Shape files often come with a great amount of
+    detail that will only be visible when zooming in on selected areas of
+    the map. Use {cmd:geoframe simplify} to reduce the amount of data in these
+    cases, yielding faster screen rendering and smaller graph files, without
+    loosing much accuracy of the display. Specify, for example,
+    {cmd:geoframe simplify 100} if you want to simplify the shapes with a clear
+    visual effect.
+
+{pmore}
+    Specify {it:delta} with option {cmd:absolute} if you want to provide a
+    custom threshold rather than a multiplier for the default threshold.
+
+{phang}
+    {opt nodrop} retains empty-shape units in the data. The default is to keep only
+    those units that remain non-empty after the modification.
+
+{phang}
+    {opt nodot:s} suppresses the progress dots that are displayed by default.
+
+{phang}
+    {opt into(newname [newshpname])} copies the processed shapes
+    into a frame called {it:newname} (and possibly a linked shape
+    frame called {it:newshpname}) and leaves the current frame (and its linked
+    shape frame) unchanged. The default for {it:newshpname} is
+    {it:newname}{cmd:_shp}. Only observations that satisfy the {it:if} and {it:in}
+    qualifiers will be copied.
+
+{phang}
+    {opt replace} allows {cmd:into()} to overwrite existing frames.
+
+{phang}
+    {opt nocur:rent} does not make the created frame the current frame.
+
+{marker bshare}{...}
+{dlgtab:geoframe bshare}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:bshare} {ifin}
+    [{cmd:,} {cmd:not} {it:options} ]
+
+{pstd}
+    modifies the selected shapes so that only shared borders remain. Specify option
+    {cmd:not} to remove shared borders and retain the other parts of the shape
+    items. The default is to retain shared borders and remove the other
+    parts. Further {it:options} are {opt nodrop}, {opt nodot:s}, {opt into()},
+    {opt replace}, and {opt nocur:rent} as described for
+    {helpb geoframe##simplify:geoframe simplify}.
 
 {marker generate}{...}
 {dlgtab:geoframe generate}

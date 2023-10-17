@@ -1,4 +1,4 @@
-*! version 1.1.4  12oct2023  Ben Jann
+*! version 1.1.5  17oct2023  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -752,15 +752,17 @@ program _geoframe_select
         }
     }
     // reporting and frame change
-    if `Ndrop'==1 local msg observation
-    else          local msg observations
-    local tmp `: di %9.0gc `Ndrop''
-    di as txt "(dropped `tmp' `msg' in frame {bf:`newname'})"
-    if `Ndropshp'<. {
-        if `Ndropshp'==1 local msg observation
-        else             local msg observations
-        local tmp `: di %9.0gc `Ndropshp''
-        di as txt "(dropped `tmp' `msg' in frame {bf:`newshpname'})"
+    if `hasIF' {
+        if `Ndropshp'<. {
+            if `Ndropshp'==1 local msg observation
+            else             local msg observations
+            local tmp `: di %9.0gc `Ndropshp''
+            di as txt "(dropped `tmp' `msg' in frame {bf:`newshpname'})"
+        }
+        if `Ndrop'==1 local msg observation
+        else          local msg observations
+        local tmp `: di %9.0gc `Ndrop''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`newname'})"
     }
     if `newFRM' {
         if "`current'"=="" {
@@ -773,20 +775,15 @@ end
 
 program _geoframe_clip
     // syntax
-    syntax anything(name=matname id="matname") [if] [in] [,/*
-        */ Line noCLip STrict SPlit nodrop /*
-        */ into(passthru) replace noDEScribe noCURrent ]
+    syntax anything(name=matname id="matname") [if] [in] [, * ]
     tempname MASK
     confirm matrix `matname'
     mat `MASK' = `matname'
-    __geoframe_clip `if' `in', mask(`MASK') `line' `clip' `strict'/*
-        */ `split' `drop' `into' `replace' `describe' `current'
+    __geoframe_manipulate clip `if' `in', mask(`MASK') `options'
 end
 
 program _geoframe_rclip
-    syntax anything(name=limits id="limits") [if] [in] [,/*
-        */ Line noCLip STrict SPlit nodrop /*
-        */ into(passthru) replace noDEScribe noCURrent ]
+    syntax anything(name=limits id="limits") [if] [in] [, * ]
     tempname MASK
     local ismat 0
     if `: list sizeof limits'==1 {
@@ -820,168 +817,121 @@ program _geoframe_rclip
         di as err "{it:ymax} must be larger than {it:ymin}"
         esit 198
     }
-    __geoframe_clip `if' `in', mask(`MASK') rclip `line' `clip' `strict'/*
-        */ `split' `drop' `into' `replace' `describe' `current'
+    __geoframe_manipulate clip `if' `in', mask(`MASK') rclip `options'
 end
 
-program __geoframe_clip
+program _geoframe_simplify
+    __geoframe_manipulate simplify `0'
+end
+
+program _geoframe_bshare
+    __geoframe_manipulate bshare `0'
+end
+
+program __geoframe_manipulate
     // syntax
-    syntax [if] [in], mask(str) [ rclip/*
-        */ line noclip strict split nodrop /*
-        */ into(namelist max=2) replace nodescribe nocurrent ]
-    local hasIF = `"`if'`in'"'!=""
-    // get settings of current frame
-    local frame `"`c(frame)'"'
-    geoframe get shpframe, local(shpframe)
-    local hasSHP = "`shpframe'"!=""
-    // make sure coordinates are available
-    if `hasSHP'==0 | "`noshp'"!="" {
-        qui geoframe get coordinates, strict
+    gettoken subcmd 0 : 0
+    local opts nodrop noDOTs into(namelist max=2) replace noCURrent
+    if "`subcmd'"=="clip" {
+        syntax [if] [in], mask(str) [ rclip/*
+            */ Line noCLip STrict SPlit `opts' ]
     }
-    else {
-        frame `shpframe': qui geoframe get coordinates, strict
+    else if "`subcmd'"=="simplify" {
+        syntax [anything(id="delta" name=delta)] [if] [in] [,/*
+            */ ABSolute JOINTly `opts' ]
+        if "`delta'"!="" {
+            numlist `"`delta'"', max(1) range(>=0)
+            local delta `r(numlist)'
+        }
     }
-    // parse into()
-    local newFRM 0
-    local newSHP 0
-    if "`into'"!="" {
-        gettoken newname into : into
-        local newFRM = "`newname'"!=`"`frame'"'
-        if "`replace'"=="" confirm new frame `newname'
+    else if "`subcmd'"=="bshare" {
+        syntax [if] [in] [, NOT `opts' ]
+    }
+    else exit 198
+    // mark sample
+    marksample touse
+    // into()
+    if `"`into'"'!="" {
+        gettoken frame : into
+        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
+    }
+    else local frame `"`c(frame)'"'
+    // check for shape frame
+    frame `frame' {
+        geoframe get shpframe, local(shpframe)
+        local hasSHP = "`shpframe'"!=""
         if `hasSHP' {
-            if "`newname'"==`"`shpframe'"' {
-                di as err "{it:newname} must be different from"/*
-                    */ " name of linked shape frame"
-                exit 198
-            }
-            gettoken newshpname : into
-            if "`newshpname'"=="" local newshpname `newname'_shp
-            local newSHP = "`newshpname'"!=`"`shpframe'"'
-            if "`replace'"=="" confirm new frame `newshpname'
-            if "`newshpname'"==`"`frame'"' {
-                di as err "{it:newshpname} must be different from"/*
-                    */ " name of current frame"
-                exit 198
-            }
-            if "`newshpname'"=="`newname'" {
-                di as err "{it:newshpname} must be different from"/*
-                    */ " {it:newname}"
-                exit 198
+            geoframe get id, local(id) strict
+            geoframe get linkname, local(lnkvar) strict
+            frame `shpframe' {
+                geoframe get id, local(shpid) strict
+                qui frget `touse' = `touse', from(`lnkvar')
+                qui replace `touse' = 0 if `touse'>=.
             }
         }
+        else local shpframe `frame'
     }
-    if `newFRM'==0 local newname `frame'
-    if `newSHP'==0 local newshpname `shpframe'
-    // make copies of frames if necessary
-    if `newFRM' {
-        capt confirm new frame `newname'
-        if _rc==1 exit 1
-        if _rc frame drop `newname'
-        frame copy `frame' `newname'
-        // remove all linkage info in copied frame
-        frame `newname' {
-            __geoframe_set_shpframe
-            __geoframe_set_linkname
-            capt drop _GEOFRAME_lnkvar_*
+    // apply procedure
+    frame `shpframe' {
+        if "`subcmd'"=="clip" {
+            ___geoframe_clip `touse' `mask' "`rclip'" "`line'" "`clip'"/*
+                */ "`strict'" "`split'" "`drop'" "`dots'" // => Ndrop, Nadd
+        } 
+        else if "`subcmd'"=="simplify" {
+            __geoframe_simplify `touse' "`delta'" "`absolute'" "`jointly'"/*
+                */ "`drop'" "`dots'" // => Ndrop
         }
-        di as txt "(new frame {bf:`newname'} created)"
-    }
-    if `newSHP' {
-        capt confirm new frame `newshpname'
-        if _rc==1 exit 1
-        if _rc frame drop `newshpname'
-        frame copy `shpframe' `newshpname'
-        // remove all linkage info in copied frame
-        frame `newshpname' {
-            __geoframe_set_shpframe
-            __geoframe_set_linkname
-            capt drop _GEOFRAME_lnkvar_*
+        else if "`subcmd'"=="bshare" {
+            __geoframe_bshare `touse' "`not'" "`drop'" "`dots'" // => Ndrop
         }
-        di as txt "(new shape frame {bf:`newshpname'} created)"
-    }
-    // apply selection and establish linkage
-    local Ndrop 0
-    local Ndropshp .
-    frame `newname' {
-        if `hasIF' {
-            qui keep `if' `in'
-            local Ndrop = r(N_drop)
+        // update PID and shape_order (if set)
+        geoframe get sid, local(sid)
+        if `"`sid'"'!="" {
+            geoframe get id, local(ID) strict
+            qui replace `sid' = cond(_n==1 | `ID'!=`ID'[_n-1], 1, 1+`sid'[_n-1])
         }
-        if `hasSHP' {
-            qui geoframe link `newshpname'
-            local Ndropshp 0
-            if `hasIF' {
-                geoframe get linkname, local(lnkvar)
-                frame `newshpname' {
-                    qui keep if `lnkvar'<.
-                    local Ndropshp = r(N_drop)
-                }
-            }
+        geoframe get pid, local(pid)
+        if `"`pid'"'!="" {
+            qui geoframe generate pid `pid', replace
         }
     }
-    // apply clipping
-    if `hasSHP'==0 {
-        frame `newname' {
-            ___geoframe_clip `mask' "`rclip'" "`line'" "`clip'" "`strict'"/*
-                */ "`split'" "`drop'"
-            local Ndrop = `Ndrop' + `Ndrop_clip'
-        }
-    }
-    else {
-        frame `newshpname' {
-            ___geoframe_clip `mask' "`rclip'" "`line'" "`clip'" "`strict'"/*
-                */ "`split'" "`drop'"
-            local Ndropshp = `Ndropshp' + `Ndrop_clip'
-        }
-        // create reverse link from shapeframe and drop unmatched units
-        frame `newname' {
-            if "`drop'"=="" {
-                geoframe get id, local(id) strict
-                geoframe get linkname, local(lnkvar) strict
-                tempname tmpframe tag
-                frame `newshpname' {
-                    geoframe get id, local(shpid) strict
-                    qui gen byte `tag' = `lnkvar'<. &/*
-                        */ (_n==1 | `shpid'!=`shpid'[_n-1])
-                    frame put `shpid' if `tag', into(`tmpframe')
-                }
-                qui frlink 1:1 `id', frame(`tmpframe' `shpid')
-                qui drop if `tmpframe'>=.
-                local Ndrop = `Ndrop' + r(N_drop)
-                qui geoframe link `newshpname'
-            }
+    // eliminate dropped units in attribute frame
+    if `hasSHP' & "`drop'"=="" {
+        frame `frame' {
+            drop `touse'
+            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
+            qui drop if `touse'>=.
+            local Ndrop0 = r(N_drop)
+            qui geoframe link `shpframe'
         }
     }
     // reporting and frame change
     if `Ndrop'==1 local msg observation
     else          local msg observations
     local tmp `: di %9.0gc `Ndrop''
-    di as txt "(dropped `tmp' `msg' in frame {bf:`newname'})"
-    if `Nadd_clip' {
-        if `Nadd_clip'==1 local msg observation
-        else              local msg observations
-        local tmp `: di %9.0gc `Nadd_clip''
-        di as txt "(added `tmp' `msg' in frame " _c 
-        if `hasSHP' di as txt "{bf:`newshpname'})"
-        else        di as txt "{bf:`newname'})"
+    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
+    if "`Nadd'"!="" {
+        if `Nadd'==1 local msg observation
+        else         local msg observations
+        local tmp `: di %9.0gc `Nadd''
+        di as txt "(added `tmp' `msg' in frame {bf:`shpframe'})"
     }
-    if `Ndropshp'<. {
-        if `Ndropshp'==1 local msg observation
-        else             local msg observations
-        local tmp `: di %9.0gc `Ndropshp''
-        di as txt "(dropped `tmp' `msg' in frame {bf:`newshpname'})"
+    if "`Ndrop0'"!="" {
+        if `Ndrop0'==1 local msg observation
+        else           local msg observations
+        local tmp `: di %9.0gc `Ndrop0''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
     }
-    if `newFRM' {
-        if "`current'"=="" {
-            frame change `newname'
-            di as txt "(current frame now {bf:`newname'})"
+    if "`current'"=="" {
+        if "`frame'"!=`"`c(frame)'"' {
+            frame change `frame'
+            di as txt "(current frame now {bf:`frame'})"
         }
     }
-    if "`describe'"=="" _geoframe_describe `newname'
 end
 
 program ___geoframe_clip
-    args MASK rclip line noclip strict split drop
+    args touse MASK rclip line noclip strict split drop dots
     geoframe get coordinates, local(XY) strict
     gettoken X XY : XY
     gettoken Y XY : XY
@@ -997,7 +947,7 @@ program ___geoframe_clip
     }
     if "`X2'"!="" local point point // assume point data if pc
     else {
-        capt assert (`id'!=`id'[_n-1] | `pid'!=`pid'[_n-1])
+        capt assert (`id'!=`id'[_n-1] | `pid'!=`pid'[_n-1]) if `touse'
         if _rc==1 exit _rc
         if _rc==0 local point point // assume point data if PID is unique
     }
@@ -1007,7 +957,7 @@ program ___geoframe_clip
         if "`point'"!="" {
             if "`split'"!="" local poly 0
             else {
-                capt assert (_n==1 | `id'!=`id'[_n-1])
+                capt assert (_n==1 | `id'!=`id'[_n-1]) if `touse'
                 if _rc==1 exit _rc
                 if _rc==0 local poly 0 // only one obs per unit
             }
@@ -1016,8 +966,8 @@ program ___geoframe_clip
     // identify points outside mask
     tempvar OUT
     if "`rclip'"!="" {
-        qui gen byte `OUT' = 0
-        qui replace `OUT' = . if `X'>=. | `Y'>=.
+        qui gen byte `OUT' = 0 if `touse'
+        qui replace `OUT' = . if (`X'>=. | `Y'>=.) & `touse'
         if `MASK'[1,1]<. qui replace `OUT' = 1 if `X'<`MASK'[1,1] & `OUT'==0
         if `MASK'[1,2]<. qui replace `OUT' = 1 if `X'>`MASK'[1,2] & `OUT'==0
         if `MASK'[1,3]<. qui replace `OUT' = 1 if `Y'<`MASK'[1,3] & `OUT'==0
@@ -1027,21 +977,203 @@ program ___geoframe_clip
         qui gen byte `OUT' = .
     }
     // apply clipping
-    local Nadd 0
     if `poly' {
         if "`noclip'"!="" {
-            mata: _noclip("`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
+            mata: _noclip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
+                */ ("`X'","`Y'"), "`MASK'", "`strict'"!="", "`split'"!="",/*
+                */ "`drop'"!="", "`dots'"=="")
+        }
+        else {
+            mata: _clip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
+                */ ("`X'","`Y'"), "`MASK'", "`line'"!="", "`drop'"!="",/*
+                */ "`dots'"=="")
+        }
+    }
+    qui drop if `OUT' & `touse'
+    c_local Ndrop = r(N_drop)
+    c_local Nadd `Nadd'
+end
+
+program __geoframe_simplify
+    args touse delta absolute jointly drop dots
+    geoframe get id, local(ID)
+    if `"`ID'"'=="" {
+        tempvar ID
+        qui gen byte `ID' = 1
+    }
+    tempvar OUT
+    qui gen byte `OUT' = 0
+    qui geoframe get coordinates, local(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    if "`delta'"=="" | "`absolute'"=="" {
+        if "`delta'"=="" local delta 1
+        su `X' if `touse', meanonly
+        local xrange = r(max)-r(mean)
+        su `Y' if `touse', meanonly
+        local yrange = r(max)-r(mean)
+        local delta = (`xrange'/1000) * (`yrange'/1000) / 2 * `delta'
+    }
+    local msg `: di %9.0g `delta''
+    di as txt "(threshold = `msg')"
+    mata: _simplify("`ID'", "`OUT'", ("`X'","`Y'"), "`touse'", `delta', /*
+        */ "`jointly'"!="", "`drop'"!="", "`dots'"=="")
+    qui drop if `OUT'
+    c_local Ndrop = r(N_drop)
+end
+
+program __geoframe_bshare
+    args touse not drop dots
+    geoframe get id, local(ID)
+    if `"`ID'"'=="" {
+        tempvar ID
+        qui gen byte `ID' = 1
+    }
+    tempvar OUT
+    qui gen byte `OUT' = 0
+    qui geoframe get coordinates, local(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    tempname PID
+    qui geoframe gen pid `PID', noset
+    mata: _bshare("`ID'", "`PID'", "`OUT'", ("`X'","`Y'"), "`touse'",/*
+        */ "`not'"!="" ? -1 : 0, "`drop'"!="", "`dots'"=="")
+    qui drop if `OUT'
+    c_local Ndrop = r(N_drop)
+end
+
+/*
+program __geoframe_clip
+    // syntax
+    syntax [if] [in], mask(str) [ rclip/*
+        */ line noclip strict split nodrop /*
+        */ into(namelist max=2) replace nocurrent ]
+    // mark sample
+    marksample touse
+    // into()
+    if `"`into'"'!="" {
+        gettoken frame : into
+        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
+    }
+    else local frame `"`c(frame)'"'
+    // check for shape frame
+    frame `frame' {
+        geoframe get shpframe, local(shpframe)
+        local hasSHP = "`shpframe'"!=""
+        if `hasSHP' {
+            geoframe get id, local(id) strict
+            geoframe get linkname, local(lnkvar) strict
+            frame `shpframe' {
+                geoframe get id, local(shpid) strict
+                qui frget `touse' = `touse', from(`lnkvar')
+                qui replace `touse' = 0 if `touse'>=.
+            }
+        }
+        else local shpframe `frame'
+    }
+    // apply clipping
+    frame `shpframe' {
+        di as txt "(clipping shapes ..." _c
+        ___geoframe_clip `touse' `mask' "`rclip'" "`line'" "`clip'"/*
+            */ "`strict'" "`split'" "`drop'" // => Ndrop, Nadd
+        di as txt " done)"
+    }
+    // eliminate dropped units in attribute frame
+    if `hasSHP' & "`drop'"=="" {
+        frame `frame' {
+            drop `touse'
+            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
+            qui drop if `touse'>=.
+            local Ndrop0 = r(N_drop)
+            qui geoframe link `shpframe'
+        }
+    }
+    // reporting and frame change
+    if `Ndrop'==1 local msg observation
+    else          local msg observations
+    local tmp `: di %9.0gc `Ndrop''
+    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
+    if "`Nadd'"!="" {
+        if `Nadd'==1 local msg observation
+        else         local msg observations
+        local tmp `: di %9.0gc `Nadd''
+        di as txt "(added `tmp' `msg' in frame {bf:`shpframe'})"
+    }
+    if "`Ndrop0'"!="" {
+        if `Ndrop0'==1 local msg observation
+        else           local msg observations
+        local tmp `: di %9.0gc `Ndrop0''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
+    }
+    if "`current'"=="" {
+        if "`frame'"!=`"`c(frame)'"' {
+            frame change `frame'
+            di as txt "(current frame now {bf:`frame'})"
+        }
+    }
+end
+
+program ___geoframe_clip
+    args touse MASK rclip line noclip strict split drop
+    geoframe get coordinates, local(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    gettoken X2 XY : XY // pc
+    gettoken Y2 XY : XY // pc
+    // determine type of shapes and type of clipping
+    tempname pid
+    qui geoframe generate pid `pid', noset
+    geoframe get id, local(id)
+    if `"`id'"'=="" { // assume all obs belong to the same unit
+        tempname id
+        qui gen byte `id' = 1
+    }
+    if "`X2'"!="" local point point // assume point data if pc
+    else {
+        capt assert (`id'!=`id'[_n-1] | `pid'!=`pid'[_n-1]) if `touse'
+        if _rc==1 exit _rc
+        if _rc==0 local point point // assume point data if PID is unique
+    }
+    if "`point'"!="" local noclip noclip // point data implies noclip
+    local poly 1 // 0 = individual observation, 1 = groups of observations
+    if "`noclip'"!="" {
+        if "`point'"!="" {
+            if "`split'"!="" local poly 0
+            else {
+                capt assert (_n==1 | `id'!=`id'[_n-1]) if `touse'
+                if _rc==1 exit _rc
+                if _rc==0 local poly 0 // only one obs per unit
+            }
+        }
+    }
+    // identify points outside mask
+    tempvar OUT
+    if "`rclip'"!="" {
+        qui gen byte `OUT' = 0 if `touse'
+        qui replace `OUT' = . if (`X'>=. | `Y'>=.) & `touse'
+        if `MASK'[1,1]<. qui replace `OUT' = 1 if `X'<`MASK'[1,1] & `OUT'==0
+        if `MASK'[1,2]<. qui replace `OUT' = 1 if `X'>`MASK'[1,2] & `OUT'==0
+        if `MASK'[1,3]<. qui replace `OUT' = 1 if `Y'<`MASK'[1,3] & `OUT'==0
+        if `MASK'[1,4]<. qui replace `OUT' = 1 if `Y'>`MASK'[1,4] & `OUT'==0
+    }
+    else {
+        qui gen byte `OUT' = .
+    }
+    // apply clipping
+    if `poly' {
+        if "`noclip'"!="" {
+            mata: _noclip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
                 */ ("`X'","`Y'"), "`MASK'", "`strict'"!="", "`split'"!="",/*
                 */ "`drop'"!="")
         }
         else {
-            mata: _clip("`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
+            mata: _clip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
                 */ ("`X'","`Y'"), "`MASK'", "`line'"!="", "`drop'"!="")
         }
     }
-    qui drop if `OUT' // (also drops missing)
-    c_local Ndrop_clip = r(N_drop)
-    c_local Nadd_clip `Nadd'
+    qui drop if `OUT' & `touse'
+    c_local Ndrop = r(N_drop)
+    c_local Nadd `Nadd'
     // update PID and shape_order (if set)
     geoframe get sid, local(sid)
     if `"`sid'"'!="" {
@@ -1052,7 +1184,195 @@ program ___geoframe_clip
         qui geoframe generate pid `pid', replace
     }
 end
+*/
 
+/*
+program _geoframe_simplify
+    // syntax
+    syntax [anything(id="delta" name=delta)] [if] [in] [,/*
+        */ ABSolute JOINTly nodots nodrop/*
+        */ into(namelist max=2) replace noCURrent ]
+    if "`delta'"!="" {
+        numlist `"`delta'"', max(1) range(>=0)
+        local delta `r(numlist)'
+    }
+    // mark sample
+    marksample touse
+    // into()
+    if `"`into'"'!="" {
+        gettoken frame : into
+        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
+    }
+    else local frame `"`c(frame)'"'
+    // check for shape frame
+    frame `frame' {
+        geoframe get shpframe, local(shpframe)
+        local hasSHP = "`shpframe'"!=""
+        if `hasSHP' {
+            geoframe get id, local(id) strict
+            geoframe get linkname, local(lnkvar) strict
+            frame `shpframe' {
+                geoframe get id, local(shpid) strict
+                qui frget `touse' = `touse', from(`lnkvar')
+                qui replace `touse' = 0 if `touse'>=.
+            }
+        }
+        else local shpframe `frame'
+    }
+    // generalize
+    frame `shpframe' {
+        geoframe get id, local(ID)
+        if `"`ID'"'=="" {
+            tempvar ID
+            qui gen byte `ID' = 1
+        }
+        tempvar OUT
+        qui gen byte `OUT' = 0
+        qui geoframe get coordinates, local(XY) strict
+        gettoken X XY : XY
+        gettoken Y XY : XY
+        if "`delta'"=="" | "`absolute'"=="" {
+            if "`delta'"=="" local delta 1
+            su `X' if `touse', meanonly
+            local xrange = r(max)-r(mean)
+            su `Y' if `touse', meanonly
+            local yrange = r(max)-r(mean)
+            local delta = (`xrange'/1000) * (`yrange'/1000) / 2 * `delta'
+        }
+        local msg `: di %9.0g `delta''
+        di as txt "(threshold = `msg')"
+        mata: _simplify("`ID'", "`OUT'", ("`X'","`Y'"), "`touse'", `delta', /*
+            */ "`jointly'"!="", "`drop'"!="", "`dots'"=="")
+        qui drop if `OUT'
+        local Ndrop = r(N_drop)
+        // update PID and shape_order (if set)
+        geoframe get sid, local(sid)
+        if `"`sid'"'!="" {
+            qui replace `sid' = cond(_n==1 | `ID'!=`ID'[_n-1], 1, 1+`sid'[_n-1])
+        }
+        geoframe get pid, local(pid)
+        if `"`pid'"'!="" {
+            qui geoframe generate pid `pid', replace
+        }
+    }
+    // eliminate dropped units in attribute frame
+    if `hasSHP' & "`drop'"=="" {
+        frame `frame' {
+            drop `touse'
+            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
+            qui drop if `touse'>=.
+            local Ndrop0 = r(N_drop)
+            qui geoframe link `shpframe'
+        }
+    }
+    // reporting and frame change
+    if `Ndrop'==1 local msg observation
+    else          local msg observations
+    local tmp `: di %9.0gc `Ndrop''
+    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
+    if "`Ndrop0'"!="" {
+        if `Ndrop0'==1 local msg observation
+        else           local msg observations
+        local tmp `: di %9.0gc `Ndrop0''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
+    }
+    if "`current'"=="" {
+        if "`frame'"!=`"`c(frame)'"' {
+            frame change `frame'
+            di as txt "(current frame now {bf:`frame'})"
+        }
+    }
+end
+*/
+
+
+/*
+program _geoframe_bshare
+    // syntax
+    syntax [if] [in] [,/*
+        */ nodots nodrop/*
+        */ into(namelist max=2) replace noCURrent ]
+    // mark sample
+    marksample touse
+    // into()
+    if `"`into'"'!="" {
+        gettoken frame : into
+        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
+    }
+    else local frame `"`c(frame)'"'
+    // check for shape frame
+    frame `frame' {
+        geoframe get shpframe, local(shpframe)
+        local hasSHP = "`shpframe'"!=""
+        if `hasSHP' {
+            geoframe get id, local(id) strict
+            geoframe get linkname, local(lnkvar) strict
+            frame `shpframe' {
+                geoframe get id, local(shpid) strict
+                qui frget `touse' = `touse', from(`lnkvar')
+                qui replace `touse' = 0 if `touse'>=.
+            }
+        }
+        else local shpframe `frame'
+    }
+    // generalize
+    frame `shpframe' {
+        geoframe get id, local(ID)
+        if `"`ID'"'=="" {
+            tempvar ID
+            qui gen byte `ID' = 1
+        }
+        tempvar OUT
+        qui gen byte `OUT' = 0
+        qui geoframe get coordinates, local(XY) strict
+        gettoken X XY : XY
+        gettoken Y XY : XY
+        tempname PID
+        qui geoframe gen pid `PID', noset
+        mata: _bshare("`ID'", "`PID'", "`OUT'", ("`X'","`Y'"), "`touse'",/*
+            */ "`drop'"!="", "`dots'"=="")
+        qui drop if `OUT'
+        local Ndrop = r(N_drop)
+        // update PID and shape_order (if set)
+        geoframe get sid, local(sid)
+        if `"`sid'"'!="" {
+            qui replace `sid' = cond(_n==1 | `ID'!=`ID'[_n-1], 1, 1+`sid'[_n-1])
+        }
+        geoframe get pid, local(pid)
+        if `"`pid'"'!="" {
+            qui geoframe generate pid `pid', replace
+        }
+    }
+    // eliminate dropped units in attribute frame
+    if `hasSHP' & "`drop'"=="" {
+        frame `frame' {
+            drop `touse'
+            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
+            qui drop if `touse'>=.
+            local Ndrop0 = r(N_drop)
+            qui geoframe link `shpframe'
+        }
+    }
+    // reporting and frame change
+    if `Ndrop'==1 local msg observation
+    else          local msg observations
+    local tmp `: di %9.0gc `Ndrop''
+    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
+    if "`Ndrop0'"!="" {
+        if `Ndrop0'==1 local msg observation
+        else           local msg observations
+        local tmp `: di %9.0gc `Ndrop0''
+        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
+    }
+    if "`current'"=="" {
+        if "`frame'"!=`"`c(frame)'"' {
+            frame change `frame'
+            di as txt "(current frame now {bf:`frame'})"
+        }
+    }
+end
+*/
+    
 program _geoframe_generate
     gettoken fnc 0 : 0, parse(" ,")
     local fnc = strlower(`"`fnc'"')
@@ -1279,7 +1599,7 @@ program _copy_from_shpframe
     }
     qui frlink 1:1 `id', frame(`tmpframe' `shpid')
     if `"`vlist'"'=="" {
-        foreach v of local 0 {
+        foreach v of local varlist {
             local vlist `vlist' `v' = `v'
         }
     }
@@ -2565,9 +2885,11 @@ void _gtype(string scalar R, string rowvector id,
     st_matrix(R, poly \ line \ point \ empty)
 }
 
-void _noclip(string scalar id, string scalar pid, real scalar rclip,
+void _noclip(string scalar touse,
+    string scalar id, string scalar pid, real scalar rclip,
     string scalar out, string rowvector xy, string scalar mask,
-    real scalar strict, real scalar split, real scalar nodrop)
+    real scalar strict, real scalar split, real scalar nodrop,
+    real scalar dots)
 {
     real scalar    i, r, n
     real colvector a, b
@@ -2575,20 +2897,24 @@ void _noclip(string scalar id, string scalar pid, real scalar rclip,
     real matrix    XY
     real rowvector ab
 
-    st_view(ID=., ., id)
-    st_view(PID=., ., pid)
-    st_view(OUT=., ., out)
-    if (!rclip) {
-        st_view(XY=., ., xy)
-        p = selectindex(!rowmissing(XY))
-        OUT[p] = !__geo_clip_point(XY[p,],
-                 _geo_clip_mask(st_matrix(mask), "matname"))
-    }
-    n = rows(OUT)
+    st_view(ID=., ., id, touse)
+    st_view(PID=., ., pid, touse)
+    st_view(OUT=., ., out, touse)
+    n = rows(ID)
     a = selectindex(_mm_uniqrows_tag((ID,PID)))
     i = rows(a)
     if (i<=1) b = n
     else      b = a[|2 \. |] :- 1 \ n
+    if (dots) {
+        printf("{txt}(clipping %g shape items ...", i)
+        displayflush()
+    }
+    if (!rclip) {
+        st_view(XY=., ., xy, touse)
+        p = selectindex(!rowmissing(XY))
+        OUT[p] = !__geo_clip_point(XY[p,],
+                 _geo_clip_mask(st_matrix(mask), "matname"))
+    }
     for (;i;i--) {
         ab = a[i] \ b[i]
         r  = b[i] - a[i] + 1
@@ -2608,7 +2934,7 @@ void _noclip(string scalar id, string scalar pid, real scalar rclip,
         }
     }
     if (nodrop) {
-        if (rclip) st_view(XY=., ., xy)
+        if (rclip) st_view(XY=., ., xy, touse)
         if (split) {
             a = selectindex(_mm_unique_tag(ID))
             i = rows(a)
@@ -2624,6 +2950,7 @@ void _noclip(string scalar id, string scalar pid, real scalar rclip,
             }
         }
     }
+    if (dots) printf(" done)\n")
 }
 
 struct _clip_expand_info {
@@ -2631,11 +2958,12 @@ struct _clip_expand_info {
     pointer rowvector ab // range of original polygon in data
 }
 
-void _clip(string scalar id, string scalar pid, real scalar rclip,
+void _clip(string scalar touse,
+    string scalar id, string scalar pid, real scalar rclip,
     string scalar out, string rowvector xy, string scalar mask,
-    real scalar line, real scalar nodrop)
+    real scalar line, real scalar nodrop, real scalar dots)
 {
-    real scalar    i, n, r, run
+    real scalar    i, n, r, run, dn, d0
     real colvector a, b
     real colvector ID, PID, OUT
     real rowvector ab
@@ -2644,16 +2972,23 @@ void _clip(string scalar id, string scalar pid, real scalar rclip,
     
     if (rclip) MASK = vec(st_matrix(mask))
     else       MASK = _geo_clip_mask(st_matrix(mask), "matname")
-    st_view(ID=., ., id)
-    st_view(PID=., ., pid)
-    st_view(OUT=., ., out)
-    st_view(XY=., ., xy)
+    st_view(ID=., ., id, touse)
+    st_view(PID=., ., pid, touse)
+    st_view(OUT=., ., out, touse)
+    st_view(XY=., ., xy, touse)
     n = rows(OUT)
     a = selectindex(_mm_uniqrows_tag((ID,PID)))
     i = rows(a)
     if (i<=1) b = n
     else      b = a[|2 \. |] :- 1 \ n
+    if (dots) {
+        displayas("txt")
+        printf("(clipping %g shape items)\n", i)
+        d0 = _geo_progress_init("(")
+        dn = i
+    }
     for (;i;i--) {
+        if (dots) _geo_progressdots(1-i/dn, d0)
         ab = a[i] \ b[i]
         r  = b[i] - a[i] + 1
         run = rclip ? anyof(OUT[|ab|], 1) : 1
@@ -2695,11 +3030,15 @@ void _clip(string scalar id, string scalar pid, real scalar rclip,
             if (nodrop) OUT[a[i]] = 0
         }
     }
-    _clip_expand(I.XY, I.ab, xy) // store polygons that have additional points
+    _clip_expand(touse, I.XY, I.ab, xy) // store polygons with additional points
+    if (dots) {
+        _geo_progressdots(1, d0)
+        display(")")
+    }
 }
 
-void _clip_expand(pointer rowvector XY, pointer rowvector ab,
-    string rowvector xy)
+void _clip_expand(string scalar touse, pointer rowvector XY, 
+    pointer rowvector ab, string rowvector xy)
 {
     real scalar    l, i, r, n
     string scalar  p, s
@@ -2712,11 +3051,11 @@ void _clip_expand(pointer rowvector XY, pointer rowvector ab,
     stata("generate double " + s + " = _n") // sort index
     p = st_tempname()
     stata("generate double " + p + " = 1") // count variable for expand
-    st_view(V=.,., p)
+    st_view(V=.,., p, touse)
     n = 0
     for (i=l;i;i--) {
         r = rows(*XY[i]) - ((*ab[i])[2] - (*ab[i])[1] + 1) // additional obs
-        V[(*ab[i])[2]] = r + 1 // expand last obs of original polygpn
+        V[(*ab[i])[2]] = r + 1 // expand last obs of original polygon
         *ab[i] = *ab[i] + (n \ n+r) // update range index
         n = n + r
     }
@@ -2724,9 +3063,146 @@ void _clip_expand(pointer rowvector XY, pointer rowvector ab,
     stata("sort " + s)
     st_local("Nadd", strofreal(n, "%18.0g"))
     // store clipped polygons
-    st_view(V=., ., xy)
+    st_view(V=., ., xy, touse)
     for (i=l;i;i--) {
         V[|*ab[i],(1\2)|] = *XY[i]
+    }
+}
+
+void _simplify(string scalar id, string scalar out, string rowvector xy,
+    string scalar touse, real scalar delta, real scalar jointly,
+    real scalar nodrop, real scalar dots)
+{
+    real scalar    i, n, dn, d0
+    real colvector a, b
+    real colvector ID, OUT, B
+    real matrix    XY
+    real rowvector ab
+
+    st_view(ID=., ., id, touse)
+    st_view(OUT=., ., out, touse)
+    st_view(XY=., ., xy, touse)
+    if (jointly) B = geo_bshare(ID, geo_pid(ID, XY), XY, 1, !dots)
+    n = rows(OUT)
+    a = selectindex(_mm_unique_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    if (dots) {
+        displayas("txt")
+        printf("(simplifying shapes of %g units)\n", i)
+        d0 = _geo_progress_init("(")
+        dn = i
+    }
+    for (;i;i--) {
+        ab = a[i] \ b[i]
+        if (jointly) OUT[|ab|] = !geo_simplify(XY[|ab, (1\2)|], delta, B[|ab|])
+        else         OUT[|ab|] = !geo_simplify(XY[|ab, (1\2)|], delta)
+        if (nodrop) {
+            if (all(OUT[|ab|])) {
+                OUT[a[i]] = 0 // keep unit in data
+                XY[a[i],] = (.,.)
+            }
+        }
+        if (dots) _geo_progressdots(1-(i-1)/dn, d0)
+    }
+    if (dots) display(")")
+}
+
+void _bshare(string scalar id, string scalar pid, string scalar out,
+    string rowvector xy, string scalar touse, real scalar rtype,
+    real scalar nodrop, real scalar dots)
+{
+    real scalar    i, n
+    real colvector a, b
+    real colvector ID, PID, OUT
+    real matrix    XY
+
+    st_view(ID=., ., id, touse)
+    st_view(PID=., ., pid, touse)
+    st_view(OUT=., ., out, touse)
+    st_view(XY=., ., xy, touse)
+    // identify border points
+    OUT[.] = !geo_bshare(ID, PID, XY, rtype, !dots)
+    // lines may be disconnected at polygon origin; fix this
+    n = rows(OUT)
+    a = selectindex(_mm_uniqrows_tag((ID,PID)))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        if (OUT[a[i]]) continue // all out
+        _bshare_wrap(OUT, XY, a[i], b[i])
+    }
+    // separate lines by missings (and handle nodrop)
+    a = selectindex(_mm_unique_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        if (all(OUT[|a[i] \ b[i]|])) { // no border points
+            if (nodrop) {
+                OUT[a[i]] = 0
+                XY[a[i],] = (.,.)
+            }
+        }
+        else _bshare_addmis(OUT, XY, a[i], b[i])
+    }
+}
+
+void _bshare_wrap(real colvector out, real matrix XY, real scalar a,
+    real scalar b)
+{
+    real scalar i
+    
+    if (!any(out[|a\b|])) return // all in; nothing to do
+    // select non-missing section
+    for (;a<=b;a++) {
+        if (!missing(XY[a,])) break
+    }
+    if (a>b) return // all missing
+    for (;b;b--) {
+        if (!missing(XY[b,])) break
+    }
+    // wrap around if needed
+    if (XY[a,]!=XY[b,]) return // not a polygon
+    if (out[a])         return // origin not within shared border
+    for (i=a;i<=b;i++) { // find first outside point; make this the new origin
+        if (out[i]) break
+    }
+    out[|a\b|]    = out[|i\b|]    \ out[|a+1\i|]
+    XY[|a,1\b,2|] = XY[|i,1\b,2|] \ XY[|a+1,1\i,2|]
+}
+
+void _bshare_addmis(real colvector out, real matrix XY, real scalar a,
+    real scalar b)
+{
+    real scalar mfirst
+    
+    if (!any(out[|a\b|])) return // all in; nothing to do
+    // keep first obs if missing; else tag as missing-comes-last
+    mfirst = hasmissing(XY[a,])
+    if (mfirst) out[a++] = 0
+    // skip to first inside point that is nonmissing
+    for (;a<=b;a++) {
+        if (!out[a]) {
+            if (hasmissing(XY[a,])) out[a] = 1
+            else break
+        }
+    }
+    // now add missing before each segment
+    for (++a;a<=b;a++) {
+        if (hasmissing(XY[a,])) out[a] = 1
+        else if (!out[a]) {
+            if (out[a-1]) {
+                out[a-1] = 0
+                XY[a-1,] = (.,.)
+            }
+        }
+    }
+    // keep last point if missing-comes-last
+    if (!mfirst) {
+        if (hasmissing(XY[b,])) out[b] = 0
     }
 }
 

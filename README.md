@@ -131,6 +131,14 @@ Zoom.
 
 Main changes:
 
+    16oct2023
+    - geoframe [r]clip:
+      o observations that do not satisfy the if and in qualifiers
+       are no longer removed from the data unless option into() is specified
+      o progress dots are now displayed; type -nodots- to suppress
+    - geograme simplify added
+    - geoframe bshare added
+
     12oct2023
     - -geoframe translate- added (wrapper for spshape2dta)
     - -geoframe query orientation- added
