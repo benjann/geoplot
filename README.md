@@ -131,6 +131,19 @@ Zoom.
 
 Main changes:
 
+    18oct2023
+    - -geoframe select- now has option shpif() to select observations based on 
+      variables in the linked shape frame
+    - -geoframe generate direction- added (generate variable containing direction
+      of stapes)
+    - -geoframe generate gtype- added (generate variable containing geometry
+      type of shapes)
+    - -geoframe translate- now has option -user- to use SSC command shp2dta
+      instead of official spshape2dta
+    - -geoframe translate- now has a workaround for the problem that spshape2dta
+      chokes on paths that contain ".shp"
+    - -geoframe convert- can now be used as a synonym for -geoframe translate-
+
     16oct2023
     - geoframe [r]clip:
       o observations that do not satisfy the if and in qualifiers

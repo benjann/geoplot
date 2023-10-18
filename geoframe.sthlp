@@ -1,5 +1,5 @@
 {smcl}
-{* 17oct2023}{...}
+{* 18oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -20,6 +20,8 @@
 {synoptline}
 {syntab :Main}
 {p2col :{helpb geoframe##translate:{ul:tr}anslate}}translate shapefile source to Stata format (without loading)
+    {p_end}
+{p2col :{helpb geoframe##translate:convert}}synonym for {cmd:geoframe translate}
     {p_end}
 {synopt :{helpb geoframe##create:{ul:cr}eate}}load data into geoframe or declare
     current frame as geoframe
@@ -64,7 +66,7 @@
     {p_end}
 {p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
     {p_end}
-{p2col :{helpb geoframe##symboli:symboli}}{cmd:symbol} with immediate arguments
+{p2col :{helpb geoframe##symboli:symboli}}{cmd:geoframe symbol} with immediate arguments
     {p_end}
 
 {syntab :Settings}
@@ -101,7 +103,8 @@
 {dlgtab:geoframe translate}
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:tr:anslate} [{it:translator}] [{it:name}] [{cmd:using}] {it:sourcename} [{cmd:,} {cmd:replace} ]
+    {cmd:geoframe} {cmdab:tr:anslate} [{it:translator}] [{it:name}] [{cmd:using}]
+    {it:sourcename} [{cmd:,} {cmd:replace} {cmd:user} ]
 
 {pstd}
     translates shape file source data to Stata format. Two files will be created,
@@ -115,13 +118,17 @@
 {pstd}
     {it:sourcename} specifies the location
     of the source. If {it:sourcename} only contains a path (i.e. does not specify
-    the base name of the source), {cmd:geoframe translate} will translate the
-    first source found in specified directory.
+    the name of the source), {cmd:geoframe translate} will translate the
+    first source found in the specified directory.
 
 {pstd}
     Currently, the only available {it:translator} is {cmd:esri}, which
-    translates ESRI shapefile data to Stata format using
-    {helpb spshape2dta}.
+    translates ESRI shapefile data to Stata format using official Stata's
+    {helpb spshape2dta} command or, if option {cmd:user} is specified, the
+    user command {helpb shp2dta} (see {stata ssc describe shp2dta}).
+
+{pstd}
+    {cmd:geoframe convert} is a synonym for {cmd:geoframe translate}.
 
 {marker create}{...}
 {dlgtab:geoframe create}
@@ -308,9 +315,9 @@
 {p2colset 9 22 24 2}{...}
 {p2col : {helpb geoframe##q_n:n}}number of units and shapes; the default
     {p_end}
-{p2col : {helpb geoframe##q_orient:{ul:or}ientation}}orientation of shape items
+{p2col : {helpb geoframe##q_dir:{ul:dir}ection}}orientation of shape items
     {p_end}
-{p2col : {helpb geoframe##q_orient:{ul:dir}ection}}synonym for {cmd:orientation}
+{p2col : {helpb geoframe##q_dir:{ul:or}ientation}}synonym for {cmd:direction}
     {p_end}
 {p2col : {helpb geoframe##q_gtype:{ul:gt}ype}}geometry type of shape items
     {p_end}
@@ -340,11 +347,11 @@
 {p2col : {cmd:r(max)}}maximum number of shape items per unit
     {p_end}
 
-{marker q_orient}{...}
+{marker q_dir}{...}
 {pstd}{ul:Orientation of shape items}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {opt q:uery} {opt or:ientation} {ifin}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {opt q:uery} {opt dir:ection} {ifin}
 
 {pstd}
     obtains information about the orientation of the shape items of the
@@ -360,6 +367,9 @@
 {p2col : {cmd:r(null)}}number of items with undefined orientation (items
     with less than 3 unique points)
     {p_end}
+
+{pstd}
+    {cmd:geoframe query orientation} is a synonym for {cmd:geoframe query direction}.
 
 {marker q_gtype}{...}
 {pstd}{ul:Geometry type of shape items}
@@ -462,6 +472,27 @@
     {it:newshpname} to provide an alternative name.
 
 {phang}
+    {opt replace} allows {cmd:into()} to overwrite existing frames.
+
+{phang}
+    {opth shpif(exp)} specifies an {it:if} condition to be applied to
+    the linked shape frame when selecting observations. Observations in the
+    linked shape frame that do not satisfy the specified condition (i.e.,
+    observations for which {it:exp} evaluates to zero) will be removed from
+    the (copy of the) linked shape frame, and units for which no observations
+    remain in the linked shape frame after applying {cmd:shpif()} will be
+    dropped from the (copy of the) current frame. {cmd:shpif()} is only allowed
+    if the current frame is linked to a shape frame. {cmd:shpif()} is not
+    allowed together with {cmd:noshp} or {cmd:unlink}.
+
+{phang}
+    {opt nodrop} retains units in the (copy of the) current frame for which
+    {cmd:shpif()} removed all shape-frame observations. The default
+    is to keep only those units for which at least one observation remains
+    after applying {cmd:shpif()}. {cmd:nodrop} is only relevant if
+    {cmd:shpif()} has been specified. 
+
+{phang}
     {opt nos:hp} modifies the (copy of the) current frame
     only, even if the current frame contains a link to a shape frame. That is,
     the linked shape frame will remain unchanged (apart from updating the
@@ -472,9 +503,6 @@
     {opt unl:ink} does not establish a link to a shape frame in the modified
     frame, even if the current frame contains a link to a shape
     frame. {cmd:unlink} implies {cmd:noshp}.
-
-{phang}
-    {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
     {opt nodes:cribe} suppresses the description of the created frame.
@@ -667,20 +695,123 @@
 
 {pstd}
     provides functions to generate specific variables in the current frame or in a
-    linked shape frame. Available
-    functions are:
+    linked shape frame. Available functions are:
 
-{p2colset 9 20 23 2}{...}
-{p2col : {helpb geoframe##g_plevel:{ul:pl}evel}}generate identifier for enclaves and exclaves
+{p2colset 9 22 24 2}{...}
+{p2col : {helpb geoframe##g_centroids:{ul:cen}troids}}generate centroid variables in current frame
     {p_end}
-{p2col : {helpb geoframe##g_centroids:{ul:cen}troids}}generate centroids
+{p2col : {helpb geoframe##g_area:area}}generate shape size variable in current frame
     {p_end}
-{p2col : {helpb geoframe##g_area:area}}generate shape sizes
+{p2col : {helpb geoframe##g_pid:pid}}generate within-unit polygon ID (shape item ID) in shape frame
     {p_end}
-{p2col : {helpb geoframe##g_pid:pid}}generate within-unit polygon ID
+{p2col : {helpb geoframe##g_dir:{ul:dir}ection}}generate direction indicator for shape items in shape frame
     {p_end}
-{p2col : {helpb geoframe##g_centroids:{ul:shp}match}}generate indicator whether unit has match in shape frame
+{p2col : {helpb geoframe##g_dir:{ul:or}ientation}}synonym for {cmd:geoframe generate direction}
     {p_end}
+{p2col : {helpb geoframe##g_gtype:{ul:gt}ype}}generate geometry-type indicator for shape items in shape frame
+    {p_end}
+{p2col : {helpb geoframe##g_plevel:{ul:pl}evel}}generate enclave/exclaves identifier in shape frame
+    {p_end}
+{p2col : {helpb geoframe##g_shpmatch:{ul:shp}match}}generate indicator in current frame
+    whether unit has match in the linked shape frame
+    {p_end}
+
+{marker g_centroids}{...}
+{pstd}{ul:Centroids}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmdab:cen:troids} [{it:CX CY}] [{cmd:,} {opt replace} {opt noset} ]
+
+{pstd}
+    generates variables containing the coordinates of the centroid of each shape
+    (across all shape items belonging to the same unit). The command can be
+    applied both to a shape frame (in which case the centroids
+    will be stored in the shape frame) or to an attribute frame that has a linked shape
+    frame (in which case the centroids will be stored in the attribute frame). {it:CX}
+    and {it:CY} specify the names of the generated
+    variables; {cmd:_CX} and {cmd:_CY} are used as default variable names. Option
+    {cmd:replace} allows overwriting existing variables. The created variables
+    will be registered using {helpb geoframe##set:geoframe set centroids}
+    unless option {cmd:noset} is specified.
+
+{marker g_area}{...}
+{pstd}{ul:Shape sizes}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt s:cale(exp)} {opt replace} {opt noset} ]
+
+{pstd}
+    generates a variable containing the size of the area enclosed in each
+    shape (including all shape items belonging to the same unit). The command
+    can be applied both to a shape frame (in which case the variable
+    will be stored in the shape frame) or to an attribute frame that has a linked shape
+    frame (in which case the variable will be stored in the attribute frame). {it:AREA}
+    specifies a name for the generated variable; {cmd:_AREA}
+    is used as default variable name. Option {opt scale(exp)} determines
+    the scale of the resulting areas; for example, if the coordinates are in meters,
+    type {cmd:scale(100)} to obtain areas in hectares, or type {cmd:scale(1000)}
+    to obtain areas in square kilometers. Option {cmd:replace} allows overwriting
+    an existing variable. The created variable will be registered using
+    {helpb geoframe##set:geoframe set area} unless option {cmd:noset} is
+    specified.
+
+{marker g_pid}{...}
+{pstd}{ul:Shape item IDs}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} {opt noset} ]
+
+{pstd}
+    generates a variable identifying the different polygons or other shape items
+    (lines, points) within each unit
+    represented in the frame. If {cmd:geoframe generate pid} is applied to an
+    attribute frame that has a linked shape frame, the variable will be added to
+    the shape frame (considering all observations of the shape frame). {it:PID}
+    specifies a name for the generated variable; {cmd:_PID} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
+    variable. The created variable will be registered in the shape frame using
+    {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is
+    specified.
+
+{pstd}
+    Shape items are assumed to be separated by rows of missing
+    coordinates. If a unit contains no missing rows, each observation in the
+    unit is assumed to be a separate point item.
+
+{marker g_dir}{...}
+{pstd}{ul:Orientation of shape items}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmdab:dir:ection} [{it:DIR}] [{cmd:,} {opt replace} {opt nolab:el} ]
+
+{pstd}
+    generates a variable identifying the orientation of each shape item in the
+    frame: 1 = positive (counterclockwise), -1 = negative (clockwise), 0 = undetermined
+    (item has less than 3 unique points). If {cmd:geoframe generate direction} is applied to an
+    attribute frame that has a linked shape frame, the variable will be added to
+    the shape frame (considering all observations of the shape frame). {it:DIR}
+    specifies a name for the generated variable; {cmd:_DIR} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
+    variable. Option {cmd:nolabel} omits creating and assigning value labels.
+
+{pstd}
+    {cmd:geoframe generate orientation} is a synonym for {cmd:geoframe generate direction}.
+
+{marker g_gtype}{...}
+{pstd}{ul:Geometry types of shape items}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:g:enerate} {cmdab:gt:ype} [{it:GTYPE}] [{cmd:,} {opt replace} {opt nolab:el} ]
+
+{pstd}
+    generates a variable identifying the geometry type of each shape item in the
+    frame: 1 = polygon, 2 = (poly)line, 3 = point, 0 = empty (item contains missing
+    only). If {cmd:geoframe generate gtype} is applied to an
+    attribute frame that has a linked shape frame, the variable will be added to
+    the shape frame (considering all observations of the shape frame). {it:GTYPE}
+    specifies a name for the generated variable; {cmd:_GTYPE} is used as default
+    variable name. Option {cmd:replace} allows overwriting an existing
+    variable. Option {cmd:nolabel} omits creating and assigning value labels.
 
 {marker g_plevel}{...}
 {pstd}{ul:Enclaves and exclaves}
@@ -744,61 +875,7 @@
     graph (e.g. using {helpb geoframe##select:geoframe select}) before applying
     {cmd:geoframe generate plevel}.
 
-{marker g_centroids}{...}
-{pstd}{ul:Centroids}
-
-{p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmdab:cen:troids} [{it:CX CY}] [{cmd:,} {opt replace} {opt noset} ]
-
-{pstd}
-    generates variables containing the coordinates of the centroids
-    of the shapes. The command can be applied both to a shape frame (in which case the centroids
-    will be stored in the shape frame) or to an attribute frame that has a linked shape
-    frame (in which case the centroids will be stored in the attribute frame). {it:CX}
-    and {it:CY} specify the names of the generated
-    variables; {cmd:_CX} and {cmd:_CY} are used as default variable names. Option
-    {cmd:replace} allows overwriting existing variables. The created variables
-    will be registered using {helpb geoframe##set:geoframe set centroids}
-    unless option {cmd:noset} is specified.
-
-{marker g_area}{...}
-{pstd}{ul:Shape sizes}
-
-{p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:area} [{it:AREA}] [{cmd:,} {opt s:cale(exp)} {opt replace} {opt noset} ]
-
-{pstd}
-    generates a variable containing the size of the area enclosed in each
-    shape. The command can be applied both to a shape frame (in which case the variable
-    will be stored in the shape frame) or to an attribute frame that has a linked shape
-    frame (in which case the variable will be stored in the attribute frame). {it:AREA}
-    specifies a name for the generated variable; {cmd:_AREA}
-    is used as default variable name. Option {opt scale(exp)} determines
-    the scale of the resulting areas; for example, if the coordinates are in meters,
-    type {cmd:scale(100)} to obtain areas in hectares, or type {cmd:scale(1000)}
-    to obtain areas in square kilometers. Option {cmd:replace} allows overwriting
-    an existing variable. The created variable will be registered using
-    {helpb geoframe##set:geoframe set area} unless option {cmd:noset} is
-    specified.
-
-{marker g_pid}{...}
-{pstd}{ul:Polygon IDs}
-
-{p 8 15 2}
-    {cmd:geoframe} {cmdab:g:enerate} {cmd:pid} [{it:PID}] [{cmd:,} {opt replace} {opt noset} ]
-
-{pstd}
-    generates a variable identifying the different polygons within each unit
-    represented in the frame. If {cmd:geoframe generate pid} is applied to an
-    attribute frame that has a linked shape frame, the variable will be added to
-    the shape frame (considering all observations of the shape frame). {it:PID}
-    specifies a name for the generated variable; {cmd:_PID} is used as default
-    variable name. Option {cmd:replace} allows overwriting an existing
-    variable. The created variable will be registered in the shape frame using
-    {helpb geoframe##set:geoframe set pid} unless option {cmd:noset} is
-    specified.
-
-{marker g_pid}{...}
+{marker g_shpmatch}{...}
 {pstd}{ul:Match in shape frame}
 
 {p 8 15 2}

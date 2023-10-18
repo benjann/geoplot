@@ -1,4 +1,4 @@
-*! version 1.1.5  17oct2023  Ben Jann
+*! version 1.1.6  18oct2023  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -228,7 +228,7 @@ program __geoframe_create_type
     if `: list sizeof coord'==4 local type "pc"   // 4 coordinates => pc
     else if `hasSHP'            local type "unit" // shpfile() => unit
     else {
-        geoframe get id, local(id)
+        __get id, local(id)
         if `"`id'"'!="" {
             capt isid `id', missok
             if _rc local type "shape"             // id not unique => shape
@@ -247,10 +247,10 @@ program _geoframe_link
         exit 498
     }
     confirm frame `shpframe'
-    geoframe get shpframe, local(oldshpframe)
-    if `"`oldshpframe'"'!="" geoframe unlink
+    __get shpframe, local(oldshpframe)
+    if `"`oldshpframe'"'!="" _geoframe_unlink
     frame `shpframe' {
-        geoframe get id, local(shpid)
+        __get id, local(shpid)
         if `"`shpid'"'=="" {
             di as err "no ID variable defined in {it:shpframe}"
             exit 498
@@ -265,7 +265,7 @@ program _geoframe_link
             else   continue, break  // name ok
         }
     }
-    geoframe get id, local(id)
+    __get id, local(id)
     if `"`id'"'=="" {
         di as err "no ID variable defined in current frame"
         exit 498
@@ -274,7 +274,7 @@ program _geoframe_link
     __geoframe_set_shpframe `shpframe'
     __geoframe_set_linkname `lnkvar'
     if `"`clean'`clean2'"'!="" {
-        geoframe clean, quietly `clean2'
+        _geoframe_clean, quietly `clean2'
     }
     di as txt "(link to frame {bf:`shpframe'} added)"
 end
@@ -294,14 +294,14 @@ program _geoframe_clean
         local shapes shapes
         local units units
     }
-    geoframe get shpframe, local(shpframe)
+    __get shpframe, local(shpframe)
     if `"`shpframe'"'=="" {
         di as txt "(nothing to do; no link to shape frame found)"
         exit
     }
-    geoframe get id, local(id) strict
-    geoframe get linkname, local(lnkvar) strict
-    frame `shpframe': geoframe get id, local(shpid) strict
+    __get id, local(id) strict
+    __get linkname, local(lnkvar) strict
+    frame `shpframe': __get id, local(shpid) strict
     local lnkupdate 0
     // identify empty shapes (among the linked shapes)
     if "`noempty'"=="" {
@@ -309,11 +309,13 @@ program _geoframe_clean
         frame `shpframe' {
             tempvar empty
             qui gen `empty' = 0
-            geoframe get coordinates, local(coord)
-            if `"`coord'"'!="" {
+            __get coordinates, local(XY)
+            gettoken X XY : XY
+            gettoken Y XY : XY
+            if `"`XY'"'!="" {
                 tempvar touse
                 qui gen `touse' = `lnkvar'<.
-                mata: _clean_empty("`empty'", "`shpid'", tokens(`"`coord'"'),/*
+                mata: _clean_empty("`empty'", "`shpid'", (`"`X'"', `"`Y'"'),/*
                     */ "`touse'")
             }
             else local Nempty 0
@@ -388,7 +390,7 @@ program _geoframe_clean
             `quietly' di as txt "(no empty shapes)"
         }
     }
-    if `lnkupdate' qui geoframe link `shpframe'
+    if `lnkupdate' qui _geoframe_link `shpframe'
 end
 
 program _geoframe_query
@@ -421,19 +423,19 @@ end
 program __geoframe_query_n, rclass
     syntax [if] [in]
     marksample touse
-    geoframe get id, local(id) strict
+    __get id, local(id) strict
     tempvar tmp
     qui gen `tmp' = _n==1 | `id'!=`id'[_n-1]
     su `tmp' if `touse', meanonly
     local units = r(sum)
-    geoframe get type, l(type)
-    if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+    __get type, l(type)
+    if "`type'"!="shape" __get shpframe, local(shpframe)
     if `"`shpframe'"'!="" {
-        geoframe get linkname, local(lnkvar) strict
+        __get linkname, local(lnkvar) strict
         tempvar PID
-        qui geoframe generate pid `PID', noset
+        qui _geoframe_generate pid `PID', noset
         frame `shpframe' {
-            geoframe get id, local(id) strict
+            __get id, local(id) strict
             qui frget `touse' = `touse', from(`lnkvar')
             qui replace `touse' = 0 if `touse'>=.
             tempvar tmp
@@ -450,14 +452,14 @@ program __geoframe_query_n, rclass
         }
     }
     else {
-        geoframe get type, l(type)
+        __get type, l(type)
         if "`type'"!="shape" {
             di as txt "(shape frame not found;"/*
                 */ " treating current frame as shape frame)"
         }
         local units_shp `units'
         tempvar PID
-        qui geoframe generate pid `PID', noset
+        qui _geoframe_generate pid `PID', noset
         qui replace `tmp' = ( `PID'!=`PID'[_n-1]) | `tmp'
         su `tmp' if `touse', meanonly
         local shapes = r(sum)
@@ -492,17 +494,17 @@ program ___geoframe_query_items, rclass
     syntax [if] [in]
     marksample touse
     local cframe `"`c(frame)'"'
-    geoframe get type, l(type)
+    __get type, l(type)
     if "`type'"=="shape" local shpframe `"`cframe'"'
     else {
-        geoframe get shpframe, local(shpframe)
+        __get shpframe, local(shpframe)
         if `"`shpframe'"'=="" {
             di as txt "(shape frame not found;"/*
                 */ " treating current frame as shape frame)"
             local shpframe `"`cframe'"'
         }
         else {
-            geoframe get linkname, local(lnkvar) strict
+            __get linkname, local(lnkvar) strict
             frame `shpframe' {
                 qui frget `touse' = `touse', from(`lnkvar')
                 qui replace `touse' = 0 if `touse'>=.
@@ -510,16 +512,18 @@ program ___geoframe_query_items, rclass
         }
     }
     frame `shpframe' {
-        geoframe get id, local(ID)
+        __get id, local(ID)
         if `"`ID'"'=="" {
             tempvar ID
             qui gen byte `ID' = 1
         }
         tempvar PID
-        qui geoframe generate pid `PID', noset
-        geoframe get coord, local(XY) strict
+        qui _geoframe_generate pid `PID', noset
+        __get coord, local(XY) strict
+        gettoken X XY : XY
+        gettoken Y XY : XY
         tempname R
-        mata: _`fcn'("`R'", (`"`ID'"', "`PID'"), tokens(`"`XY'"'),/*
+        mata: _q_`fcn'("`R'", (`"`ID'"', "`PID'"), (`"`X'"', `"`Y'"'),/*
                 */ "`touse'")
     }
     di as txt ""
@@ -554,7 +558,7 @@ program __geoframe_query_bbox, rclass
         */ n(passthru) ANGle(passthru) noADJust ]
     // obtain bounding box
     tempname bbox
-    qui geoframe bbox `bbox' `if' `in', `shp' `rotate' `circle' `hull'/*
+    qui _geoframe_bbox `bbox' `if' `in', `shp' `rotate' `circle' `hull'/*
         */ `padding' `n' `angle' `noadjust' 
     tempname BBOX LIMITS R
     frame `bbox' {
@@ -603,7 +607,7 @@ program _geoframe_describe
     frame `frame' {
         local allchars type feat id coord centr area sid pid plevel shpf
         foreach char of local allchars {
-            geoframe get `char', local(`char')
+            __get `char', local(`char')
         }
     }
     // chars to print even if empty
@@ -657,13 +661,40 @@ program __geoframe_describe_di
 end
 
 program _geoframe_select
-    syntax [if] [in] [, into(namelist max=2) NOShp UNLink replace/*
-        */ noDEScribe noCURrent ]
-    local hasIF = `"`if'`in'"'!=""
+    syntax [if] [in] [, shpif(str asis) nodrop NOShp UNLink/*
+        */ into(namelist max=2) replace noDEScribe noCURrent ]
+    if `"`shpif'"'!="" {
+        if "`noshp'"!="" {
+            di as err "shpif() and noshp not both allowed"
+            exit 198
+        }
+        if "`unlink'"!="" {
+            di as err "shpif() and unlink not both allowed"
+            exit 198
+        }
+    }
     // get settings of current frame
     local frame `"`c(frame)'"'
-    geoframe get shpframe, local(shpframe)
-    local hasSHP = "`shpframe'"!=""
+    __get shpframe, local(shpframe)
+    local hasSHP = `"`shpframe'"'!=""
+    // mark sample
+    local shpIF = `"`shpif'"'!=""
+    if `shpIF' & `"`shpframe'"'=="" {
+        di as err "shpif() not allowed; the current frame is not linked to"/*
+            */ " a shape frame"
+        exit 198
+    }
+    local hasIF = `"`if'`in'"'!=""
+    if `hasIF' marksample touse
+    if `shpIF' {
+        if !`hasIF' tempname touse
+        __get id, local(id) strict // will be used later
+        frame `shpframe' {
+            __get id, local(shpid) strict // will be used later
+            qui gen byte `touse' = 0
+            qui replace  `touse' = 1 if `shpif'
+        }
+    }
     // parse into()
     local newFRM 0
     local newSHP 0
@@ -729,30 +760,43 @@ program _geoframe_select
     local Ndropshp .
     frame `newname' {
         if `hasIF' {
-            qui keep `if' `in'
+            qui keep if `touse'
             local Ndrop = r(N_drop)
         }
         if `hasSHP' {
             if "`unlink'"=="" {
-                qui geoframe link `newshpname'
+                qui _geoframe_link `newshpname'
                 if "`noshp'"=="" {
                     local Ndropshp 0
-                    if `hasIF' {
-                        geoframe get linkname, local(lnkvar)
+                    // drop obs in shpframe
+                    if `hasIF' | `shpIF' {
+                        __get linkname, local(lnkvar) strict
                         frame `newshpname' {
-                            qui keep if `lnkvar'<.
+                            if `shpIF' qui keep if `lnkvar'<. & `touse'
+                            else       qui keep if `lnkvar'<.
                             local Ndropshp = r(N_drop)
+                        }
+                    }
+                    // update units in attribute frame
+                    if `shpIF' & "`drop'"=="" {
+                        if `hasIF' drop `touse'
+                        _copy_from_shpframe `id' `shpid' `newshpname'/*
+                            */ `lnkvar' "`touse'"
+                        qui drop if `touse'>=.
+                        if r(N_drop) {
+                            local Ndrop = `Ndrop' + r(N_drop)
+                            qui _geoframe_link `newshpname'
                         }
                     }
                 }
             }
-            else if `newFRM'==0 {
-                geoframe unlink `shpframe'
+            else if `newFRM'==0 { // unlink specified
+                _geoframe_unlink `shpframe'
             }
         }
     }
     // reporting and frame change
-    if `hasIF' {
+    if `hasIF' | `shpIF' {
         if `Ndropshp'<. {
             if `Ndropshp'==1 local msg observation
             else             local msg observations
@@ -853,18 +897,18 @@ program __geoframe_manipulate
     // into()
     if `"`into'"'!="" {
         gettoken frame : into
-        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
+        _geoframe_select `if' `in', into(`into') `replace' nodescribe nocurrent 
     }
     else local frame `"`c(frame)'"'
     // check for shape frame
     frame `frame' {
-        geoframe get shpframe, local(shpframe)
+        __get shpframe, local(shpframe)
         local hasSHP = "`shpframe'"!=""
         if `hasSHP' {
-            geoframe get id, local(id) strict
-            geoframe get linkname, local(lnkvar) strict
+            __get id, local(id) strict
+            __get linkname, local(lnkvar) strict
             frame `shpframe' {
-                geoframe get id, local(shpid) strict
+                __get id, local(shpid) strict
                 qui frget `touse' = `touse', from(`lnkvar')
                 qui replace `touse' = 0 if `touse'>=.
             }
@@ -885,14 +929,14 @@ program __geoframe_manipulate
             __geoframe_bshare `touse' "`not'" "`drop'" "`dots'" // => Ndrop
         }
         // update PID and shape_order (if set)
-        geoframe get sid, local(sid)
+        __get sid, local(sid)
         if `"`sid'"'!="" {
-            geoframe get id, local(ID) strict
+            __get id, local(ID) strict
             qui replace `sid' = cond(_n==1 | `ID'!=`ID'[_n-1], 1, 1+`sid'[_n-1])
         }
-        geoframe get pid, local(pid)
+        __get pid, local(pid)
         if `"`pid'"'!="" {
-            qui geoframe generate pid `pid', replace
+            qui _geoframe_generate pid `pid', replace
         }
     }
     // eliminate dropped units in attribute frame
@@ -902,7 +946,7 @@ program __geoframe_manipulate
             _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
             qui drop if `touse'>=.
             local Ndrop0 = r(N_drop)
-            qui geoframe link `shpframe'
+            qui _geoframe_link `shpframe'
         }
     }
     // reporting and frame change
@@ -932,15 +976,15 @@ end
 
 program ___geoframe_clip
     args touse MASK rclip line noclip strict split drop dots
-    geoframe get coordinates, local(XY) strict
+    __get coordinates, local(XY) strict
     gettoken X XY : XY
     gettoken Y XY : XY
     gettoken X2 XY : XY // pc
     gettoken Y2 XY : XY // pc
     // determine type of shapes and type of clipping
     tempname pid
-    qui geoframe generate pid `pid', noset
-    geoframe get id, local(id)
+    qui _geoframe_generate pid `pid', noset
+    __get id, local(id)
     if `"`id'"'=="" { // assume all obs belong to the same unit
         tempname id
         qui gen byte `id' = 1
@@ -996,14 +1040,14 @@ end
 
 program __geoframe_simplify
     args touse delta absolute jointly drop dots
-    geoframe get id, local(ID)
+    __get id, local(ID)
     if `"`ID'"'=="" {
         tempvar ID
         qui gen byte `ID' = 1
     }
     tempvar OUT
     qui gen byte `OUT' = 0
-    qui geoframe get coordinates, local(XY) strict
+    qui __get coordinates, local(XY) strict
     gettoken X XY : XY
     gettoken Y XY : XY
     if "`delta'"=="" | "`absolute'"=="" {
@@ -1024,362 +1068,34 @@ end
 
 program __geoframe_bshare
     args touse not drop dots
-    geoframe get id, local(ID)
+    __get id, local(ID)
     if `"`ID'"'=="" {
         tempvar ID
         qui gen byte `ID' = 1
     }
     tempvar OUT
     qui gen byte `OUT' = 0
-    qui geoframe get coordinates, local(XY) strict
+    qui __get coordinates, local(XY) strict
     gettoken X XY : XY
     gettoken Y XY : XY
     tempname PID
-    qui geoframe gen pid `PID', noset
+    qui _geoframe_generate pid `PID', noset
     mata: _bshare("`ID'", "`PID'", "`OUT'", ("`X'","`Y'"), "`touse'",/*
         */ "`not'"!="" ? -1 : 0, "`drop'"!="", "`dots'"=="")
     qui drop if `OUT'
     c_local Ndrop = r(N_drop)
 end
 
-/*
-program __geoframe_clip
-    // syntax
-    syntax [if] [in], mask(str) [ rclip/*
-        */ line noclip strict split nodrop /*
-        */ into(namelist max=2) replace nocurrent ]
-    // mark sample
-    marksample touse
-    // into()
-    if `"`into'"'!="" {
-        gettoken frame : into
-        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
-    }
-    else local frame `"`c(frame)'"'
-    // check for shape frame
-    frame `frame' {
-        geoframe get shpframe, local(shpframe)
-        local hasSHP = "`shpframe'"!=""
-        if `hasSHP' {
-            geoframe get id, local(id) strict
-            geoframe get linkname, local(lnkvar) strict
-            frame `shpframe' {
-                geoframe get id, local(shpid) strict
-                qui frget `touse' = `touse', from(`lnkvar')
-                qui replace `touse' = 0 if `touse'>=.
-            }
-        }
-        else local shpframe `frame'
-    }
-    // apply clipping
-    frame `shpframe' {
-        di as txt "(clipping shapes ..." _c
-        ___geoframe_clip `touse' `mask' "`rclip'" "`line'" "`clip'"/*
-            */ "`strict'" "`split'" "`drop'" // => Ndrop, Nadd
-        di as txt " done)"
-    }
-    // eliminate dropped units in attribute frame
-    if `hasSHP' & "`drop'"=="" {
-        frame `frame' {
-            drop `touse'
-            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
-            qui drop if `touse'>=.
-            local Ndrop0 = r(N_drop)
-            qui geoframe link `shpframe'
-        }
-    }
-    // reporting and frame change
-    if `Ndrop'==1 local msg observation
-    else          local msg observations
-    local tmp `: di %9.0gc `Ndrop''
-    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
-    if "`Nadd'"!="" {
-        if `Nadd'==1 local msg observation
-        else         local msg observations
-        local tmp `: di %9.0gc `Nadd''
-        di as txt "(added `tmp' `msg' in frame {bf:`shpframe'})"
-    }
-    if "`Ndrop0'"!="" {
-        if `Ndrop0'==1 local msg observation
-        else           local msg observations
-        local tmp `: di %9.0gc `Ndrop0''
-        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
-    }
-    if "`current'"=="" {
-        if "`frame'"!=`"`c(frame)'"' {
-            frame change `frame'
-            di as txt "(current frame now {bf:`frame'})"
-        }
-    }
-end
-
-program ___geoframe_clip
-    args touse MASK rclip line noclip strict split drop
-    geoframe get coordinates, local(XY) strict
-    gettoken X XY : XY
-    gettoken Y XY : XY
-    gettoken X2 XY : XY // pc
-    gettoken Y2 XY : XY // pc
-    // determine type of shapes and type of clipping
-    tempname pid
-    qui geoframe generate pid `pid', noset
-    geoframe get id, local(id)
-    if `"`id'"'=="" { // assume all obs belong to the same unit
-        tempname id
-        qui gen byte `id' = 1
-    }
-    if "`X2'"!="" local point point // assume point data if pc
-    else {
-        capt assert (`id'!=`id'[_n-1] | `pid'!=`pid'[_n-1]) if `touse'
-        if _rc==1 exit _rc
-        if _rc==0 local point point // assume point data if PID is unique
-    }
-    if "`point'"!="" local noclip noclip // point data implies noclip
-    local poly 1 // 0 = individual observation, 1 = groups of observations
-    if "`noclip'"!="" {
-        if "`point'"!="" {
-            if "`split'"!="" local poly 0
-            else {
-                capt assert (_n==1 | `id'!=`id'[_n-1]) if `touse'
-                if _rc==1 exit _rc
-                if _rc==0 local poly 0 // only one obs per unit
-            }
-        }
-    }
-    // identify points outside mask
-    tempvar OUT
-    if "`rclip'"!="" {
-        qui gen byte `OUT' = 0 if `touse'
-        qui replace `OUT' = . if (`X'>=. | `Y'>=.) & `touse'
-        if `MASK'[1,1]<. qui replace `OUT' = 1 if `X'<`MASK'[1,1] & `OUT'==0
-        if `MASK'[1,2]<. qui replace `OUT' = 1 if `X'>`MASK'[1,2] & `OUT'==0
-        if `MASK'[1,3]<. qui replace `OUT' = 1 if `Y'<`MASK'[1,3] & `OUT'==0
-        if `MASK'[1,4]<. qui replace `OUT' = 1 if `Y'>`MASK'[1,4] & `OUT'==0
-    }
-    else {
-        qui gen byte `OUT' = .
-    }
-    // apply clipping
-    if `poly' {
-        if "`noclip'"!="" {
-            mata: _noclip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
-                */ ("`X'","`Y'"), "`MASK'", "`strict'"!="", "`split'"!="",/*
-                */ "`drop'"!="")
-        }
-        else {
-            mata: _clip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
-                */ ("`X'","`Y'"), "`MASK'", "`line'"!="", "`drop'"!="")
-        }
-    }
-    qui drop if `OUT' & `touse'
-    c_local Ndrop = r(N_drop)
-    c_local Nadd `Nadd'
-    // update PID and shape_order (if set)
-    geoframe get sid, local(sid)
-    if `"`sid'"'!="" {
-        qui replace `sid' = cond(_n==1 | `id'!=`id'[_n-1], 1, 1 + `sid'[_n-1])
-    }
-    geoframe get pid, local(pid)
-    if `"`pid'"'!="" {
-        qui geoframe generate pid `pid', replace
-    }
-end
-*/
-
-/*
-program _geoframe_simplify
-    // syntax
-    syntax [anything(id="delta" name=delta)] [if] [in] [,/*
-        */ ABSolute JOINTly nodots nodrop/*
-        */ into(namelist max=2) replace noCURrent ]
-    if "`delta'"!="" {
-        numlist `"`delta'"', max(1) range(>=0)
-        local delta `r(numlist)'
-    }
-    // mark sample
-    marksample touse
-    // into()
-    if `"`into'"'!="" {
-        gettoken frame : into
-        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
-    }
-    else local frame `"`c(frame)'"'
-    // check for shape frame
-    frame `frame' {
-        geoframe get shpframe, local(shpframe)
-        local hasSHP = "`shpframe'"!=""
-        if `hasSHP' {
-            geoframe get id, local(id) strict
-            geoframe get linkname, local(lnkvar) strict
-            frame `shpframe' {
-                geoframe get id, local(shpid) strict
-                qui frget `touse' = `touse', from(`lnkvar')
-                qui replace `touse' = 0 if `touse'>=.
-            }
-        }
-        else local shpframe `frame'
-    }
-    // generalize
-    frame `shpframe' {
-        geoframe get id, local(ID)
-        if `"`ID'"'=="" {
-            tempvar ID
-            qui gen byte `ID' = 1
-        }
-        tempvar OUT
-        qui gen byte `OUT' = 0
-        qui geoframe get coordinates, local(XY) strict
-        gettoken X XY : XY
-        gettoken Y XY : XY
-        if "`delta'"=="" | "`absolute'"=="" {
-            if "`delta'"=="" local delta 1
-            su `X' if `touse', meanonly
-            local xrange = r(max)-r(mean)
-            su `Y' if `touse', meanonly
-            local yrange = r(max)-r(mean)
-            local delta = (`xrange'/1000) * (`yrange'/1000) / 2 * `delta'
-        }
-        local msg `: di %9.0g `delta''
-        di as txt "(threshold = `msg')"
-        mata: _simplify("`ID'", "`OUT'", ("`X'","`Y'"), "`touse'", `delta', /*
-            */ "`jointly'"!="", "`drop'"!="", "`dots'"=="")
-        qui drop if `OUT'
-        local Ndrop = r(N_drop)
-        // update PID and shape_order (if set)
-        geoframe get sid, local(sid)
-        if `"`sid'"'!="" {
-            qui replace `sid' = cond(_n==1 | `ID'!=`ID'[_n-1], 1, 1+`sid'[_n-1])
-        }
-        geoframe get pid, local(pid)
-        if `"`pid'"'!="" {
-            qui geoframe generate pid `pid', replace
-        }
-    }
-    // eliminate dropped units in attribute frame
-    if `hasSHP' & "`drop'"=="" {
-        frame `frame' {
-            drop `touse'
-            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
-            qui drop if `touse'>=.
-            local Ndrop0 = r(N_drop)
-            qui geoframe link `shpframe'
-        }
-    }
-    // reporting and frame change
-    if `Ndrop'==1 local msg observation
-    else          local msg observations
-    local tmp `: di %9.0gc `Ndrop''
-    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
-    if "`Ndrop0'"!="" {
-        if `Ndrop0'==1 local msg observation
-        else           local msg observations
-        local tmp `: di %9.0gc `Ndrop0''
-        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
-    }
-    if "`current'"=="" {
-        if "`frame'"!=`"`c(frame)'"' {
-            frame change `frame'
-            di as txt "(current frame now {bf:`frame'})"
-        }
-    }
-end
-*/
-
-
-/*
-program _geoframe_bshare
-    // syntax
-    syntax [if] [in] [,/*
-        */ nodots nodrop/*
-        */ into(namelist max=2) replace noCURrent ]
-    // mark sample
-    marksample touse
-    // into()
-    if `"`into'"'!="" {
-        gettoken frame : into
-        geoframe select `if' `in', into(`into') `replace' nodescribe nocurrent 
-    }
-    else local frame `"`c(frame)'"'
-    // check for shape frame
-    frame `frame' {
-        geoframe get shpframe, local(shpframe)
-        local hasSHP = "`shpframe'"!=""
-        if `hasSHP' {
-            geoframe get id, local(id) strict
-            geoframe get linkname, local(lnkvar) strict
-            frame `shpframe' {
-                geoframe get id, local(shpid) strict
-                qui frget `touse' = `touse', from(`lnkvar')
-                qui replace `touse' = 0 if `touse'>=.
-            }
-        }
-        else local shpframe `frame'
-    }
-    // generalize
-    frame `shpframe' {
-        geoframe get id, local(ID)
-        if `"`ID'"'=="" {
-            tempvar ID
-            qui gen byte `ID' = 1
-        }
-        tempvar OUT
-        qui gen byte `OUT' = 0
-        qui geoframe get coordinates, local(XY) strict
-        gettoken X XY : XY
-        gettoken Y XY : XY
-        tempname PID
-        qui geoframe gen pid `PID', noset
-        mata: _bshare("`ID'", "`PID'", "`OUT'", ("`X'","`Y'"), "`touse'",/*
-            */ "`drop'"!="", "`dots'"=="")
-        qui drop if `OUT'
-        local Ndrop = r(N_drop)
-        // update PID and shape_order (if set)
-        geoframe get sid, local(sid)
-        if `"`sid'"'!="" {
-            qui replace `sid' = cond(_n==1 | `ID'!=`ID'[_n-1], 1, 1+`sid'[_n-1])
-        }
-        geoframe get pid, local(pid)
-        if `"`pid'"'!="" {
-            qui geoframe generate pid `pid', replace
-        }
-    }
-    // eliminate dropped units in attribute frame
-    if `hasSHP' & "`drop'"=="" {
-        frame `frame' {
-            drop `touse'
-            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
-            qui drop if `touse'>=.
-            local Ndrop0 = r(N_drop)
-            qui geoframe link `shpframe'
-        }
-    }
-    // reporting and frame change
-    if `Ndrop'==1 local msg observation
-    else          local msg observations
-    local tmp `: di %9.0gc `Ndrop''
-    di as txt "(dropped `tmp' `msg' in frame {bf:`shpframe'})"
-    if "`Ndrop0'"!="" {
-        if `Ndrop0'==1 local msg observation
-        else           local msg observations
-        local tmp `: di %9.0gc `Ndrop0''
-        di as txt "(dropped `tmp' `msg' in frame {bf:`frame'})"
-    }
-    if "`current'"=="" {
-        if "`frame'"!=`"`c(frame)'"' {
-            frame change `frame'
-            di as txt "(current frame now {bf:`frame'})"
-        }
-    }
-end
-*/
-    
 program _geoframe_generate
     gettoken fnc 0 : 0, parse(" ,")
     local fnc = strlower(`"`fnc'"')
     local l = strlen(`"`fnc'"')
-    if      `"`fnc'"'==substr("centroids", 1, max(3,`l')) local fnc centroids
-    else if `"`fnc'"'==substr("plevel", 1, max(2,`l'))    local fnc plevel
-    else if `"`fnc'"'==substr("shpmatch", 1, max(3,`l'))  local fnc shpmatch
+    if      `"`fnc'"'==substr("centroids", 1, max(3,`l'))   local fnc centroids
+    else if `"`fnc'"'==substr("direction", 1, max(3,`l'))   local fnc dir
+    else if `"`fnc'"'==substr("orientation", 1, max(2,`l')) local fnc dir
+    else if `"`fnc'"'==substr("gtype", 1, max(2,`l'))       local fnc gtype
+    else if `"`fnc'"'==substr("plevel", 1, max(2,`l'))      local fnc plevel
+    else if `"`fnc'"'==substr("shpmatch", 1, max(3,`l'))    local fnc shpmatch
     else if `"`fnc'"'=="" {
         di as err `"{it:function} required"'
         exit 198
@@ -1399,7 +1115,7 @@ program _geoframe_generate_plevel
     syntax [name] [if] [in] [, by(varname numeric) replace noset noDOTs ]
     if "`namelist'"=="" local namelist _PLEVEL
     local cframe `"`c(frame)'"'
-    geoframe get type, l(type)
+    __get type, l(type)
     marksample touse
     if "`by'"!="" markout `touse' `by'
     if "`type'"=="shape" {
@@ -1407,8 +1123,8 @@ program _geoframe_generate_plevel
         local BY `by'
     }
     else {
-        geoframe get shpframe, local(shpframe) strict
-        geoframe get linkname, local(lnkvar) strict
+        __get shpframe, local(shpframe) strict
+        __get linkname, local(lnkvar) strict
         frame `shpframe' {
             qui frget `touse' = `touse', from(`lnkvar')
             qui replace `touse' = 0 if `touse'>=.
@@ -1440,18 +1156,18 @@ program _geoframe_generate_plevel
                 exit 110
             }
         }
-        geoframe get id, l(ID)
+        __get id, l(ID)
         if `"`ID'"'=="" {
             di as txt "(ID not available;"/*
                 */ " assuming all polygons belong to same unit)"
             tempname ID
             qui gen byte `ID' = 1
         }
-        geoframe get coordinates, l(XY) strict
-        geoframe get pid, l(PID)
+        __get coordinates, l(XY) strict
+        __get pid, l(PID)
         if `"`PID'"'=="" {
             tempvar PID
-            qui geoframe gen pid `PID', noset
+            qui _geoframe_generate pid `PID', noset
         }
         tempname PL
         qui gen double `PL' = .
@@ -1484,7 +1200,7 @@ program _geoframe_generate_plevel
             qui replace `namelist' = `PL' if `touse'
             di as txt "(variable {bf:`namelist'} updated in frame {bf:`shpframe'})"
         }
-        if "`set'"=="" geoframe set plevel `namelist'
+        if "`set'"=="" _geoframe_set plevel `namelist'
     }
 end
 
@@ -1494,10 +1210,10 @@ program _geoframe_generate_centroids
     if "`replace'"=="" {
         confirm new variable `namelist'
     }
-    geoframe get type, l(type)
+    __get type, l(type)
     local cframe `"`c(frame)'"'
     if "`type'"=="shape" {
-        geoframe get id, l(ID0)
+        __get id, l(ID0)
         if `"`ID0'"'=="" {
             di as txt "(ID not available;"/*
                 */ " assuming all polygons belong to same unit)"
@@ -1508,15 +1224,15 @@ program _geoframe_generate_centroids
         local hasSHP 0
     }
     else {
-        geoframe get shpframe, local(shpframe) strict
-        geoframe get linkname, local(lnkvar) strict
-        geoframe get id, l(ID0) strict
+        __get shpframe, local(shpframe) strict
+        __get linkname, local(lnkvar) strict
+        __get id, l(ID0) strict
         local hasSHP 1
     }
     frame `shpframe' {
         if !`hasSHP' local ID `ID0'
-        else geoframe get id, l(ID) strict
-        geoframe get coordinates, l(XY) strict
+        else __get id, l(ID) strict
+        __get coordinates, l(XY) strict
         tempvar CX CY
         qui gen double `CX' = .
         qui gen double `CY' = .
@@ -1543,10 +1259,10 @@ program _geoframe_generate_area
     if "`replace'"=="" {
         confirm new variable `namelist'
     }
-    geoframe get type, l(type)
+    __get type, l(type)
     local cframe `"`c(frame)'"'
     if "`type'"=="shape" {
-        geoframe get id, l(ID0)
+        __get id, l(ID0)
         if `"`ID0'"'=="" {
             di as txt "(ID not available;"/*
                 */ " assuming all polygons belong to same unit)"
@@ -1557,15 +1273,15 @@ program _geoframe_generate_area
         local hasSHP 0
     }
     else {
-        geoframe get shpframe, local(shpframe) strict
-        geoframe get linkname, local(lnkvar) strict
-        geoframe get id, l(ID0) strict
+        __get shpframe, local(shpframe) strict
+        __get linkname, local(lnkvar) strict
+        __get id, l(ID0) strict
         local hasSHP 1
     }
     frame `shpframe' {
         if !`hasSHP' local ID `ID0'
-        else geoframe get id, l(ID) strict
-        geoframe get coordinates, l(XY) strict
+        else __get id, l(ID) strict
+        __get coordinates, l(XY) strict
         tempvar AREA
         qui gen double `AREA' = .
         mata: _area("`AREA'", `"`ID'"', `"`XY'"')
@@ -1610,10 +1326,10 @@ program _geoframe_generate_pid
     syntax [name] [, replace noset ]
     if "`namelist'"=="" local namelist _PID
     local cframe `"`c(frame)'"'
-    geoframe get type, l(type)
+    __get type, l(type)
     if "`type'"=="shape" local shpframe `"`cframe'"'
     else {
-        geoframe get shpframe, local(shpframe)
+        __get shpframe, local(shpframe)
         if `"`shpframe'"'=="" {
             di as txt "(shape frame not found;"/*
                 */ " treating current frame as shape frame)"
@@ -1631,14 +1347,14 @@ program _geoframe_generate_pid
                 exit _rc
             }
         }
-        geoframe get id, l(ID)
+        __get id, l(ID)
         if `"`ID'"'=="" {
             di as txt "(ID not available;"/*
                 */ " assuming all polygons belong to same unit)"
             tempname ID
             qui gen byte `ID' = 1
         }
-        geoframe get coordinates, l(XY) strict
+        __get coordinates, l(XY) strict
         tempvar PID
         qui gen double `PID' = .
         mata: _pid("`PID'", `"`ID'"', `"`XY'"')
@@ -1652,18 +1368,83 @@ program _geoframe_generate_pid
     }
 end
 
+program _geoframe_generate_dir
+    __geoframe_generate_T dir `0'
+end
+
+program _geoframe_generate_gtype
+    __geoframe_generate_T gtype `0'
+end
+
+program __geoframe_generate_T
+    gettoken T 0 : 0
+    syntax [name] [, replace nolabel ]
+    if "`namelist'"=="" local namelist _`=strupper("`T'")'
+    local cframe `"`c(frame)'"'
+    __get type, l(type)
+    if "`type'"=="shape" local shpframe `"`cframe'"'
+    else {
+        __get shpframe, local(shpframe)
+        if `"`shpframe'"'=="" {
+            di as txt "(shape frame not found;"/*
+                */ " treating current frame as shape frame)"
+            local shpframe `"`cframe'"'
+        }
+    }
+    frame `shpframe' {
+        if "`replace'"=="" {
+            cap n confirm new variable `namelist'
+            if _rc==1 exit 1
+            if _rc {
+                if "`shpframe'"!="`cframe'" {
+                    di as err "in frame {bf:`shpframe'}"
+                }
+                exit _rc
+            }
+        }
+        __get id, l(ID)
+        if `"`ID'"'=="" {
+            di as txt "(ID not available;"/*
+                */ " assuming all polygons belong to same unit)"
+            tempname ID
+            qui gen byte `ID' = 1
+        }
+        __get coordinates, l(XY) strict
+        tempvar PID
+        qui gen double `PID' = .
+        mata: _pid("`PID'", `"`ID'"', `"`XY'"')
+        gettoken X XY : XY
+        gettoken Y XY : XY
+        tempvar Z
+        qui gen byte `Z' = .
+        mata: _g_`T'("`Z'", ("`ID'","`PID'"), ("`X'", "`Y'"))
+        capt confirm new variable `namelist'
+        if _rc==1 exit _rc
+        if _rc drop `namelist'
+        rename `Z' `namelist'
+        if "`label'"=="" {
+            if "`T'"=="dir" local lbls/*
+                */ -1 "clockwise" 0 "undetermined" 1 "counterclockwise"
+            else local lbls 0 "empty" 1 "polygon" 2 "line" 3 "point" 
+            label define `namelist' `lbls', replace
+            label values `namelist' `namelist', nofix
+        }
+        di as txt "(variable {bf:`namelist'} added to frame {bf:`shpframe'})"
+    }
+end
+
 program _geoframe_generate_shpmatch
     syntax [name] [, replace ]
     if "`namelist'"=="" local namelist _SHPMATCH
     if "`replace'"=="" {
         confirm new variable `namelist'
     }
-    geoframe get shpframe, local(shpframe) strict
-    geoframe get id, local(id) strict
-    geoframe get linkname, local(lnkvar) strict
+    __get shpframe, local(shpframe) strict
+    __get id, local(id) strict
+    __get linkname, local(lnkvar) strict
     tempname tmpframe tag
     frame `shpframe' {
-        geoframe get id, local(shpid) strict
+        __get id, local(shpid) strict
         qui gen byte `tag' = `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1])
         frame put `shpid' if `tag', into(`tmpframe')
     }
@@ -1696,26 +1477,26 @@ program _geoframe_bbox
     if "`by'"!="" markout `touse' `by'
     // find shapes
     local cframe `"`c(frame)'"'
-    geoframe get id, l(ID0)
+    __get id, l(ID0)
     if "`shp'"=="" {
-        geoframe get type, l(type) 
-        if "`type'"!="shape" geoframe get shpframe, local(shpframe)
+        __get type, l(type) 
+        if "`type'"!="shape" __get shpframe, local(shpframe)
     }
     if `"`shpframe'"'=="" {
-        geoframe get coordinates, l(XY) strict
+        __get coordinates, l(XY) strict
         markout `touse' `XY'
         local shpframe `"`cframe'"'
         local BY `by'
         local ID `ID0'
     }
     else {
-        geoframe get linkname, local(lnkvar) strict
+        __get linkname, local(lnkvar) strict
         frame `shpframe' {
             qui frget `touse' = `touse', from(`lnkvar')
             qui replace `touse' = 0 if `touse'>=.
-            geoframe get coordinates, l(XY) strict
+            __get coordinates, l(XY) strict
             markout `touse' `XY'
-            geoframe get id, l(ID)
+            __get id, l(ID)
             if "`by'"!="" {
                 if "`by'"=="`ID0'" & "`ID'"!="" local BY `ID'
                 else {
@@ -1808,7 +1589,7 @@ program __geoframe_symbol
     }
     else {
         local frame `"`c(frame)'"'
-        geoframe get id, l(ID)
+        __get id, l(ID)
     }
     tempname newframe
     _geoplot_symbol . . `frame' `if' `in', _frameonly(`newframe' `ID')/*
@@ -1879,7 +1660,7 @@ program __geoframe_collapse
                 local set noset
                 local novarnote novarnote
             }
-            geoframe spjoin `cframe' `ID' `if' `in',/*
+            _geoframe_spjoin `cframe' `ID' `if' `in',/*
                 */ `select' `coordinates' `replace' `set' `novarnote'
         }
     }
@@ -1894,12 +1675,12 @@ program __geoframe_collapse
         else {
             collapse `anything' [`weight'`exp'], by(`ID') fast `cw'
         }
-        geoframe get id, local(id)
+        __get id, local(id)
         if `"`id'"'!="`ID'" {
-            geoframe set id `ID'
+            _geoframe_set id `ID'
         }
     }
-    geoframe copy `frame1' *, exclude(`ID') quietly
+    _geoframe_copy `frame1' *, exclude(`ID') quietly
     if `r(k)'==1 di as txt "(variable " _c
     else         di as txt "(variables " _c
     di as res r(newlist) as txt " added to frame {bf:`cframe'})"
@@ -1922,15 +1703,15 @@ program _geoframe_spjoin
     if "`id'"=="" local id _ID
     if "`replace'"=="" confirm new variable `id'
     if `"`coordinates'"'!="" local xy `coordinates'
-    else geoframe get coordinates, l(xy) strict
+    else __get coordinates, l(xy) strict
     markout `touse' `xy'
     local frame `"`c(frame)'"'
     local TOUSE
     frame `shpframe' {
         // check whether shpframe is an attribute frame linked to a shape frame
-        geoframe get type, l(type)
+        __get type, l(type)
         if "`type'"!="shape" {
-            geoframe get shpframe, local(shpframe2)
+            __get shpframe, local(shpframe2)
             if `"`shpframe2'"'!="" {
                 tempvar TOUSE
                 if `"`select'"'!="" {
@@ -1938,7 +1719,7 @@ program _geoframe_spjoin
                     qui replace `TOUSE' = 1 if (`select')
                 }
                 else qui gen byte `TOUSE' = 1
-                geoframe get linkname, local(lnkvar) strict
+                __get linkname, local(lnkvar) strict
                 frame `shpframe2' {
                     qui frget `TOUSE' = `TOUSE', from(`lnkvar')
                     qui replace `TOUSE' = 0 if `TOUSE'>=.
@@ -1953,15 +1734,15 @@ program _geoframe_spjoin
         }
     }
     frame `shpframe' {
-        geoframe get ID, l(ID) strict
+        __get ID, l(ID) strict
         local type: type `ID'
-        geoframe get coordinates, l(XY) strict
-        geoframe get pid, l(PID)
+        __get coordinates, l(XY) strict
+        __get pid, l(PID)
         if "`PID'"=="" {
             tempvar PID
-            qui geoframe gen pid `PID', noset
+            qui _geoframe_generate pid `PID', noset
         }
-        geoframe get pl, l(PL)
+        __get pl, l(PL)
         if "`PL'"=="" {
             di as txt "({helpb geoframe##gen_plevel:plevel} not set;"/*
                 */ " assuming that there are no nested polygons)"
@@ -1982,7 +1763,7 @@ program _geoframe_spjoin
     if _rc drop `id'
     rename `Id' `id'
     if "`set'"=="" {
-        geoframe set id `id'
+        _geoframe_set id `id'
     }
     if "`novarnote'"=="" {
         di as txt "(variable {bf:`id'} added to frame {bf:`frame'})"
@@ -2166,6 +1947,11 @@ program _geoframe_get
     }
 end
 
+program __get
+    _geoframe_get `0'
+    c_local `local' `"`value'"'
+end
+
 program __geoframe_get_var
     syntax name [, * ]
     local exp: char _dta[GEOFRAME_`namelist']
@@ -2209,7 +1995,7 @@ program __geoframe_get_coordinates
             if _rc==0 local exp `VARS'
         }
     }
-    if "`flip'"!="" geoframe flip `exp', local(exp)
+    if "`flip'"!="" __flip `exp', local(exp)
     c_local exp `exp'
 end
 
@@ -2231,7 +2017,7 @@ program __geoframe_get_centroids
             local exp `VARS'
         }
     }
-    if "`flip'"!="" geoframe flip `exp', local(exp)
+    if "`flip'"!="" __flip `exp', local(exp)
     c_local exp `exp'
 end
 
@@ -2241,6 +2027,11 @@ program _geoframe_flip
     mata: _flip("lhs")
     c_local local `local'
     c_local value `"`lhs'"'
+end
+
+program __flip
+    _geoframe_flip `0'
+    c_local `local' `"`value'"'
 end
 
 program _geoframe_rename
@@ -2258,7 +2049,7 @@ program _geoframe_rename
     di as txt "(frame {bf:`cname'} renamed to {bf:`newname'})"
     frame `newname' {
         // update possible outgoing link
-        geoframe get shpframe, local(shpframe)
+        __get shpframe, local(shpframe)
         if `"`shpframe'"'!="" {
             local rc = `"`shpframe'"'=="`newname'"
             if `rc'==0 {
@@ -2273,7 +2064,7 @@ program _geoframe_rename
                     */ " exists; link removed)"
             }
             else {
-                qui geoframe link `shpframe'
+                qui _geoframe_link `shpframe'
                 di as txt "(link to shape frame {bf:`shpframe'} updated)"
             }
         }
@@ -2294,7 +2085,7 @@ program _geoframe_rename
                 continue
             }
             frame `unitframe' {
-                geoframe get shpframe, local(shpframe)
+                __get shpframe, local(shpframe)
                 if `"`shpframe'"'!="`cname'" continue // leaves linkvar in data
                 __geoframe_set_shpframe `newname'
                 __geoframe_set_linkname `lnkvar'
@@ -2310,17 +2101,17 @@ program _geoframe_duplicate
 end
 
 program _geoframe_relink
-    geoframe get shpframe, local(shpframe)
+    __get shpframe, local(shpframe)
     if `"`shpframe'"'=="" {
         di as txt "(no link to shape frame found)"
         exit
     }
-    geoframe link `shpframe'
+    _geoframe_link `shpframe'
 end
 
 program _geoframe_unlink
-    geoframe get shpframe, local(shpframe)
-    geoframe get linkname, local(lnkvar)
+    __get shpframe, local(shpframe)
+    __get linkname, local(lnkvar)
     if `"`shpframe'"'=="" {
         di as txt "(no link to shape frame found)"
         exit
@@ -2350,7 +2141,7 @@ program _geoframe_attach
     confirm frame `frame'
     frame `frame' {
         syntax [varlist] [, EXclude(varlist) ]
-        geoframe get id, local(id)
+        __get id, local(id)
         if `"`id'"'=="" {
             di as err "no ID variable defined in {it:unitframe}"
             exit 498
@@ -2363,7 +2154,7 @@ program _geoframe_attach
     }
     local 0
     syntax [varlist]
-    geoframe get id, local(id0)
+    __get id, local(id0)
     if `"`id0'"'=="" {
         di as err "no ID variable defined in current frame"
         exit 498
@@ -2434,8 +2225,8 @@ program _geoframe_copy
             */ TARget(namelist) id(namelist max=2)/*
             */ QUIETly ] // undodumented
         local varlist: list varlist - exclude
-        geoframe get id, local(id2)
-        geoframe get shpframe, local(shpframe2)
+        __get id, local(id2)
+        __get shpframe, local(shpframe2)
         if `"`shpframe2'"'!=`"`frame'"' local shpframe2
         gettoken ID  id : id
         gettoken ID2 id : id
@@ -2448,8 +2239,8 @@ program _geoframe_copy
         }
         local varlist: list varlist - ID2
     }
-    geoframe get id, local(id)
-    geoframe get shpframe, local(shpframe)
+    __get id, local(id)
+    __get shpframe, local(shpframe)
     if `"`shpframe'"'!=`"`frame2'"' local shpframe
     if "`ID'"!="" confirm variable `ID'
     else          local ID `id'
@@ -2478,7 +2269,7 @@ program _geoframe_copy
     // try existing link
     if "`ID'"=="`id'" & "`ID2'"=="`id2'" {
         if "`shpframe2'"!="" { // attribute -> shp
-            frame `frame2': geoframe get linkname, local(lnkvar2)
+            frame `frame2': __get linkname, local(lnkvar2)
             if `"`lnkvar2'"'!="" {
                 capt frget `vlist', from(`lnkvar2')
                 if _rc==1 exit 1
@@ -2492,7 +2283,7 @@ program _geoframe_copy
             local lnkvar2
         }
         if  "`shpframe'"!="" { // shp -> attribute
-            geoframe get linkname, local(lnkvar)
+            __get linkname, local(lnkvar)
             if `"`lnkvar'"'!="" {
                 frame `frame2' {
                     tempvar merge
@@ -2723,8 +2514,12 @@ program _geoframe_translate
     __geoframe_translate_esri `0'
 end
 
+program _geoframe_convert
+    _geoframe_translate `0'
+end
+
 program __geoframe_translate_esri
-    syntax [anything(equalok)] [using] [, * ]
+    syntax [anything(equalok)] [using] [, user * ]
     if `:list sizeof using'==0 {
         if `:list sizeof anything'>1 {
             gettoken outname anything : anything
@@ -2744,24 +2539,74 @@ program __geoframe_translate_esri
     }
     else local shpfile `"`outname'"'
     local shpfile `"`"`shpfile'"'"'
-    local shpfile: list clean shpfile 
+    local shpfile: list clean shpfile
+    if `path_has_SHP' {
+        mata: st_local("out_tmp", pathjoin(`"`path'"', `"`outname'"'))
+        mata: st_local("out_fin", pathjoin(`"`outpath'"', `"`outname'"'))
+    }
+    if "`user'"=="" {
+        local cmd spshape2dta `"`using'"', saving(`"`outname'"') `replace'
+    }
+    else {
+        local cmd shp2dta using `"`using'"', database(`"`outname'.dta"') ///
+            coordinates(`"`outname'_shp.dta"') `replace'
+    }
     local pwd = c(pwd)
     nobreak {
         if `hasoutpath' local pwd = c(pwd)
         capture noisily break {
-            if `hasoutpath' qui cd `"`outpath'"'
             di ""
-            spshape2dta `"`using'"', saving(`"`outname'"') `replace'
-            if `hasoutpath' di as txt `"  (in directory `outpath')"'
-            else            di as txt "  (in current directory)"
+            if `path_has_SHP' {
+                // workaround for failure of spshape2dta to handle path
+                // that contains ".shp"
+                qui cd `"`path'"'
+                `cmd'
+                qui cd `"`pwd'"'
+                qui copy `"`out_tmp'.dta"' `"`out_fin'.dta"', `replace'
+                qui copy `"`out_tmp'_shp.dta"' `"`out_fin'_shp.dta"', `replace'
+            }
+            else {
+                if `hasoutpath' qui cd `"`outpath'"'
+                `cmd'
+            }
+            if "`user'"=="" {
+                if `hasoutpath' di as txt `"  (in directory `outpath')"'
+                else            di as txt  "  (in current directory)"
+            }
+            else {
+                di as txt `"(files `outname'.dta and `outname'_shp.dta"' _c
+                if `hasoutpath' di as txt `"in directory `outpath')"'
+                else            di as txt  "in current directory)"
+            }
         }
         local rc = _rc
-        if `hasoutpath' qui cd `"`pwd'"'
-        if `rc' exit `rc'
+        if `path_has_SHP' {
+            qui cd `"`pwd'"'
+            capt erase `"`out_tmp'.dta"'
+            capt erase `"`out_tmp'_shp.dta"'
+        }
+        else if `hasoutpath' {
+            qui cd `"`pwd'"'
+        }
+        if `rc' {
+            if `rc'!=1 {
+                if "`user'"=="" local cmd spshape2dta
+                else            local cmd shp2dta
+                di _n as err "error occurred when calling command {bf:`cmd'}"
+            }
+            exit `rc'
+        }
     }
-    di _n as txt "  (type "/*
-        */ `"{bf:{stata geoframe create `shpfile'}}"'/*
-        */ " to load the data)"
+    if "`user'"=="" {
+        di _n as txt "  (type "/*
+            */ `"{bf:{stata geoframe create `shpfile'}}"'/*
+            */ " to load the data)"
+    }
+    else {
+        di as txt "(type "/*
+            */ `"{bf:{stata geoframe create `shpfile'}}"'/*
+            */ " to load the data)"
+    }
 end
 
 version 16.1
@@ -2793,7 +2638,6 @@ void _clean_empty(string scalar empty, string scalar id, string rowvector xy,
     real colvector ID, E, a, b 
     real matrix    XY
 
-    if (length(xy)>2) xy = xy[(1,2)] // ignore X2 Y2
     st_view(E=., ., empty, touse)
     st_view(ID=., ., id, touse)
     st_view(XY=., ., xy, touse)
@@ -2829,7 +2673,7 @@ void _flip(string scalar nm)
     st_local(nm, invtokens(S[p]))
 }
 
-void _orientation(string scalar R, string rowvector id,
+void _q_orientation(string scalar R, string rowvector id,
     string rowvector xy, string scalar touse)
 {
     real scalar    i, n, dir, pos, neg, na
@@ -2845,7 +2689,7 @@ void _orientation(string scalar R, string rowvector id,
     else      b = a[|2 \. |] :- 1 \ n
     pos = neg = na = 0
     for (;i;i--) {
-        dir = geo_orientation(XY[|a[i],1 \ b[i],2|])
+        dir = geo_orientation(XY[|a[i],1 \ b[i],.|])
         if (dir==1)       pos++ 
         else if (dir==-1) neg++
         else              na++
@@ -2853,7 +2697,7 @@ void _orientation(string scalar R, string rowvector id,
     st_matrix(R, neg \ pos \ na)
 }
 
-void _gtype(string scalar R, string rowvector id,
+void _q_gtype(string scalar R, string rowvector id,
     string rowvector xy, string scalar touse)
 {
     real scalar    i, n, ai, bi, poly, line, point, empty
@@ -2869,14 +2713,17 @@ void _gtype(string scalar R, string rowvector id,
     else      b = a[|2 \. |] :- 1 \ n
     poly = line = point = empty = 0
     for (;i;i--) {
-        ai = a[i]; bi = b[i] 
-        if (ai==bi) {
-            if (hasmissing(XY[ai,])) empty++
-            else                     point++
+        ai = a[i]; bi = b[i]
+        for (;ai<=bi;ai++) {
+            if (!hasmissing(XY[ai,])) break
+        }
+        if (ai>bi) { // all missing
+            empty++
             continue
         }
-        if (hasmissing(XY[ai,])) ai++
-        else                     bi--
+        for (;bi>=ai;bi--) {
+            if (!hasmissing(XY[bi,])) break
+        }
         if (ai==bi)                point++ // only one valid obs
         else if ((ai+1)==bi)       line++  // only two valid obs
         else if (XY[ai,]==XY[bi,]) poly++
@@ -3236,6 +3083,59 @@ void _pid(string scalar pid, string scalar id, string scalar xy)
     st_store(., pid, geo_pid(ID, XY))
 }
 
+void _g_dir(string scalar dir, string rowvector id, string rowvector xy)
+{
+    real scalar    i, n
+    real colvector a, b, DIR 
+    real matrix    ID, XY
+
+    st_view(ID=., ., id)
+    st_view(XY=., ., xy)
+    st_view(DIR=., ., dir)
+    n = rows(ID)
+    a = selectindex(_mm_uniqrows_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        DIR[|a[i] \ b[i]|] = 
+            J(b[i]-a[i]+1,1,geo_orientation(XY[|a[i],1 \ b[i],2|]))
+    }
+}
+
+void _g_gtype(string scalar gtype, string rowvector id, string rowvector xy)
+{
+    real scalar    i, n, ai, bi
+    real colvector a, b, GTYPE 
+    real matrix    ID, XY
+
+    st_view(ID=., ., id)
+    st_view(XY=., ., xy)
+    st_view(GTYPE=., ., gtype)
+    n = rows(ID)
+    a = selectindex(_mm_uniqrows_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        ai = a[i]; bi = b[i]
+        for (;ai<=bi;ai++) {
+            if (!hasmissing(XY[ai,])) break
+        }
+        if (ai>bi) {
+            GTYPE[|a[i]\b[i]|] = J(b[i]-a[i]+1,1,0) // all missing
+            continue
+        }
+        for (;bi>=ai;bi--) {
+            if (!hasmissing(XY[bi,])) break
+        }
+        if (ai==bi)                GTYPE[|a[i]\b[i]|] = J(b[i]-a[i]+1,1,3)
+        else if ((ai+1)==bi)       GTYPE[|a[i]\b[i]|] = J(b[i]-a[i]+1,1,2)
+        else if (XY[ai,]==XY[bi,]) GTYPE[|a[i]\b[i]|] = J(b[i]-a[i]+1,1,1)
+        else                       GTYPE[|a[i]\b[i]|] = J(b[i]-a[i]+1,1,2)
+    }
+}
+
 void _plevel(real scalar nodots, string scalar pl, string scalar id,
     string scalar pid, string scalar xy, string scalar touse,
     | string scalar BY, real scalar lvl)
@@ -3436,7 +3336,7 @@ void _translate_using(string scalar fn)
     else { // only path specified
         path = fn
         if (!direxists(path)) {
-            errprintf("directory %s does not exist", path)
+            errprintf("directory %s not found\n", path)
             exit(601)
         }
         dir = dir(path, "files", "*.shp")
@@ -3449,7 +3349,15 @@ void _translate_using(string scalar fn)
             pathrmsuffix(bn), path)
     }
     if (!pathisabs(path)) path = pathjoin(pwd(), path) // make path absolute
-    st_local("using", pathjoin(path, bn))
+    if (strpos(path, ".shp")) {
+        // spshape2dta and shp2dta have problem with .shp in path
+        st_local("using", bn)
+        st_local("path_has_SHP", "1")
+    }
+    else {
+        st_local("using", pathjoin(path, bn))
+        st_local("path_has_SHP", "0")
+    }
     st_local("path", path)
     st_local("basename", pathrmsuffix(bn))
 }
