@@ -2261,7 +2261,7 @@ end
 
 *! {smcl}
 *! {marker geo_spjoin}{bf:geo_spjoin()}{asis}
-*! version 1.0.1  02oct2023  Ben Jann
+*! version 1.0.2  23oct2023  Ben Jann
 *!
 *! Spatially joins the points in xy to the polygons in XY
 *!
@@ -2303,7 +2303,7 @@ mata set matastrict on
     pointer  pl
     
     if (args()<6) nodots = 0
-    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, nodots, "(pass 1/1: "))
+    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, nodots, "("))
     if (hasmissing(PL)) pl = &editmissing(PL, 0) // treat missing as 0
     else                pl = &PL
     L  = mm_unique(select(*pl, _mm_uniqrows_tag((ID, PID))))

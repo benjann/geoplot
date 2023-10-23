@@ -131,6 +131,16 @@ Zoom.
 
 Main changes:
 
+    23oct2023
+    - geoframe project added
+    - geoframe grid added
+    - geoframe select: option shpif() renamed to ifshp()
+    - geoframe select and geoframe duplicate no longer run geoframe describe; option
+      nodescribe discontinued
+    - geoframe select, simplify, bshare, and duplicate no longer change the current
+      frame automatically
+    - option current added to geoframe bbox/symbol/symboli
+
     18oct2023
     - -geoframe select- now has option shpif() to select observations based on 
       variables in the linked shape frame

@@ -1,5 +1,5 @@
 {smcl}
-{* 18oct2023}{...}
+{* 23oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -36,6 +36,8 @@
     {p_end}
 
 {syntab :Manipulation}
+{p2col :{helpb geoframe##project:project}}apply projection
+    {p_end}
 {p2col :{helpb geoframe##select:{ul:sel}ect}}select units and shapes
     {p_end}
 {p2col :{helpb geoframe##clip:clip}}clip shapes using convex window
@@ -62,6 +64,8 @@
     {p_end}
 
 {syntab :Generate shapes}
+{p2col :{helpb geoframe##grid:grid}}store grid lines in new frame
+    {p_end}
 {p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box, enclosing circle, or convex hull in new frame
     {p_end}
 {p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
@@ -125,7 +129,7 @@
     Currently, the only available {it:translator} is {cmd:esri}, which
     translates ESRI shapefile data to Stata format using official Stata's
     {helpb spshape2dta} command or, if option {cmd:user} is specified, the
-    user command {helpb shp2dta} (see {stata ssc describe shp2dta}).
+    user command {helpb shp2dta} (see {bf:{stata ssc describe shp2dta}}).
 
 {pstd}
     {cmd:geoframe convert} is a synonym for {cmd:geoframe translate}.
@@ -446,11 +450,90 @@
 {pstd}
     to display the settings of frame {it:frame}.
 
+{marker project}{...}
+{dlgtab:geoframe project}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:project} [{it:projection} [{it:args}]] {ifin}
+    [{cmd:,} {it:options} ]
+
+{pstd}
+    applies the specified projection to the coordinates of the selected
+    shapes. X coordinates are assumed to be within -180 and 180, Y coordinates
+    within -90 and 90; values outside these ranges will be
+    clipped before applying the projection. If the current frame is linked to a
+    shape frame, the coordinates in the shape frame will also be translated. The
+    following projections are currently available:
+
+{p2colset 9 40 42 2}{...}
+{p2col :{opt rob:inson} [{it:#}]}Robinson projection; argument {it:#} sets the scale (earth radius;
+    default is {cmd:1}; for example, set {it:#} to 6371 if you want the
+    resulting coordinates to be in km)
+        {p_end}
+{p2col : {helpb geo2xy_web_mercator:{ul:web}_mercator} [{it:args}]}Web Mercator projection (spherical model); the default
+    {p_end}
+{p2col : {helpb geo2xy_mercator_sphere:{ul:mercator_s}phere} [{it:args}]}Mercator projection (spherical model)
+    {p_end}
+{p2col : {helpb geo2xy_mercator:{ul:merc}ator} [{it:args}]}Mercator projection (ellipsoid model)
+    {p_end}
+{p2col : {helpb geo2xy_equidistant_cylindrical:{ul:eq}uidistant_cylindrical} [{it:args}]}Equidistant cylindrical projection (spherical model)
+    {p_end}
+{p2col : {helpb geo2xy_albers_sphere:{ul:albers_s}phere} [{it:args}]}Albers equal-area conic projection (spherical model)
+    {p_end}
+{p2col : {helpb geo2xy_albers:{ul:alb}ers} [{it:args}]}Albers equal-area conic projection (ellipsoid model)
+    {p_end}
+{p2col : {helpb geo2xy_lambert_sphere:{ul:lamb}ert_sphere} [{it:args}]}Lambert conformal conic projection (spherical model)
+    {p_end}
+
+{pstd}
+Except for {cmd:robinson}, the projections are computed by user command
+{helpb geo2xy}, which must be installed on the system (see
+{bf:{stata ssc describe geo2xy}}); {it:args} are documented as
+{it:proj_opts} in {helpb geo2xy}. {it:options} are as follows
+
+{phang}
+    {opth xy(varlist)} specifies additional variables in the current
+    frame to be translated. By default, only the variables returned by
+    {helpb geoframe##:geoframe get coordinates} will be affected. {it:varlist}
+    must provide an even number of variables (i.e., pairs of X and Y
+    coordinates).
+
+{phang}
+    {opth if:shp(exp)} specifies an {it:if} condition to be applied to
+    the linked shape. Observations in the
+    linked shape frame that do not satisfy the specified condition (i.e.,
+    observations for which {it:exp} evaluates to zero), as well as units in the
+    current frame for which {cmd:ifshp()} leads to an empty selection in the
+    shape frame, will not be transformed. {cmd:ifshp()} is only allowed
+    if the current frame is linked to a shape frame. {cmd:ifshp()} and
+    {cmd:noshp} are not both allowed.
+
+{phang}
+    {opt nos:hp} applies the projection to the current frame only, even if there
+    is a linked shape frame.
+
+{phang}
+    {opt into(newname [newshpname])} copies the transformed data into a new frame
+    called {it:newname} and leaves the current frame unchanged. If the current
+    frame has a linked shape frame, {cmd:into()} also creates a new shape
+    frame and leaves the original shape frame unchanged. The
+    default name for the new shape frame is {it:newname}{cmd:_shp}; specify
+    {it:newshpname} to provide an alternative name. {cmd:into()} and {cmd:noshp}
+    are not both allowed.
+
+{phang}
+    {opt replace} allows {cmd:into()} to overwrite existing frames.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
+
 {marker select}{...}
 {dlgtab:geoframe select}
 
 {p 8 15 2}
-    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:select} {ifin}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:sel:ect} {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
@@ -462,35 +545,22 @@
     follows.
 
 {phang}
-    {opt into(newname [newshpname])} copies the selection in a new frame
-    called {it:newname} and leaves the current frame unchanged. If the current
-    frame has been linked to a shape frame by
-    {helpb geoframe##create:geoframe create} or
-    {helpb geoframe##link:geoframe link}, {cmd:into()} also creates a new shape
-    frame and leaves the original shape frame unchanged. The
-    default name for the new shape frame is {it:newname}{cmd:_shp}; specify
-    {it:newshpname} to provide an alternative name.
-
-{phang}
-    {opt replace} allows {cmd:into()} to overwrite existing frames.
-
-{phang}
-    {opth shpif(exp)} specifies an {it:if} condition to be applied to
+    {opth if:shp(exp)} specifies an {it:if} condition to be applied to
     the linked shape frame when selecting observations. Observations in the
     linked shape frame that do not satisfy the specified condition (i.e.,
     observations for which {it:exp} evaluates to zero) will be removed from
     the (copy of the) linked shape frame, and units for which no observations
-    remain in the linked shape frame after applying {cmd:shpif()} will be
-    dropped from the (copy of the) current frame. {cmd:shpif()} is only allowed
-    if the current frame is linked to a shape frame. {cmd:shpif()} is not
+    remain in the linked shape frame after applying {cmd:ifshp()} will be
+    dropped from the (copy of the) current frame. {cmd:ifshp()} is only allowed
+    if the current frame is linked to a shape frame. {cmd:ifshp()} is not
     allowed together with {cmd:noshp} or {cmd:unlink}.
 
 {phang}
     {opt nodrop} retains units in the (copy of the) current frame for which
-    {cmd:shpif()} removed all shape-frame observations. The default
+    {cmd:ifshp()} removed all shape-frame observations. The default
     is to keep only those units for which at least one observation remains
-    after applying {cmd:shpif()}. {cmd:nodrop} is only relevant if
-    {cmd:shpif()} has been specified. 
+    after applying {cmd:ifshp()}. {cmd:nodrop} is only relevant if
+    {cmd:ifshp()} has been specified.
 
 {phang}
     {opt nos:hp} modifies the (copy of the) current frame
@@ -505,10 +575,20 @@
     frame. {cmd:unlink} implies {cmd:noshp}.
 
 {phang}
-    {opt nodes:cribe} suppresses the description of the created frame.
+    {opt into(newname [newshpname])} copies the selection in a new frame
+    called {it:newname} and leaves the current frame unchanged. If the current
+    frame has a linked shape frame, {cmd:into()} also creates a new shape
+    frame and leaves the original shape frame unchanged. The
+    default name for the new shape frame is {it:newname}{cmd:_shp}; specify
+    {it:newshpname} to provide an alternative name.
 
 {phang}
-    {opt nocur:rent} does not make the created frame the current frame.
+    {opt replace} allows {cmd:into()} to overwrite existing frames.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
 
 {marker clip}{...}
 {dlgtab:geoframe clip}
@@ -570,7 +650,9 @@
     {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
-    {opt nocur:rent} does not make the created frame the current frame.
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
 
 {marker rclip}{...}
 {dlgtab:geoframe rclip}
@@ -628,7 +710,7 @@
     time consuming in large datasets.
 
 {phang}
-    {opt abs:solute} causes {it:delta} to be interpreted as an absolute
+    {opt abs:olute} causes {it:delta} to be interpreted as an absolute
     threshold (minimum triangle area by which points are dropped). {cmd:absolute}
     only has an effect if {it:delta} is specified.
 
@@ -670,7 +752,9 @@
     {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
-    {opt nocur:rent} does not make the created frame the current frame.
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
 
 {marker bshare}{...}
 {dlgtab:geoframe bshare}
@@ -684,7 +768,7 @@
     {cmd:not} to remove shared borders and retain the other parts of the shape
     items. The default is to retain shared borders and remove the other
     parts. Further {it:options} are {opt nodrop}, {opt nodot:s}, {opt into()},
-    {opt replace}, and {opt nocur:rent} as described for
+    {opt replace}, and {opt cur:rent} as described for
     {helpb geoframe##simplify:geoframe simplify}.
 
 {marker generate}{...}
@@ -950,6 +1034,10 @@
     the name of the ID in {it:frame2}; the same name will be used in
     both frames if {it:id2} is omitted.
 
+{pstd}
+    Results stored by the internal call to {helpb frget} are passed through in
+    {cmd:r()}.
+
 {marker append}{...}
 {dlgtab:geoframe append}
 
@@ -1083,6 +1171,63 @@
     {helpb geoframe##gen_plevel:geoframe generate plevel}
     (if there are nested shapes).
 
+{marker grid}{...}
+{dlgtab:geoframe grid}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:grid} {it:newname} [{it:newshpname}]
+    {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    generates grid lines covering the range of the selected shapes and stores
+    them in a new frame called {it:newname} and an associated shape frame
+    called {it:newshpname}; {it:newname}{cmd:_shp} is
+    used as name for the shape frame if {it:newshpname} is omitted. The current
+    frame may be a shape frame or an attribute frame that has been linked to a
+    shape frame. {it:options} are as follows.
+
+{phang}
+    {cmd:x(}{cmd:#}{it:#}{cmd:)} or {opth x(numlist)} determines the
+    positions of the vertical grid lines. Use {cmd:x(}{cmd:#}{it:#}{cmd:)},
+    where {it:#} is the desired number of lines, to
+    determine the positions automatically based on the range of the coordinates of
+    the selected shapes. Use {opth x(numlist)} to specify custom positions. Default
+    is {cmd:x(#10)}.
+
+{phang}
+    {cmd:y(}{cmd:#}{it:#}{cmd:)} or {opth y(numlist)} determines the
+    positions of the horizontal grid lines. Use {cmd:y(}{cmd:#}{it:#}{cmd:)},
+    where {it:#} is the desired number of lines, to
+    determine the positions automatically based on the range of the coordinates of
+    the selected shapes. Use {opth y(numlist)} to specify custom positions. Default
+    is {cmd:y(#10)}.
+
+{phang}
+    {opt pad:ding(#)} adds padding to the range of the grid (only relevant for
+    positions that are determined automatically, not for custom
+    positions). Argument {it:#} is in percent of the size in each dimension. For
+    example, type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
+
+{phang}
+    {opt mesh} omits the first and last line on each axis
+    so that the grid has no frame.
+
+{phang}
+    {opt n(n)} sets the number of points used to construct a line. The
+    default is {cmd:n(100)}.
+
+{phang}
+    {opt nos:hp} uses information on coordinates from the current frame even
+    if the current frame is linked to a shape frame.
+
+{phang}
+    {opt replace} allows overwriting an existing frame.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
+
 {marker bbox}{...}
 {dlgtab:geoframe bbox}
 
@@ -1143,6 +1288,11 @@
 {phang}
     {opt replace} allows overwriting an existing frame.
 
+{phang}
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
+
 {marker symbol}{...}
 {dlgtab:geoframe symbol}
 
@@ -1162,6 +1312,11 @@
 
 {phang}
     {opt replace} allows overwriting an existing frame.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
 
 {marker symboli}{...}
 {dlgtab:geoframe symboli}
@@ -1304,10 +1459,9 @@
     {opt replace} allows overwriting existing frames.
 
 {phang}
-    {opt nodes:cribe} suppresses the description of the created frame.
-
-{phang}
-    {opt nocur:rent} does not make the created frame the current frame.
+    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
+    no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
+    to the prior frame.)
 
 {pstd}
     Copying geoframes using official Stata's {helpb frame copy} is discouraged
@@ -1346,22 +1500,22 @@
 {dlgtab:geoframe attach}
 
 {p 8 15 2}
-    [{cmd:frame} {it:shpframe}{cmd::}] {cmd:geoframe} {cmdab:at:tach} {it:frame}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:at:tach} {it:frame2}
     [{varlist}] [{cmd:,} {opth ex:clude(varlist)} ]
 
 {pstd}
-    attaches {it:frame} to the current frame using an {cmd:m:1} merge. That is, a
-    link to {it:frame} is established and all variables from {it:frame}
+    attaches {it:frame2} to the current frame using an {cmd:m:1} merge. That is, a
+    link to {it:frame2} is established and all variables from {it:frame2}
     that do not already exist in the current frame (except for the ID) are added
-    as aliases to the current frame. {it:frame} must be an attribute frame
+    as aliases to the current frame. {it:frame2} must be an attribute frame
     (one row per unit) and the current frame is typically a frame containing
-    shape information on the units represented in {it:frame}. After attaching
-    {it:frame} to the current frame, the variables
-    from {it:frame} will be available in the current frame like any other variables
+    shape information on the units represented in {it:frame2}. After attaching
+    {it:frame2} to the current frame, the variables
+    from {it:frame2} will be available in the current frame like any other variables
     in the current frame.
 
 {pstd}
-    By default, all relevant variables from {it:frame} will be added as aliases
+    By default, all relevant variables from {it:frame2} will be added as aliases
     to the current frame. Specify {varlist} to select the variables
     to be added; use option {cmd:exlcude()} to exclude variables from being added.
 
@@ -1372,11 +1526,11 @@
 {dlgtab:geoframe detach}
 
 {p 8 15 2}
-    [{cmd:frame} {it:shpframe}{cmd::}] {cmd:geoframe} {cmdab:det:ach} {it:frame}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:det:ach} {it:frame2}
 
 {pstd}
-    detaches {it:frame} from the current frame. All alias variables related to
-    {it:frame} will be removed and the link to {it:frame}
+    detaches {it:frame2} from the current frame. All alias variables related to
+    {it:frame2} will be removed and the link to {it:frame2}
     will be deleted from the current frame.
 
 {pstd}
