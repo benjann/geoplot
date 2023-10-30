@@ -1,5 +1,5 @@
 {smcl}
-{* 28oct2023}{...}
+{* 30oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -44,7 +44,9 @@
     {p_end}
 {p2col :{helpb geoframe##rclip:rclip}}clip shapes using rectangular window
     {p_end}
-{p2col :{helpb geoframe##simplify:simplfy}}simplify (generalize) shapes
+{p2col :{helpb geoframe##simplify:simplify}}simplify (generalize) shapes
+    {p_end}
+{p2col :{helpb geoframe##refine:refine}}add extra points to straight lines
     {p_end}
 {p2col :{helpb geoframe##bshare:bshare}}select shared borders
     {p_end}
@@ -748,8 +750,8 @@ Except for {cmd:robinson}, the projections are computed by user command
 {pmore}
     By default, {it:delta} is interpreted as a multiplier for the base threshold, which
     is determined from the coordinates of the selected shapes as
-    0.5 * (Xmax-Xmin)/1000 * (Ymax-Ymin)/1000 (corresponding to half a pixel
-    in a one megapixel image). This default is chosen so
+    0.5 * (Xmax-Xmin)/2000 * (Ymax-Ymin)/2000 (corresponding to half a pixel
+    in a four megapixel image). This default is chosen so
     that the simplification will be barely visible when plotting the shapes, but
     thousands of data points may still be removed depending on the complexity of
     the original data. Shape files often come with a great amount of
@@ -786,6 +788,23 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
     no effect if the {cmd:frame} prefix is applied, as Stata immediately switches back
     to the prior frame.)
+
+{marker refine}{...}
+{dlgtab:geoframe refine}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:refine} [{it:delta}] {ifin}
+    [{cmd:,} {it:options} ]
+
+{pstd}
+    refines the selected shapes by adding extra points within segments that are
+    longer than {it:delta}. That is, if the distance between two neighboring points
+    in a polygon or line is larger than {it:delta}, additional points will be added
+    by halving the distance until the maximum distance between points is smaller than or equal to
+    {it:delta}. The default for {it:delta} is chosen such that a diagonal across
+    the map would have at least 100 points. {it:options} are {opt abs:olute},
+    {opt nodot:s}, {opt into()}, {opt replace}, and {opt cur:rent} as described for
+    {helpb geoframe##simplify:geoframe simplify}.
 
 {marker bshare}{...}
 {dlgtab:geoframe bshare}

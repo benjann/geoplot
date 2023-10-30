@@ -1,4 +1,4 @@
-*! version 1.1.8  28oct2023  Ben Jann
+*! version 1.1.9  30oct2023  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -1057,6 +1057,10 @@ program _geoframe_simplify
     __geoframe_manipulate simplify `0'
 end
 
+program _geoframe_refine
+    __geoframe_manipulate refine `0'
+end
+
 program _geoframe_bshare
     __geoframe_manipulate bshare `0'
 end
@@ -1076,6 +1080,15 @@ program __geoframe_manipulate
             numlist `"`delta'"', max(1) range(>=0)
             local delta `r(numlist)'
         }
+    }
+    else if "`subcmd'"=="refine" {
+        syntax [anything(id="delta" name=delta)] [if] [in] [,/*
+            */ ABSolute `opts' ]
+        if "`delta'"!="" {
+            numlist `"`delta'"', max(1) range(>=0)
+            local delta `r(numlist)'
+        }
+        if "`drop'"=="" local drop nodrop 
     }
     else if "`subcmd'"=="bshare" {
         syntax [if] [in] [, NOT `opts' ]
@@ -1114,6 +1127,10 @@ program __geoframe_manipulate
             __geoframe_simplify `touse' "`delta'" "`absolute'" "`jointly'"/*
                 */ "`drop'" "`dots'" // => Ndrop
         }
+        else if "`subcmd'"=="refine" {
+            __geoframe_refine `touse' "`delta'" "`absolute'"/*
+                */ "`dots'" // => Nadd
+        }
         else if "`subcmd'"=="bshare" {
             __geoframe_bshare `touse' "`not'" "`drop'" "`dots'" // => Ndrop
         }
@@ -1139,10 +1156,12 @@ program __geoframe_manipulate
         }
     }
     // reporting and frame change
-    if `Ndrop'==1 local msg observation
-    else          local msg observations
-    local tmp `: di %9.0gc `Ndrop''
-    __di_frame "(dropped `tmp' `msg' in frame " `shpframe' ")"
+    if "`Ndrop'"!="" {
+        if `Ndrop'==1 local msg observation
+        else          local msg observations
+        local tmp `: di %9.0gc `Ndrop''
+        __di_frame "(dropped `tmp' `msg' in frame " `shpframe' ")"
+    }
     if "`Nadd'"!="" {
         if `Nadd'==1 local msg observation
         else         local msg observations
@@ -1242,10 +1261,10 @@ program __geoframe_simplify
     if "`delta'"=="" | "`absolute'"=="" {
         if "`delta'"=="" local delta 1
         su `X' if `touse', meanonly
-        local xrange = r(max)-r(mean)
+        local xrange = r(max)-r(min)
         su `Y' if `touse', meanonly
-        local yrange = r(max)-r(mean)
-        local delta = (`xrange'/1000) * (`yrange'/1000) / 2 * `delta'
+        local yrange = r(max)-r(min)
+        local delta = (`xrange'/2000) * (`yrange'/2000) / 2 * `delta'
     }
     local msg `: di %9.0g `delta''
     di as txt "(threshold = `msg')"
@@ -1253,6 +1272,31 @@ program __geoframe_simplify
         */ "`jointly'"!="", "`drop'"!="", "`dots'"=="")
     qui drop if `OUT'
     c_local Ndrop = r(N_drop)
+end
+
+program __geoframe_refine
+    args touse delta absolute dots
+    __get id, local(ID)
+    if `"`ID'"'=="" {
+        tempvar ID
+        qui gen byte `ID' = 1
+    }
+    qui __get coordinates, local(XY) strict
+    gettoken X XY : XY
+    gettoken Y XY : XY
+    if "`delta'"=="" | "`absolute'"=="" {
+        if "`delta'"=="" local delta 1
+        su `X' if `touse', meanonly
+        local xrange = r(max)-r(min)
+        su `Y' if `touse', meanonly
+        local yrange = r(max)-r(min)
+        local delta = sqrt(`xrange'^2 + `yrange'^2) / 100 * `delta'
+        if `delta'==0 local delta .
+    }
+    local msg `: di %9.0g `delta''
+    di as txt "(threshold = `msg')"
+    mata: _refine("`ID'", ("`X'","`Y'"), "`touse'", `delta', "`dots'"=="")
+    c_local Nadd `Nadd'
 end
 
 program __geoframe_bshare
@@ -3353,6 +3397,42 @@ void _simplify(string scalar id, string scalar out, string rowvector xy,
         if (dots) _geo_progressdots(1-(i-1)/dn, d0)
     }
     if (dots) display(")")
+}
+
+void _refine(string scalar id, string rowvector xy,
+    string scalar touse, real scalar delta, real scalar dots)
+{
+    real scalar    i, n, r, dn, d0
+    real colvector a, b
+    real colvector ID, B
+    real matrix    XY
+    struct _clip_expand_info scalar I
+
+    st_view(ID=., ., id, touse)
+    st_view(XY=., ., xy, touse)
+    n = rows(ID)
+    a = selectindex(_mm_unique_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    if (dots) {
+        displayas("txt")
+        printf("(refining shapes of %g units)\n", i)
+        d0 = _geo_progress_init("(")
+        dn = i
+    }
+    for (;i;i--) {
+        r  = b[i] - a[i] + 1
+        XYi = geo_refine(XY[|a[i],1 \ b[i],2|], delta)
+        if (rows(XYi)>r) {
+            I.XY = I.XY, &XYi[.,.]
+            I.ab = I.ab, &(a[i] \ b[i])
+        }
+        if (dots) _geo_progressdots(1-(i-1)/dn, d0)
+    }
+    if (dots) display(")")
+    st_local("Nadd", "0")
+    _clip_expand(touse, I.XY, I.ab, xy) // store polygons with additional points
 }
 
 void _bshare(string scalar id, string scalar pid, string scalar out,

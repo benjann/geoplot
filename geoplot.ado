@@ -1,4 +1,4 @@
-*! version 1.1.5  30oct2023  Ben Jann
+*! version 1.1.6  30oct2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -609,7 +609,7 @@ program __zoom
     // plot tangents
     if "`noconnect'"=="" & "`connect'`box'`circle'"!="" {
         local 0 `", `connect2'"'
-        syntax [, LPattern(passthru) LWidth(passthru) LColor(passthru)/*
+        syntax [, all LPattern(passthru) LWidth(passthru) LColor(passthru)/*
             */ LAlign(passthru) LSTYle(passthru) PSTYle(passthru) ]
         local options
         foreach opt in lpattern lwidth lcolor lalign lstyle pstyle {
@@ -621,7 +621,7 @@ program __zoom
                 */ `YMID', `S')
         }
         else {
-            mata: _zoom_boxconnect(`Xmax',`Xmin',`Ymax',`Ymin',/*
+            mata: _zoom_boxconnect("`all'"!="", `Xmax',`Xmin',`Ymax',`Ymin',/*
                 */`XMAX',`XMIN',`YMAX',`YMIN')
         }
         if `"`YX'"'!="" {
@@ -1797,9 +1797,9 @@ void _st_circle_tangents(
     else           st_local("YX", "")
 }
 
-void _zoom_boxconnect(real scalar Xmax, real scalar Xmin, real scalar Ymax,
-    real scalar Ymin, real scalar XMAX, real scalar XMIN, real scalar YMAX,
-    real scalar YMIN)
+void _zoom_boxconnect(real scalar all,
+    real scalar Xmax, real scalar Xmin, real scalar Ymax, real scalar Ymin,
+    real scalar XMAX, real scalar XMIN, real scalar YMAX, real scalar YMIN)
 {
     real scalar    i
     real matrix    yx, YX, p, P
@@ -1811,7 +1811,7 @@ void _zoom_boxconnect(real scalar Xmax, real scalar Xmin, real scalar Ymax,
     P = J(0,2,.)
     for (i=1;i<=4;i++) {
         // handle edge connecting lower right corner
-        p = __zoom_boxconnect(i, yx:-YX[i,], YX:-YX[i,]) :+ YX[i,]
+        p = __zoom_boxconnect(all, i, yx:-YX[i,], YX:-YX[i,]) :+ YX[i,]
         if (length(p)) {
             _geo_rotate(p, -(i-1)*90) // undo rotation
             P = P \ p
@@ -1824,16 +1824,31 @@ void _zoom_boxconnect(real scalar Xmax, real scalar Xmin, real scalar Ymax,
     st_local("YX", invtokens(strofreal(vec(P')', "%18.0g")))
 }
 
-real matrix __zoom_boxconnect(real scalar i, real matrix yx, real matrix YX)
+real matrix __zoom_boxconnect(real scalar all, real scalar i, real matrix yx,
+    real matrix YX)
 {
     real scalar y, x, Y, X, Ymax, Xmin
     
     y = yx[i,1]
     x = yx[i,2]
-    if (y<0 | x>0) return((y,x) \ (0,0)) // no crossing
+    // outer lines only (i.e. no crossing of origin or destination)
+    if (!all) { 
+        if (y<0) {
+            if (x<0) return((y,x) \ (0,0))
+            return(J(0,2,.))
+        }
+        if (x>0) {
+            if (y>0) return((y,x) \ (0,0))
+            return(J(0,2,.))
+        }
+        return(J(0,2,.))
+    }
+    // outer and inner lines
+    if (y<0 | x>0) return((y,x) \ (0,0)) // no crossing of destination
     Ymax = YX[mod(i,4)+1,1]
     Xmin = YX[mod(i+1,4)+1,2]
     if (y<=Ymax & x>=Xmin) return(J(0,2,.)) // inside box
+    // clip lines that cross the destination box
     if (((x*Ymax - y*Xmin) / sqrt(Xmin^2 + Ymax^2))>0) { // above diagonal
         Y = Ymax
         X = x * Ymax / y

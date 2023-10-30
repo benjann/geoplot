@@ -132,6 +132,18 @@ Zoom.
 Main changes:
 
     30oct2023
+    geoplot:
+    - change in default behavior of zoom(): only outer connecting lines between
+      boxes are now printed by default (i.e. lines that neither cross the origin
+      box nor the destination box); type -connect(all)- to print all four lines
+    geoframe:
+    - -geoframe refine- added
+    - there was an error in the computation of the default value for delta in
+      -geoframe simplify- such it was only about 1/4 of the value claimed in
+      the documentation; the default value is now computed as half a pixel in a
+      in a 2000x2000 bitmap and documentation has been updated
+
+    30oct2023
     geoframe:
     - geoframe translate can now directly read from zipfiles
     geoplot:

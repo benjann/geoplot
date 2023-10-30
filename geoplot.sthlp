@@ -1588,10 +1588,19 @@
     or {cmd:circle} is specified.
 
 {phang2}
-    {cmdab:con:nect}[{cmd:(}{it:{help line_options}}{cmd:)}] enforces printing the
-    connecting lines even if no bounding boxes or MECs are printed. Specify
-    {it:{help line_options}} to affect the rendering of the connecting lines. For
-    example, type {cmd:connect(lpattern(dash))} to use dashed lines.
+    {cmdab:con:nect}[{cmd:(}{it:options}{cmd:)}] enforces printing the
+    connecting lines even if no bounding boxes or MECs are displayed and affects
+    the rendering of the lines. {it:options} are as follows.
+
+{p2colset 17 31 33 2}{...}
+{p2col:{cmd:all}}requests that all four corners of the bounding
+    boxes be connected; by default only the two outer corners are connected
+    (i.e., the corners for which the connecting lines do not cross either the
+    origin box or the destination box)
+    {p_end}
+{p2col:{it:{help line_options}}}affect the rendering of the connecting lines; for
+    example, type {cmd:connect(lpattern(dash))} to use dashed lines
+    {p_end}
 
 {phang2}
     {it:{help area_options}} are options that affect the look of the bounding boxes
