@@ -1,4 +1,4 @@
-*! version 1.1.4  12oct2023  Ben Jann
+*! version 1.1.5  30oct2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -453,8 +453,8 @@ program __zoom
     if "`angle'"==""  local angle 0
     local r = mod(`angle', 360) * _pi / 180
     if `"`args'"'!="" exit 198
-    syntax [, ABSolute box BOX2(str) CIRcle CIRcle2(str) PADding(real 0) /*
-        */ NOCONnect CONnect CONnect2(str)/*
+    syntax [, ABSolute POSition(str) box BOX2(str) CIRcle CIRcle2(str)/*
+        */ PADding(real 0) NOCONnect CONnect CONnect2(str)/*
         */ LPattern(passthru) LWidth(passthru) LColor(passthru)/*
         */ LAlign(passthru) LSTYle(passthru) PSTYle(passthru) * ]
     if `"`connect2'"'!="" local connect connect
@@ -466,6 +466,7 @@ program __zoom
     }
     _zoom_parse_box, `box2' `circle2'
     if "`box_none'"!="" & "`connect'"=="" local noconnect noconnect
+    _zoom_parse_positition `position' //=> pos_x, pos_y, pos_clock
     // mark sample
     tempvar touse
     gen byte `touse' = 0
@@ -492,8 +493,44 @@ program __zoom
     if "`absolute'"=="" local offset =/*
         */ `offset'/100 * `R' * `scale' * (1 + `padding'/100)
     // new midpoint
-    local YMID = `Ymid' + `offset' * sin(`r')
-    local XMID = `Xmid' + `offset' * cos(`r')
+    if ("`pos_x'"!="") {
+        if "`circle'"!="" {
+            local Dx = `R' * `scale' * (1 + `padding'/100)
+            local Dy = `R' * `scale' * (1 + `padding'/100)
+        }
+        else {
+            local Dx = (`Xmax'-`Xmin')/2 * `scale' * (1 + `padding'/100)
+            local Dy = (`Ymax'-`Ymin')/2 * `scale' * (1 + `padding'/100)
+        }
+        local XMID = `pos_x'
+        local YMID = `pos_y'
+        if     `pos_clock'==12 local YMID = `YMID' + `Dy'
+        else if inlist(`pos_clock',1,2) {
+            local XMID = `XMID' + `Dx'
+            local YMID = `YMID' + `Dy'
+        }
+        else if `pos_clock'==3 local XMID = `XMID' + `Dx'
+        else if inlist(`pos_clock',4,5) {
+            local XMID = `XMID' + `Dx'
+            local YMID = `YMID' - `Dy'
+        }
+        else if `pos_clock'==6 local YMID = `YMID' - `Dy'
+        else if inlist(`pos_clock',7,8) {
+            local XMID = `XMID' - `Dx'
+            local YMID = `YMID' - `Dy'
+        }
+        else if `pos_clock'==9 local XMID = `XMID' - `Dx'
+        else if inlist(`pos_clock',10,11) {
+            local XMID = `XMID' - `Dx'
+            local YMID = `YMID' + `Dy'
+        }
+        local YMID = `YMID' + `offset' * cos(`r')
+        local XMID = `XMID' + `offset' * sin(`r')
+    }
+    else {
+        local YMID = `Ymid' + `offset' * sin(`r')
+        local XMID = `Xmid' + `offset' * cos(`r')
+    }
     // new position and size
     qui replace Y = (Y - `Ymid') * `scale' + `YMID' if `touse'
     qui replace X = (X - `Xmid') * `scale' + `XMID' if `touse'
@@ -603,6 +640,20 @@ program _zoom_parse_box
     c_local box_none `none'
 end
 
+program _zoom_parse_positition
+    gettoken x 0 : 0
+    gettoken y 0 : 0
+    gettoken position : 0
+    local xy `x' `y'
+    if `:list sizeof xy'==0 exit
+    numlist `"`x' `y'"', min(2) max(2)
+    if `"`position'"'=="" local position 0
+    _parse_position `position'
+    c_local pos_x `x'
+    c_local pos_y `y'
+    c_local pos_clock `position'
+end
+
 program _grdim
     syntax [, margin(str) refdim(str) aratio(str)/*
         */ XSCale(str asis) YSCale(str asis) * ]
@@ -635,7 +686,7 @@ program _grdim
     foreach V in X Y {
         local v = strlower("`V'") 
         _grdim_parse_scale `V' ``V'min' ``V'max', ``v'scale'
-        foreach O in LABel TIck MLABel MTIck {
+        foreach O in LABels TIcks MLABels MTIcks {
             local xopts
             local O `V'`O'
             local o = strlower("`O'") 
@@ -1152,12 +1203,12 @@ program _clegend
         local Zmin = CLEG_Z[1]
         local Zmax = CLEG_Z[`K']
         local zscale
-        if "`cuts'"!="label" local zlabel zlabel(none, `format' labsize(vsmall))
+        if "`cuts'"!="labels" local zlabel zlabel(none, `format' labsize(vsmall))
         else local zlabel zlabel(`labels', `format' labsize(vsmall))
-        if "`cuts'"=="mlabel" /*
+        if "`cuts'"=="mlabels" /*
             */ local zlabel `zlabel' zmlabel(`labels', `format' labsize(tiny))
-        else if "`cuts'"=="tick"  local zlabel `zlabel' ztick(`values')
-        else if "`cuts'"=="mtick" local zlabel `zlabel' zmtick(`values')
+        else if "`cuts'"=="ticks"  local zlabel `zlabel' ztick(`values')
+        else if "`cuts'"=="mticks" local zlabel `zlabel' zmtick(`values')
     }
     // adjust max
     local ZMAX `Zmax'
@@ -1186,8 +1237,8 @@ program _clegend
 end
 
 program _clegend_parse_cuts
-    syntax [, NONE LABel TIck MLABel MTIck ]
-    local cuts `label' `tick' `mlabel' `mtick'
+    syntax [, NONE LABels TIcks MLABels MTIcks ]
+    local cuts `labels' `ticks' `mlabels' `mticks'
     if "`none'"!="" {
         if "`cuts'"!="" {
             di as err "clegend(cuts()): too many keywords specified"
@@ -1196,7 +1247,7 @@ program _clegend_parse_cuts
         c_local cuts
         exit
     }
-    if "`cuts'"=="" local cuts label
+    if "`cuts'"=="" local cuts labels
     else if `: list sizeof cuts'>1 {
         di as err "clegend(cuts()): too many keywords specified"
         exit 198
@@ -1210,7 +1261,7 @@ program _clegend_adjustmax
     gettoken Zmax lhs : lhs
     syntax [, ZSCale(str asis) * ]
     _grdim_parse_scale Z `Zmin' `Zmax', `zscale'
-    foreach O in LABel TIck MLABel MTIck {
+    foreach O in LABels TIcks MLABels MTIcks {
         local O Z`O'
         local o = strlower("`O'")
         while (1) {
@@ -1585,13 +1636,49 @@ program _geoplot_area
     c_local p `p'
 end
 
+program _geoplot_areas
+    __geoplot_layer 0 area `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
 program _geoplot_line
     __geoplot_layer 0 line `0'
     c_local plot `plot'
     c_local p `p'
 end
 
+program _geoplot_lines
+    __geoplot_layer 0 line `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_labels
+    _geoplot_label `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pies
+    _geoplot_pie `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_bars
+    _geoplot_bar `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
 program _geoplot_point
+    __geoplot_layer 0 scatter `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_points
     __geoplot_layer 0 scatter `0'
     c_local plot `plot'
     c_local p `p'

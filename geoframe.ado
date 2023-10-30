@@ -1,4 +1,4 @@
-*! version 1.1.7  23oct2023  Ben Jann
+*! version 1.1.8  28oct2023  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2834,15 +2834,8 @@ program _geoframe_translate
     gettoken subcmd : 0, parse(" ,")
     local subcmd = strlower(`"`subcmd'"')
     if `"`subcmd'"'=="esri" gettoken subcmd 0 : 0, parse(" ,")
-    __geoframe_translate_esri `0'
-end
-
-program _geoframe_convert
-    _geoframe_translate `0'
-end
-
-program __geoframe_translate_esri
-    syntax [anything(equalok)] [using] [, * ]
+    else                    local subcmd esri
+    syntax [anything] [using] [, * ]
     if `:list sizeof using'==0 {
         if `:list sizeof anything'>1 {
             gettoken outname anything : anything
@@ -2852,9 +2845,63 @@ program __geoframe_translate_esri
         }
         local 0 `macval(outname)' `macval(anything)', `macval(options)'
     }
-    syntax [anything(name=outname)] using/ [, user replace ]
+    syntax [anything] using/ [, * ]
+    if `"`anything'"'=="" local anything `""""'
+    mata: _translate_zipname(st_local("using")) // => zip using shpname
+    if `zip' {
+        __geoframe_ziptranslate `subcmd' `anything' `"`using'"'/*
+            */ `"`shpname'"', `options'
+    }
+    else {
+        __geoframe_translate_`subcmd' `anything' `"`using'"', `options'
+    }
+end
+
+program _geoframe_convert
+    _geoframe_translate `0'
+end
+
+program __geoframe_ziptranslate
+    _parse comma lhs 0 : 0
+    gettoken subcmd  lhs : lhs
+    gettoken outname lhs : lhs
+    gettoken using   lhs : lhs
+    gettoken shpname     : lhs
+    while (1) { // find name for temporary directory
+        tempname tmpdir
+        mata: st_local("dirok", strofreal(!direxists("`tmpdir'")))
+        if `dirok' continue, break
+    }
+    local using0 `"`using'"'
+    mata: !pathisabs(st_local("using"))/*
+        */ ? st_local("using", pathjoin(pwd(), st_local("using")))/*
+        */ : J(0,0,.)
+    local pwd `"`c(pwd)'"'
+    nobreak {
+        mkdir `tmpdir'
+        capture noisily break {
+            qui cd `tmpdir'
+            qui unzipfile `"`using'"', replace
+            mata: _ziptranslate_findshp(st_local("shpname"),/* updates shpname
+                */ "`tmpdir'", st_local("using0"))
+            qui cd `"`pwd'"'
+            if strtrim(`"`outname'"')=="" local outname `""""'
+            __geoframe_translate_`subcmd' `outname' `"`shpname'"' `0'
+        }
+        local rc = _rc
+        qui cd `"`pwd'"'
+        mata: _ziptranslate_cleanup("`tmpdir'")
+        exit `rc'
+    }
+end
+
+program __geoframe_translate_esri
+    _parse comma lhs 0 : 0
+    syntax [, user replace ]
+    gettoken outname lhs : lhs
+    gettoken using   lhs : lhs
     mata: _translate_using(st_local("using")) // => using path basename
-    mata: _translate_outname(st_local("outname")) // => outpath outname
+    mata: _translate_outname(strtrim(st_local("outname"))) // => outpath outname
     if `"`outname'"'=="" local outname `"`basename'"'
     local hasoutpath: list sizeof outpath
     if `hasoutpath' {
@@ -3726,22 +3773,114 @@ void _append(string scalar frame, string scalar touse, string rowvector vars,
     }
 }
 
+void _translate_zipname(string scalar fn)
+{
+    string scalar bn, shpname, sep
+    pragma unset shpname
+    
+    if (!strpos(fn, ".zip")) {
+        st_local("zip", "0")
+        return
+    }
+    bn = pathbasename(fn)
+    if (bn=="") { // fn ends with directory separator
+        sep = substr(fn,-1,.)
+        fn = substr(fn,1,strlen(fn)-1)
+    }
+    while (fn!="") {
+        bn = pathbasename(fn)
+        if (substr(bn,-4,.)==".zip") {
+            if (!direxists(fn)) { // only if not a directory
+                if (shpname!="") shpname = shpname + sep
+                st_local("zip", "1")
+                st_local("using", fn)
+                st_local("shpname", shpname)
+                return
+            }
+        }
+        pathsplit(fn, fn, bn)
+        shpname = pathjoin(bn, shpname)
+    }
+    // path contains no file with a .zip suffix
+    st_local("zip", "0")
+}
+
+void _ziptranslate_findshp(string scalar shpname, 
+    string scalar tmpdir, string scalar usng)
+{
+    real scalar      i, n
+    string scalar    s, bn
+    string colvector fn
+    
+    if (!direxists(shpname)) bn = pathbasename(shpname) // directory takes precedence
+    if (bn!="") {
+        if (pathsuffix(shpname)=="") s = shpname + ".shp"
+        else                         s = shpname
+        if (!fileexists(s)) {
+            errprintf("shape file %s not found in %s\n", s, usng)
+            exit(601)
+        }
+    }
+    else {
+        if (shpname!="") {
+            if (!direxists(shpname)) {
+                errprintf("directory %s not found in %s\n", shpname, usng)
+                exit(601)
+            }
+        }
+        fn = __ziptranslate_findshp(shpname) // collect all .shp files
+        n = length(fn)
+        if (!n) {
+            errprintf("no shape file found in %s\n", pathjoin(usng,shpname))
+            exit(601)
+        }
+        if (n>1) {
+            printf("{txt}multiple shape files found in %s:\n",/*
+                */ pathjoin(usng,shpname))
+            for (i=1;i<=n;i++) printf("{bf:%s}\n", pathrmsuffix(fn[i]))
+            printf("translating {bf:%s}\n", pathrmsuffix(fn[1]))
+        }
+        shpname = fn[1] // use first match
+    }
+    st_local("shpname", pathjoin(tmpdir, shpname))
+}
+
+string colvector __ziptranslate_findshp(string scalar path)
+{
+    real scalar      i, n
+    string colvector fn, dir
+    
+    fn  = dir(path, "files", "*.shp", 1)
+    dir = dir(path, "dirs", "*")
+    n = rows(dir)
+    for (i=1;i<=n;i++) {
+        fn = fn \ __ziptranslate_findshp(pathjoin(path, dir[i]))
+    }
+    return(fn)
+}
+
+void _ziptranslate_cleanup(string scalar path)
+{
+    real scalar      i
+    string colvector fn, dir
+    
+    fn = dir(path, "files", "*", 1)
+    i = rows(fn)
+    for (;i;i--) unlink(fn[i])
+    dir = dir(path, "dirs", "*", 1)
+    i = rows(dir)
+    for (;i;i--) _ziptranslate_cleanup(dir[i])
+    rmdir(path)
+}
+
 void _translate_using(string scalar fn)
 {
+    real scalar      i, n
     string scalar    path, bn
     string colvector dir
     pragma unset path
     
-    bn = pathbasename(fn)
-    if (bn!="") {
-        // check whether fn is indeed a file; using a workaround because mata's
-        // fileexists() seems to return 1 also if fn is, in fact, a directory
-        stata(sprintf(`"local FEXISTS = fileexists(`"%s"')"', fn))
-        if (st_local("FEXISTS")=="0") {
-            if (direxists(fn)) bn = ""
-        }
-        st_local("FEXISTS", "")
-    }
+    if (!direxists(fn)) bn = pathbasename(fn) // directory takes precedence
     if (bn!="") { // [path/]filename specified
         pathsplit(fn, path, bn)
     }
@@ -3752,13 +3891,17 @@ void _translate_using(string scalar fn)
             exit(601)
         }
         dir = dir(path, "files", "*.shp")
-        if (!length(dir)) {
-            errprintf("no ESRI shapefile found in directory %s\n", path)
+        n = length(dir)
+        if (!n) {
+            errprintf("no shape file found in %s\n", path)
             exit(601)
         }
+        if (n>1) {
+            printf("{txt}multiple shape files found in %s:\n", path)
+            for (i=1;i<=n;i++) printf("{bf:%s}\n", pathrmsuffix(dir[i]))
+            printf("translating {bf:%s}\n", pathrmsuffix(dir[1]))
+        }
         bn = dir[1] // use first match
-        printf("{txt}(translating {bf:%s} from directory %s)\n",
-            pathrmsuffix(bn), path)
     }
     if (!pathisabs(path)) path = pathjoin(pwd(), path) // make path absolute
     if (strpos(path, ".shp")) {

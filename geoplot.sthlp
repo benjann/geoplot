@@ -1,5 +1,5 @@
 {smcl}
-{* 12oct2023}{...}
+{* 30oct2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -165,7 +165,7 @@
     standard legend
     {p_end}
 {synopt :{helpb geoplot##clegend:{ul:cleg}end{sf:[}({it:options}){sf:]}}}add
-    {helpb contour} plot legend
+    {helpb contour} plot legend (requires Stata 18)
     {p_end}
 {synopt :{helpb geoplot##sbar:sbar{sf:[}({it:options}){sf:]}}}add scale bar
     {p_end}
@@ -1345,8 +1345,8 @@
 {phang}
     {cmd:clegend}[{cmd:(}{it:options}{cmd:)}] prints a {help clegend_option:contour} plot legend
     of the colors used in one of the layers that include
-    {help geoplot##zvar:{it:zvar}} with a {help geoplot##color:color gradient}. {it:options}
-    are as follows.
+    {help geoplot##zvar:{it:zvar}} with a {help geoplot##color:color gradient}
+    (requires Stata 18). {it:options} are as follows.
 
 {phang2}
     {opt l:ayer(#)} selects the layer for which the legend be created. The default
@@ -1543,6 +1543,17 @@
     {opt abs:olute} specifies that {it:offset} is in absolute units of the map. The default
     is to interpret {it:offset} as a percentage of the radius (half-diagonal) of the bounding box
     (or enclosing circle) of the objects (including padding).
+
+{phang2}
+    {cmdab:pos:ition(}{it:x} {it:y} [{it:{help compassdirstyle}}]{cmd:)} moves
+    the objects to the absolute position provided by coordinates {it:x} and
+    {it:y}. Optional argument {it:{help compassdirstyle}} determines where the
+    objects will be located relative to point ({it:x},{it:y}). The default is
+    {cmd:0} (or {cmd:center}) which means that the objects will be centered
+    at ({it:x},{it:y}). For example, specify {cmd:left} to place the objects to the left of
+    ({it:x},{it:y}), or specify {cmd:se} to place the objects in south-east direction
+    of ({it:x},{it:y}). Main arguments {it:offset} and {it:angle}, if specified, will
+    be applied after {cmd:position()} has taken effect.
 
 {phang2}
     {cmd:box}[{cmd:(}{it:which}{cmd:)}] displays the origin bounding box and

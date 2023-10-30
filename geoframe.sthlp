@@ -1,5 +1,5 @@
 {smcl}
-{* 23oct2023}{...}
+{* 28oct2023}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -107,29 +107,60 @@
 {dlgtab:geoframe translate}
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:tr:anslate} [{it:translator}] [{it:name}] [{cmd:using}]
-    {it:sourcename} [{cmd:,} {cmd:replace} {cmd:user} ]
+    {cmd:geoframe} {cmdab:tr:anslate} [{it:translator}] [{it:destination}] [{cmd:using}]
+    {it:source} [{cmd:,} {cmd:replace} {cmd:user} ]
 
 {pstd}
-    translates shape file source data to Stata format. Two files will be created,
-    {it:name}{cmd:.dta} and {it:name}{cmd:_shp.dta}. {it:name} may include an absolute or
-    relative path; if no path is included in {it:name}, the files are stored in the
-    current working directory. If {it:name} is omitted or does not include a base name
-    (i.e., if {it:name} is a path only), the base name of the source data is used
-    to name the created files. Option {cmd:replace} allows
-    overwriting existing files.
-
-{pstd}
-    {it:sourcename} specifies the location
-    of the source. If {it:sourcename} only contains a path (i.e. does not specify
-    the name of the source), {cmd:geoframe translate} will translate the
-    first source found in the specified directory.
-
-{pstd}
-    Currently, the only available {it:translator} is {cmd:esri}, which
+    translates shapefile source data to Stata format, where {it:translator} specifies
+    the type of translation. Currently, the only available translator is {cmd:esri}, which
     translates ESRI shapefile data to Stata format using official Stata's
     {helpb spshape2dta} command or, if option {cmd:user} is specified, the
-    user command {helpb shp2dta} (see {bf:{stata ssc describe shp2dta}}).
+    user command {helpb shp2dta} (see {bf:{stata ssc describe shp2dta}}). Omitting
+    {it:translator} is equivalent to specifying {cmd:esri}.
+
+{pstd}
+    Optional argument {it:destination} specifies a destination for the translated
+    data. The syntax for {it:destination} is
+
+        [{it:path}][{it:basename}]
+
+{pstd}
+    where {it:path} is an absolute or relative path to an (existing) directory
+    (e.g. {cmd:mydata/shapfiles/} on Mac OS or {cmd:mydata\shapfiles\}
+    on Windows) and {it:basename} provides a custom base name for the created files. If
+    {it:path} is omitted, the files are stored in the working directory. If
+    {it:basename} is omitted, the name of the source will be used. Two files
+    will be created, {it:basename}{cmd:.dta} and
+    {it:basename}{cmd:_shp.dta}. Option {cmd:replace} allows overwriting
+    existing files.
+
+{pstd}
+    Argument {it:source} identifies the source data to be translated. The syntax
+    for {it:source} is
+
+        {it:sourcepath}[{it:sourcename}]
+
+{pstd}
+    where {it:sourcepath} is an absolute or relative path to the directory containing
+    the source (e.g. {cmd:mydata/shapfiles/source/world/} on Mac OS or
+    {cmd:mydata\shapfiles\source\world\} on Windows) and {it:sourcename} specifies the
+    base name of the source to be translated (in case of an ESRI shape file,
+    the source consists of {it:sourcename}{cmd:.shp}, {it:sourcename}{cmd:.dbf},
+    and possibly some additional files with the same base name). If {it:sourcepath}
+    contains multiple sources and {it:sourcename} is omitted, the first source
+    will be translated. Alternatively, {it:source} can be
+
+        {it:zipfile}[{it:separator}[{it:location}][{it:sourcename}]]
+
+{pstd}
+    where {it:zipfile} is the (path and) name of a zip file containing the source
+    (e.g. {cmd:mydata/shapfiles/source/world.zip} on Mac OS or {cmd:mydata\shapfiles\source\world.zip}
+    on Windows), {it:separator} is the operating system's directory separator (i.e. {cmd:/} on Mac OS, {cmd:\} on Windows),
+    {it:location} specifies the directory of the source within the zip file, and
+    {it:sourcename} specifies the name of the source to be translated. For example, you could
+    type {cmd:world.zip/50m/} to translate the first source found in folder {cmd:50m} within
+    zip file {cmd:world.zip}, or you could type {cmd:world.zip/50m/country_borders} to translate
+    the source called {cmd:country_borders} in folder {cmd:50m} within zip file {cmd:world.zip}.
 
 {pstd}
     {cmd:geoframe convert} is a synonym for {cmd:geoframe translate}.
