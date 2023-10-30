@@ -131,6 +131,17 @@ Zoom.
 
 Main changes:
 
+    30oct2023
+    geoframe:
+    - geoframe translate can now directly read from zipfiles
+    geoplot:
+    - zoom() has now option position() for explicit positioning
+    - layer types area, line, point, label, pie, bar can now also be specified as
+      areas, lines, points, labels, pies, bars
+    - parsing of axis label options now takes into account that twoway allows an "s"
+      at the end, e.g. xlabels() rather than xlabel(), even tough the options are
+      documented without "s" in help axis_label_options
+
     23oct2023
     - geoframe project added
     - geoframe grid added
