@@ -1,4 +1,4 @@
-*! version 1.1.3  12oct2023  Ben Jann
+*! version 1.1.4  02nov2023  Ben Jann
 
 /*
     Syntax:
@@ -102,7 +102,7 @@ program _layer
         local TYPE shape
         local hasSHP 1
         local OPTS `OPTS' SIze(str asis) lock wmax WMAX2(numlist max=1 >0)/*
-            */ COORdinates(namelist min=2 max=2) id(name)/*
+            */ IFshp(str asis) COORdinates(namelist min=2 max=2) id(name)/*
             */ CENTRoids(varlist numeric min=2 max=2) area(varname numeric)/*
             */ LColor(passthru) lforce // lforce: do not not turn lines off
         local WGT [iw/]
@@ -178,6 +178,25 @@ program _layer
             local tgt `touse'
         }
         else local shpframe `frame'
+        // handle ifshp()
+        if strtrim(`"`ifshp'"')!="" {
+            if `hasSHP' {
+                frame `shpframe' {
+                    // tag units with nonzero selection
+                    tempvar merge
+                    geoframe copy `frame' `touse', target(`merge') quietly
+                    qui replace `merge' = 0 if `merge'>=.
+                    qui replace `merge' = 0 if `merge' & !(`ifshp')
+                    geoframe get id, local(shpid) strict
+                    mata: _set_one_if_any("`shpid'" , "`merge'")
+                }
+                drop `touse'
+                geoframe copy `shpframe' `merge', target(`touse') quietly
+            }
+            else {
+                qui replace `touse' = 0 if `touse' & !(`ifshp')
+            }
+        }
         // handle coordinates, PLV, and unit ID
         frame `shpframe' {
             if "`TYPE'"=="pc" local typeSHP pc // enforce pc
@@ -337,7 +356,7 @@ program _layer
         }
         else local mlabcolor
         // select option
-        if `"`select'"'!="" {
+        if strtrim(`"`select'"')!="" {
             qui replace `touse' = 0 if `touse' & !(`select')
         }
         // inject colors
@@ -349,6 +368,9 @@ program _layer
         frame `shpframe' {
             geoframe copy `frame' `org', target(`tgt') quietly
             qui replace `touse' = 0 if `touse'>=.
+            if strtrim(`"`ifshp'"')!="" {
+                qui replace `touse' = 0 if `touse' & !(`ifshp')
+            }
         }
     }
     // copy data into main frame
@@ -1020,6 +1042,26 @@ end
 version 16.1
 mata:
 mata set matastrict on
+
+void _set_one_if_any(string scalar id, string scalar touse)
+{
+    real scalar    i, n
+    real colvector a, b 
+    real matrix    ID, TOUSE
+    
+    st_view(ID=., ., id)
+    st_view(TOUSE=., ., touse)
+    n = rows(ID)
+    a = selectindex(_mm_uniqrows_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        if (anyof(TOUSE[|a[i] \ b[i]|],1)) {
+            TOUSE[|a[i] \ b[i]|] = J(b[i] - a[i] + 1, 1, 1)
+        }
+    }
+}
 
 transmorphic vector _vecrecycle(real scalar k, transmorphic vector x)
 {   // x must have at least one element

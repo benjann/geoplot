@@ -1959,11 +1959,10 @@ end
 
 *! {smcl}
 *! {marker geo_refine}{bf:geo_refine()}{asis}
-*! version 1.0.0  30oct2023  Ben Jann
+*! version 1.0.1  31oct2023  Ben Jann
 *!
 *! Refines polygon by adding extra points such that maximum distance between
-*! neighboring points is smaller than or equal to delta. Points are added
-*! by halving distances.
+*! neighboring points is smaller than or equal to delta.
 *!
 *! Syntax:
 *!
@@ -1986,38 +1985,44 @@ mata set matastrict on
 
 `RM' geo_refine(`RM' XY, `RS' delta)
 {
-    `Int' i, n, j, r
-    `RS'  dsq
-    `RR'  xyi, xy0
+    `Int' i, n, j, r, k
+    `RS'  d
+    `RR'  xy1, xy0
     `RM'  xy
     
     if (cols(XY)!=2) {
         errprintf("{it:XY} must have two columns\n")
         exit(3200)
     }
-    dsq = delta^2
-    if (dsq==0) return(XY) // do not refine if delta=0
+    d = abs(delta)
+    if (d==0) return(XY) // do not refine if delta=0
     n = rows(XY)
     xy = J(r=n, 2, .)
     j = 0
-    xyi = (.,.)
+    xy1 = (.,.)
     for (i=1;i<=n;i++) {
-        xy0 = xyi
-        xyi = XY[i,]
+        xy0 = xy1
+        xy1 = XY[i,]
         if (hasmissing(xy0)) { // first point after missing
-            _geo_refine_add(xy, ++j, r, n, xyi)
+            _geo_refine_add1(xy, ++j, r, n, xy1)
             continue
         }
-        if (hasmissing(xyi)) { // missing point
-            _geo_refine_add(xy, ++j, r, n, xyi)
+        if (hasmissing(xy1)) { // missing point
+            _geo_refine_add1(xy, ++j, r, n, xy1)
             continue
         }
-        _geo_refine(xy, j, r, n, xy0, xyi, dsq)
+        k = ceil(sqrt((xy1[1]-xy0[1])^2 + (xy1[2]-xy0[2])^2) / d)
+        if (k<=1) {
+            _geo_refine_add1(xy, ++j, r, n, xy1)
+            continue
+        }
+        _geo_refine_addn(xy, j, r, n,
+            xy0 :+ (1::k-1)/k * (xy1[1] - xy0[1], xy1[2] - xy0[2]) \ xy1) 
     }
     return(xy[|1,1 \ j,.|])
 }
 
-void _geo_refine_add(`RM' XY, `Int' j, `Int' r, `Int' n, `RR' xy)
+void _geo_refine_add1(`RM' XY, `Int' j, `Int' r, `Int' n, `RR' xy)
 {
     if (j>r) {
         XY = XY \ J(n, 2, .)
@@ -2026,20 +2031,17 @@ void _geo_refine_add(`RM' XY, `Int' j, `Int' r, `Int' n, `RR' xy)
     XY[j,] = xy
 }
 
-void _geo_refine(`RM' xy, `Int' j, `Int' r, `Int' n, `RR' xy0, `RR' xy1,
-    `RS' dsq)
+void _geo_refine_addn(`RM' XY, `Int' j, `Int' r, `Int' n, `RM' xy)
 {
-    `RS' d
-    `RM' mid
+    real scalar j0
     
-    d = (xy1[1]-xy0[1])^2 + (xy1[2]-xy0[2])^2
-    if (d<=dsq) {
-        _geo_refine_add(xy, ++j, r, n, xy1)
-        return
+    j0 = j + 1
+    j  = j + rows(xy)
+    while (j>r) {
+        XY = XY \ J(n, 2, .)
+        r = r + n
     }
-    mid = (xy0[1] + xy1[1]) / 2, (xy0[2] + xy1[2]) / 2
-    _geo_refine(xy, j, r, n, xy0, mid, dsq)
-    _geo_refine(xy, j, r, n, mid, xy1, dsq)
+    XY[|j0,1 \ j,.|] = xy
 }
 
 end

@@ -25,6 +25,12 @@ Installation of `geoplot` from GitHub:
 
 ---
 
+See [doi.org/10.48350/188246](https://doi.org/10.48350/188246) for a
+presentation on `geoplot`. See [doi.org/10.48350/188248](https://doi.org/10.48350/188248)
+for examples from a workshop on `geoplot`. See 
+[Maps in Stata III: geoplot](https://medium.com/the-stata-guide/maps-in-stata-iii-geoplot-a764cf42688a)
+for a post on `geoplot` by Asjad Naqvi.
+
 Examples:
 
 Load data using `geoframe`.
@@ -130,6 +136,30 @@ Zoom.
 ---
 
 Main changes:
+
+    02nov2023
+    geoplot:
+    - option ifshp() added for layer types area and line
+    geoframe spjoin:
+    - by default, data is now sorted by the generated ID variable; specify option
+      nosort to omit sorting
+    geoframe collapse/contract:
+    - option nodots added
+    - suboption nosort added in option generate()
+    geoframe [r]clip:
+    - the default in case of -noclip- (or when clipping point data) is now to
+      treat each shape item individually; specify option -nosplit- to include or
+      exclude items that belong to the same unit together
+    geoframe refine:
+    - argument -delta- is now interpreted as a divisor, not a multiplicator
+    - now using a different algorithm to determine the points that leads to more
+      similar distances
+    geoframe project:
+    - option ifshp() did not work correctly unless option into() was also specified;
+      this is fixed
+    geoframe bbox/symbol/symboli:
+    - an attribute frame and a linked shape frame is now created, not just a shape
+      frame (similar to geoframe grid)
 
     30oct2023
     geoplot:

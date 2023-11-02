@@ -1,5 +1,5 @@
 {smcl}
-{* 30oct2023}{...}
+{* 02nov2023}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -225,8 +225,9 @@
 
 {pstd}
     where {it:frame} is the frame containing the shapes to be
-    plotted (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
-    variable to determine styling, and {it:weight}, specified as
+    plotted (see {helpb geoframe}; {it:frame} can be a shape frame or an 
+    attribute frame that has been linked to a shape frame), {help geoplot##zvar:{it:zvar}}
+    is an optional variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, rescales the coordinates of
     the shapes by the absolute (and normalized) values of {it:exp}. Type
@@ -268,6 +269,16 @@
     plot. {cmd:select()} is applied after determining the cuts for {it:zvar}
     and after processing weights and {cmd:size()}. Specify {it:{help if}} or
     {it:{help in}} if you want to select observations upfront.
+
+{phang}
+    {opth if:shp(exp)} specifies an additional {it:if} condition to be applied to
+    the shape frame. This is relevant if {it:frame} is an attribute frame that
+    has been linked to a shape frame. Observations in the shape frame that do not
+    satisfy the specified condition (i.e., observations for which {it:exp} evaluates
+    to zero), as well as units in the attribute frame for which {cmd:ifshp()}
+    leads to an empty selection in the shape frame, will be excluded. If {it:frame}
+    is a shape frame (i.e. not an attribute frame linked to a shape frame), {cmd:ifshp()}
+    is treated in the same way as the {it:{help if}} qualifier.
 
 {phang}
     {cmdab:ec:olor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)}
@@ -363,8 +374,9 @@
 
 {pstd}
     where {it:frame} is the frame containing the shapes to be
-    plotted (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
-    variable to determine styling, and {it:weight}, specified as
+    plotted (see {helpb geoframe}; {it:frame} can be a shape frame or an 
+    attribute frame that has been linked to a shape frame), {help geoplot##zvar:{it:zvar}}
+    is an optional variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, rescales the coordinates of
     the shapes by the absolute (and normalized) values of {it:exp}. Type
@@ -373,7 +385,7 @@
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()}, {cmd:select()},
-    {cmd:lock}, {opt box()}, {opt feature()}, {opt coordinates()}, {opt id()},
+    {cmd:ifshp()}, {cmd:lock}, {opt box()}, {opt feature()}, {opt coordinates()}, {opt id()},
     {opt centroids()}, and {cmd:area()} are
     options as described for layer type {helpb geoplot##area:area}.
 

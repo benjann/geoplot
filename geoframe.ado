@@ -1,4 +1,4 @@
-*! version 1.1.9  30oct2023  Ben Jann
+*! version 1.2.0  02nov2023  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -880,9 +880,15 @@ program _geoframe_project
                 if `"`ifshp'"'!="" & `"`into'"'=="" {
                     // update sample in attribute frame; already ok if select
                     // has been applied
+                    frame `shpframe' {
+                        // tag units with nonzero selection
+                        tempvar merge
+                        qui gen byte `merge' = `touse'
+                        mata: _set_one_if_any("`shpid'" , "`merge'")
+                    }
                     drop `touse'
                     _copy_from_shpframe `id' `shpid' `shpframe'/*
-                        */ `lnkvar' "`touse'"
+                        */ `lnkvar' "`merge'" "`touse' = `merge'"
                     qui replace `touse' = 0 if `touse'>=.
                 }
             }
@@ -1071,7 +1077,7 @@ program __geoframe_manipulate
     local opts nodrop noDOTs into(namelist max=2) replace CURrent
     if "`subcmd'"=="clip" {
         syntax [if] [in], mask(str) [ rclip/*
-            */ Line noCLip STrict SPlit `opts' ]
+            */ Line noCLip STrict noSPlit `opts' ]
     }
     else if "`subcmd'"=="simplify" {
         syntax [anything(id="delta" name=delta)] [if] [in] [,/*
@@ -1183,7 +1189,7 @@ program __geoframe_manipulate
 end
 
 program ___geoframe_clip
-    args touse MASK rclip line noclip strict split drop dots
+    args touse MASK rclip line noclip strict nosplit drop dots
     __get coordinates, local(XY) strict
     gettoken X XY : XY
     gettoken Y XY : XY
@@ -1207,7 +1213,7 @@ program ___geoframe_clip
     local poly 1 // 0 = individual observation, 1 = groups of observations
     if "`noclip'"!="" {
         if "`point'"!="" {
-            if "`split'"!="" local poly 0
+            if "`nosplit'"=="" local poly 0
             else {
                 capt assert (_n==1 | `id'!=`id'[_n-1]) if `touse'
                 if _rc==1 exit _rc
@@ -1232,7 +1238,7 @@ program ___geoframe_clip
     if `poly' {
         if "`noclip'"!="" {
             mata: _noclip("`touse'", "`id'", "`pid'", "`rclip'"!="", "`OUT'",/*
-                */ ("`X'","`Y'"), "`MASK'", "`strict'"!="", "`split'"!="",/*
+                */ ("`X'","`Y'"), "`MASK'", "`strict'"!="", "`nosplit'"!="",/*
                 */ "`drop'"!="", "`dots'"=="")
         }
         else {
@@ -1290,7 +1296,7 @@ program __geoframe_refine
         local xrange = r(max)-r(min)
         su `Y' if `touse', meanonly
         local yrange = r(max)-r(min)
-        local delta = sqrt(`xrange'^2 + `yrange'^2) / 100 * `delta'
+        local delta = sqrt(`xrange'^2 + `yrange'^2) / 200 / `delta'
         if `delta'==0 local delta .
     }
     local msg `: di %9.0g `delta''
@@ -1694,9 +1700,12 @@ program _geoframe_generate_shpmatch
 end
 
 program _geoframe_bbox
-    syntax name(id="newname" name=newname) [if] [in] [, noShp/*
+    syntax namelist(id="newname" name=newnames max=2) [if] [in] [, noShp/*
         */ by(varname numeric) ROTate CIRcle hull PADding(real 0)/*
         */ n(numlist int max=1 >0) ANGle(real 0) noADJust replace CURrent ]
+    gettoken newname newnames : newnames
+    gettoken newshpname : newnames
+    if "`newshpname'"=="" local newshpname "`newname'_shp"
     if "`hull'"!="" & "`circle'"!="" {
         di as err "only one of {bf:circle} and {bf:hull} allowed"
         exit 198
@@ -1706,7 +1715,10 @@ program _geoframe_bbox
     else if "`rotate'"!="" local btype 1
     else                   local btype 0
     if "`n'"=="" local n 100
-    if "`replace'"=="" confirm new frame `newname'
+    if "`replace'"=="" {
+        confirm new frame `newname'
+        confirm new frame `newshpname'
+    }
     // mark sample
     marksample touse
     if "`by'"!="" markout `touse' `by'
@@ -1742,40 +1754,59 @@ program _geoframe_bbox
         }
     }
     // prepare new frame
-    tempname newframe
-    frame create `newframe' double(_ID _X _Y)
+    tempname newframe newshpframe
+    frame create `newframe' double(_ID)
+    frame create `newshpframe' double(_ID _X _Y)
     // obtain boxes/MECs
     frame `shpframe' {
         if "`BY'"!="" {
             if "`BY'"=="`ID'" {
-                mata: _bbox2("`newframe'", `"`XY'"', "`touse'",/*
+                mata: _bbox2("`newshpframe'", `"`XY'"', "`touse'",/*
                      */ `btype', `n', `padding', "`adjust'"=="",/*
                      */ `angle', "`BY'")
             }
             else {
                 qui levelsof `BY' if `touse', local(bylvls)
                 foreach lvl of local bylvls {
-                    mata: _bbox1("`newframe'", `"`XY'"', "`touse'",/*
+                    mata: _bbox1("`newshpframe'", `"`XY'"', "`touse'",/*
                          */ `btype', `n', `padding', "`adjust'"=="",/*
                          */ `angle', "`BY'", `lvl')
                 }
             }
         }
         else {
-            mata: _bbox1("`newframe'", `"`XY'"', "`touse'",/*
+            mata: _bbox1("`newshpframe'", `"`XY'"', "`touse'",/*
                  */ `btype', `n', `padding',"`adjust'"=="", `angle')
+            frame `newshpframe': qui replace _ID = 1
+        }
+        frame `newshpframe' {
+            qui compress _ID
+            __geoframe_set_type shape
         }
     }
-    // cleanup
     frame `newframe' {
-        qui compress _ID
-        __geoframe_set_type shape
+        qui geoframe append `newshpframe' _ID if _n==1 | _ID!=_ID[_n-1]
+        __geoframe_set_type unit
+        qui _geoframe_link `newshpframe'
+        qui geoframe generate centroids
+        qui _geoframe_unlink
+    }
+    // cleanup
+    frame `newshpframe' {
+        capt confirm new frame `newshpname'
+        if _rc==1 exit 1
+        if _rc frame drop `newshpname'
+        frame rename `newshpframe' `newshpname'
+    }
+    frame `newframe' {
         capt confirm new frame `newname'
         if _rc==1 exit 1
         if _rc frame drop `newname'
         frame rename `newframe' `newname'
-        __di_frame "(new frame " `newname' " created)"
+        qui _geoframe_link `newshpname'
     }
+    __di_frame "(new frame " `newname' " created)"
+    __di_frame "(new frame " `newshpname' " created)"
     if "`current'"!="" {
         if "`newname'"!=`"`cframe'"' {
             frame change `newname'
@@ -1785,24 +1816,34 @@ program _geoframe_bbox
 end
 
 program _geoframe_symbol
-    syntax name(id="newname" name=name) [if] [in] [, * ]
-    __geoframe_symbol `name' `if' `in', `options'
+    syntax namelist(id="newname" name=newnames max=2) [if] [in] [, * ]
+    __geoframe_symbol `newnames' `if' `in', `options'
 end
 
 program _geoframe_symboli
     syntax anything(id="newname") [, * ]
-    gettoken name anything : anything
+    gettoken name    anything : anything
+    gettoken shpname          : anything
     confirm name `name'
+    capt confirm name `shpname'
+    if _rc==1 exit _rc
+    if _rc local shpname "`name'_shp"           // 2nd element is not a name
+    else   gettoken shpname anything : anything // 2nd element is a name
     numlist `"`anything'"', min(3)
-    __geoframe_symbol `name' `r(numlist)', `options'
+    __geoframe_symbol `name' `shpname' `r(numlist)', `options'
 end
 
 program __geoframe_symbol
     syntax anything [if] [in] [, replace/*
         */ SHape(passthru) SIze(passthru) OFFset(passthru) ANGle(passthru)/*
         */ ratio(passthru) n(passthru) CURrent ]
-    gettoken newname anything : anything
-    if "`replace'"=="" confirm new frame `newname'
+    gettoken newname     anything : anything
+    gettoken newshpname  anything : anything
+    if "`newshpname'"=="" local newshpname "`newname'_shp"
+    if "`replace'"=="" {
+        confirm new frame `newname'
+        confirm new frame `newshpname'
+    }
     local cframe `"`c(frame)'"'
     // generate symbols
     if `: list sizeof anything' {
@@ -1831,20 +1872,33 @@ program __geoframe_symbol
         local frame `"`c(frame)'"'
         __get id, l(ID)
     }
-    tempname newframe
-    _geoplot_symbol . . `frame' `if' `in', _frameonly(`newframe' `ID')/*
+    tempname newframe newshpframe
+    frame create `newframe' double(_ID _CX _CY)
+    _geoplot_symbol . . `frame' `if' `in', _frameonly(`newshpframe' `ID')/*
         */ `shape' `size' `offset' `angle' `ratio' `n'
-    // cleanup
     frame `newframe' {
-        drop W
+        qui geoframe append `newshpframe' _ID _CX _CY if _n==1 | _ID!=_ID[_n-1]
+        __geoframe_set_type unit
+    }
+    // cleanup
+    frame `newshpframe' {
         order _ID
+        drop W _CX _CY
         __geoframe_set_type shape
+        capt confirm new frame `newshpname'
+        if _rc==1 exit 1
+        if _rc frame drop `newshpname'
+        frame rename `newshpframe' `newshpname'
+    }
+    frame `newframe' {
         capt confirm new frame `newname'
         if _rc==1 exit 1
         if _rc frame drop `newname'
         frame rename `newframe' `newname'
-        __di_frame "(new frame " `newname' " created)"
+        qui _geoframe_link `newshpname'
     }
+    __di_frame "(new frame " `newname' " created)"
+    __di_frame "(new frame " `newshpname' " created)"
     if "`current'"!="" {
         if "`newname'"!=`"`cframe'"' {
             frame change `newname'
@@ -1980,7 +2034,7 @@ program __geoframe_collapse
     gettoken frame 0 : 0, parse(" ,")
     frame `frame' {
         local opts COordinates(passthru) SELect(passthru) id(varname)/*
-            */ GENerate GENerate2(str)
+            */ GENerate GENerate2(str) noDOTs
         if `contract' {
             syntax [if] [in] [fw] [, `opts' * ]
         }
@@ -2007,7 +2061,7 @@ program __geoframe_collapse
         else {
             if `"`generate'"'!="" {
                 __geoframe_collapse_parse_gen `generate2' /*
-                    returns generate, replace, set */
+                    returns generate, replace, set, sort*/
                 local ID `generate'
                 local novarnote
             }
@@ -2015,10 +2069,11 @@ program __geoframe_collapse
                 tempname ID
                 local replace
                 local set noset
+                local sort nosort
                 local novarnote novarnote
             }
-            _geoframe_spjoin `cframe' `ID' `if' `in',/*
-                */ `select' `coordinates' `replace' `set' `novarnote'
+            _geoframe_spjoin `cframe' `ID' `if' `in', `dots' `select'/*
+                */ `coordinates' `replace' `set' `sort' `novarnote'
         }
     }
     tempname frame1
@@ -2045,16 +2100,18 @@ program __geoframe_collapse
 end
 
 program __geoframe_collapse_parse_gen
-    syntax [name] [, replace noset ]
+    syntax [name] [, replace noset nosort ]
     if "`namelist'"=="" local namelist _ID // default
     c_local generate `namelist'
     c_local replace `replace'
     c_local set `set'
+    c_local sort `sort'
 end
 
 program _geoframe_spjoin
     syntax [namelist(min=1 max=2)] [if] [in] [, SELect(str asis) /*
-        */ COordinates(varlist min=2 max=2) replace noset NOVARNOTE noDOTs ]
+        */ COordinates(varlist min=2 max=2) replace nosort noset/*
+        */ NOVARNOTE noDOTs ]
     marksample touse
     gettoken shpframe namelist : namelist
     gettoken id       namelist : namelist
@@ -2120,11 +2177,19 @@ program _geoframe_spjoin
     if _rc==1 exit _rc
     if _rc drop `id'
     rename `Id' `id'
+    if "`sort'"=="" {
+        tempvar sortindex
+        qui gen double `sortindex' = _n
+        sort `id' `sortindex'
+    }
     if "`set'"=="" {
         _geoframe_set id `id'
     }
     if "`novarnote'"=="" {
         __di_frame "(variable {bf:`id'} added to frame " `frame' ")"
+        if "`sort'"=="" {
+            __di_frame "(data in frame " `frame' " sorted by {bf:`id'})"
+        }
     }
 end
 
@@ -3141,6 +3206,26 @@ void _q_gtype(string scalar R, string rowvector id,
     st_matrix(R, poly \ line \ point \ empty)
 }
 
+void _set_one_if_any(string scalar id, string scalar touse)
+{
+    real scalar    i, n
+    real colvector a, b 
+    real matrix    ID, TOUSE
+    
+    st_view(ID=., ., id)
+    st_view(TOUSE=., ., touse)
+    n = rows(ID)
+    a = selectindex(_mm_uniqrows_tag(ID))
+    i = rows(a)
+    if (i<=1) b = n
+    else      b = a[|2 \. |] :- 1 \ n
+    for (;i;i--) {
+        if (anyof(TOUSE[|a[i] \ b[i]|],1)) {
+            TOUSE[|a[i] \ b[i]|] = J(b[i] - a[i] + 1, 1, 1)
+        }
+    }
+}
+
 void _project(string scalar touse, string scalar x, string scalar y,
     string scalar pname, string scalar pargs)
 {
@@ -3178,7 +3263,7 @@ real matrix _project_robinson(real colvector x, real colvector y,
 void _noclip(string scalar touse,
     string scalar id, string scalar pid, real scalar rclip,
     string scalar out, string rowvector xy, string scalar mask,
-    real scalar strict, real scalar split, real scalar nodrop,
+    real scalar strict, real scalar nosplit, real scalar nodrop,
     real scalar dots)
 {
     real scalar    i, r, n
@@ -3211,7 +3296,7 @@ void _noclip(string scalar touse,
         if (anyof(OUT[|ab|], strict)) OUT[|ab|] = J(r, 1, strict)
         else                          OUT[|ab|] = J(r, 1, 1-strict)
     }
-    if (!split) {
+    if (nosplit) {
         a = selectindex(_mm_unique_tag(ID))
         i = rows(a)
         if (i<=1) b = n
@@ -3225,7 +3310,7 @@ void _noclip(string scalar touse,
     }
     if (nodrop) {
         if (rclip) st_view(XY=., ., xy, touse)
-        if (split) {
+        if (!nosplit) {
             a = selectindex(_mm_unique_tag(ID))
             i = rows(a)
             if (i<=1) b = n
@@ -3404,8 +3489,8 @@ void _refine(string scalar id, string rowvector xy,
 {
     real scalar    i, n, r, dn, d0
     real colvector a, b
-    real colvector ID, B
-    real matrix    XY
+    real colvector ID
+    real matrix    XY, XYi
     struct _clip_expand_info scalar I
 
     st_view(ID=., ., id, touse)
