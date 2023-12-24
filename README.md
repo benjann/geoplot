@@ -137,6 +137,48 @@ Zoom.
 
 Main changes:
 
+    24dec2023
+    **note that -geoframe create- no longer makes the new frame the current
+      frame by default; specify option -current- for old behavior**
+    **note that syntax for immediate layer types (e.g. pointi, pci, symboli)
+      has been revised**
+    geoplot:
+    - zvar can now be string
+    - the specified order in option cuts() now affects the order of categories
+      in the legend in case of categorical zvar
+    - option -shp- added to layer types -point- and -label-, to use data from linked
+      shape frame; support for options ifshp(), lock, id(), centroids() added
+    - layertypes symbol and symboli now support marker labels
+    - syntax for layertype symboli changed; argument size is now optional, but must
+      be enclosed in []; can also specify *size for relative size; can specifiy
+      option size() to set a default
+    - layertypes pccapsymi, pcbarrowi, pcpointi added
+    - consistent syntax is now used for all immediate layer types (i.e. coordinates
+      are now specified as x y for all types, no longer as x y for some and as y x
+      for others)
+    - option label() in compass() now has suboption text() to override the default
+      labels
+    - in some situations, rendering options such as lcolor() specified in missing()
+      did not have an effect; this is fixed
+    - fill color was turned off if zvar contained missing only; this is fixed
+    - specifying immediate plots without arguments is no longer considered an error
+    - when copying from a shape frame, -geoframe copy- failed if the data in the
+      shape frame was not ordered by the ID; this is fixed
+    geoframe:
+    - new command geoframe stack
+    - geoframe append now also copies formats and labels, unless option -raw- is
+      specified; also added options -force- and -fast-
+    - syntax for -geoframe symboli- changed; see layertype symboli above
+    - support for GeoJSON and WKT (Well-known text geometry) added
+      (see -geoframe translate json- and -geoframe translate wkt-)
+    - geoframe create no longer makes the created frame the current frame by
+      default; specify option -current- to make the created frame the current frame
+    - option -noclean- is now allowed as a synonym for -nodrop- in geoframe create
+    - geoframe load can now be used as a synonym for geoframe create
+    - geoframe query bbox did no longer work due to a change in geoframe bbox; this
+      is fixed
+    - geoframe clean failed to remove empty shapes; this is fixed
+
     02nov2023
     geoplot:
     - option ifshp() added for layer types area and line

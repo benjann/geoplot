@@ -1,4 +1,4 @@
-*! version 1.2.0  02nov2023  Ben Jann
+*! version 1.2.1  24dec2023  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -16,6 +16,7 @@ program _parse_subcmd
     if      `"`0'"'=="get"                             local 0 get
     else if `"`0'"'=="set"                             local 0 set
     else if `"`0'"'=="flip"                            local 0 flip // undocumented
+    else if `"`0'"'=="load"                            local 0 create
     else if `"`0'"'==substr("create",   1, max(2,`l')) local 0 create
     else if `"`0'"'==substr("link",     1, max(1,`l')) local 0 link
     else if `"`0'"'==substr("clean",    1, max(2,`l')) local 0 clean
@@ -58,8 +59,8 @@ program _geoframe_create
         */ type(str) id(name) sid(name) pid(name) PLevel(name)/*
         */ COordinates(namelist) CENtroids(namelist) area(name)/*
         */ Feature(str asis)/*
-        */ noShpfile Shpfile2(str asis) nodrop /*
-        */ noDEScribe noCURrent _mkfrlink(str) ]
+        */ noShpfile Shpfile2(str asis) nodrop noCLean /*
+        */ noDEScribe CURrent _mkfrlink(str) ]
     __geoframe_create_parse_type, `type'
     local isSHPread = `"`_mkfrlink'"'!=""
     local hasUSING = `"`macval(using)'"'!=""
@@ -107,7 +108,10 @@ program _geoframe_create
             }
             else if _rc exit _rc
         }
-        if `hasUSING' frame create `frame'
+        if `hasUSING' {
+            frame create `frame'
+            __di_frame "(frame " `frame' " created)"
+        }
         capture noisily break {
             frame `frame' {
                 if `hasUSING' use `"`macval(using)'"'
@@ -142,11 +146,11 @@ program _geoframe_create
                         */, type(shape) id(`SHP_id') sid(`SHP_sid') pid(`SHP_pid')/*
                         */  plevel(`SHP_plevel') coordinates(`SHP_coord')/*
                         */  feature(`SHP_feat') `replace'/*
-                        */  nodescribe nocurrent _mkfrlink(`frame') `drop'
+                        */  nodescribe _mkfrlink(`frame') `drop' `clean'
                 }
                 else if `isSHPread' {
-                    if "`drop'"!="" local clean
-                    else            local clean , clean
+                    if "`drop'`clean'"!="" local clean
+                    else                   local clean , clean
                     frame `_mkfrlink': _geoframe_link `frame'`clean'
                 }
                 else {
@@ -168,10 +172,12 @@ program _geoframe_create
     }
     
     // reporting and frame change
-    if "`current'"=="" {
+    if "`current'"!="" {
         if "`frame'"!=`"`c(frame)'"' {
             frame change `frame'
-            __di_frame "(current frame now " `frame' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `frame' ")"
+            }
         }
     }
     if "`describe'"=="" _geoframe_describe `frame'
@@ -315,9 +321,9 @@ program _geoframe_clean
             tempvar empty
             qui gen `empty' = 0
             __get coordinates, local(XY)
-            gettoken X XY : XY
-            gettoken Y XY : XY
             if `"`XY'"'!="" {
+                gettoken X XY : XY
+                gettoken Y XY : XY
                 tempvar touse
                 qui gen `touse' = `lnkvar'<.
                 mata: _clean_empty("`empty'", "`shpid'", (`"`X'"', `"`Y'"'),/*
@@ -329,11 +335,9 @@ program _geoframe_clean
     else local empty
     // create reverse link from shape file to unit file
     if "`units'"!="" | "`noempty'"=="" {
-        tempname tmpframe tag
-        frame `shpframe' {
-            qui gen byte `tag' = `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1])
-            frame put `shpid' `empty' if `tag', into(`tmpframe')
-        }
+        tempname tmpframe
+        frame `shpframe': frame put `shpid' `empty' if/*
+            */ `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1]), into(`tmpframe')
         qui frlink 1:1 `id', frame(`tmpframe' `shpid')
     }
     // drop obs from shape file
@@ -562,11 +566,11 @@ program __geoframe_query_bbox, rclass
     syntax [if] [in] [, noShp ROTate CIRcle hull PADding(passthru)/*
         */ n(passthru) ANGle(passthru) noADJust ]
     // obtain bounding box
-    tempname bbox
-    qui _geoframe_bbox `bbox' `if' `in', `shp' `rotate' `circle' `hull'/*
-        */ `padding' `n' `angle' `noadjust' 
+    tempname bbox bbox_shp
+    qui _geoframe_bbox `bbox' `bbox_shp' `if' `in',/*
+        */ `shp' `rotate' `circle' `hull' `padding' `n' `angle' `noadjust' 
     tempname BBOX LIMITS R
-    frame `bbox' {
+    frame `bbox_shp' {
         mat `LIMITS' = J(1,4,.)
         mat coln `LIMITS' = xmin xmax ymin ymax
         su _X, meanonly
@@ -747,7 +751,7 @@ program _geoframe_select
             __geoframe_set_linkname
             capt drop _GEOFRAME_lnkvar_*
         }
-        __di_frame "(new frame " `newname' " created)"
+        __di_frame "(frame " `newname' " created)"
     }
     if `newSHP' {
         capt confirm new frame `newshpname'
@@ -760,7 +764,7 @@ program _geoframe_select
             __geoframe_set_linkname
             capt drop _GEOFRAME_lnkvar_*
         }
-        __di_frame "(new shape frame " `newshpname' " created)"
+        __di_frame "(frame " `newshpname' " created)"
     }
     // apply selection and establish linkage
     local Ndrop 0
@@ -787,8 +791,8 @@ program _geoframe_select
                     // update units in attribute frame
                     if `shpIF' & "`drop'"=="" {
                         if `hasIF' drop `touse'
-                        _copy_from_shpframe `id' `shpid' `newshpname'/*
-                            */ `lnkvar' "`touse'"
+                        _copy_from_shpframe `touse', id(`id') shpid(`shpid')/*
+                            */ shpframe(`newshpname') lnkvar(`lnkvar')
                         qui drop if `touse'>=.
                         if r(N_drop) {
                             local Ndrop = `Ndrop' + r(N_drop)
@@ -818,7 +822,9 @@ program _geoframe_select
     if `newFRM' {
         if "`current'"!="" {
             frame change `newname'
-            __di_frame "(current frame now " `newname' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `newname' ")"
+            }
         }
     }
 end
@@ -887,8 +893,9 @@ program _geoframe_project
                         mata: _set_one_if_any("`shpid'" , "`merge'")
                     }
                     drop `touse'
-                    _copy_from_shpframe `id' `shpid' `shpframe'/*
-                        */ `lnkvar' "`merge'" "`touse' = `merge'"
+                    _copy_from_shpframe `merge', id(`id') shpid(`shpid')/*
+                        */ shpframe(`shpframe') lnkvar(`lnkvar')/*
+                        */ vlist(`touse' = `merge')
                     qui replace `touse' = 0 if `touse'>=.
                 }
             }
@@ -949,7 +956,9 @@ program _geoframe_project
     if "`current'"!="" {
         if "`frame'"!=`"`c(frame)'"' {
             frame change `frame'
-            __di_frame "(current frame now " `frame' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `frame' ")"
+            }
         }
     }
 end
@@ -1155,7 +1164,8 @@ program __geoframe_manipulate
     if `hasSHP' & "`drop'"=="" {
         frame `frame' {
             drop `touse'
-            _copy_from_shpframe `id' `shpid' `shpframe' `lnkvar' "`touse'"
+            _copy_from_shpframe `touse', id(`id') shpid(`shpid')/*
+                */ shpframe(`shpframe') lnkvar(`lnkvar')
             qui drop if `touse'>=.
             local Ndrop0 = r(N_drop)
             qui _geoframe_link `shpframe'
@@ -1183,7 +1193,9 @@ program __geoframe_manipulate
     if "`current'"!="" {
         if "`frame'"!=`"`c(frame)'"' {
             frame change `frame'
-            __di_frame "(current frame now " `frame' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `frame' ")"
+            }
         }
     }
 end
@@ -1480,7 +1492,8 @@ program _geoframe_generate_centroids
         mata: _centroid(("`CX'","`CY'"), `"`ID'"', `"`XY'"')
     }
     if `hasSHP' {
-        _copy_from_shpframe `ID0' `ID' `shpframe' `lnkvar' "`CX' `CY'"
+        _copy_from_shpframe `CX' `CY', id(`ID0') shpid(`ID')/*
+            */ shpframe(`shpframe') lnkvar(`lnkvar')
     }
     local TMP `CX' `CY'
     foreach var of local namelist {
@@ -1528,7 +1541,8 @@ program _geoframe_generate_area
         mata: _area("`AREA'", `"`ID'"', `"`XY'"')
     }
     if `hasSHP' {
-        _copy_from_shpframe `ID0' `ID' `shpframe' `lnkvar' `AREA'
+        _copy_from_shpframe `AREA', id(`ID0') shpid(`ID')/*
+            */ shpframe(`shpframe') lnkvar(`lnkvar')
     }
     if `"`scale'"'!="" {
         qui replace `AREA' = `AREA' / (`scale')^2
@@ -1539,28 +1553,6 @@ program _geoframe_generate_area
     rename `AREA' `namelist'
     if "`set'"=="" _geoframe_set area `namelist'
     __di_frame "(variable {bf:`namelist'} added to frame " `cframe' ")"
-end
-
-program _copy_from_shpframe
-    gettoken id 0 : 0
-    gettoken shpid 0 : 0
-    gettoken shpframe 0 : 0
-    gettoken lnkvar 0 : 0
-    gettoken varlist 0 : 0
-    gettoken vlist 0 : 0
-    if !`:list sizeof varlist' exit
-    tempname tmpframe tag
-    frame `shpframe' {
-        qui gen byte `tag' = `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1])
-        frame put `shpid' `varlist' if `tag', into(`tmpframe')
-    }
-    qui frlink 1:1 `id', frame(`tmpframe' `shpid')
-    if `"`vlist'"'=="" {
-        foreach v of local varlist {
-            local vlist `vlist' `v' = `v'
-        }
-    }
-    qui frget `vlist', from(`tmpframe')
 end
 
 program _geoframe_generate_pid
@@ -1683,11 +1675,11 @@ program _geoframe_generate_shpmatch
     __get shpframe, local(shpframe) strict
     __get id, local(id) strict
     __get linkname, local(lnkvar) strict
-    tempname tmpframe tag
+    tempname tmpframe
     frame `shpframe' {
         __get id, local(shpid) strict
-        qui gen byte `tag' = `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1])
-        frame put `shpid' if `tag', into(`tmpframe')
+        frame put `shpid' if `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1]) /*
+            */, into(`tmpframe')
     }
     qui frlink 1:1 `id', frame(`tmpframe' `shpid')
     tempvar SHPMATCH
@@ -1805,12 +1797,14 @@ program _geoframe_bbox
         frame rename `newframe' `newname'
         qui _geoframe_link `newshpname'
     }
-    __di_frame "(new frame " `newname' " created)"
-    __di_frame "(new frame " `newshpname' " created)"
+    __di_frame "(frame " `newname' " created)"
+    __di_frame "(frame " `newshpname' " created)"
     if "`current'"!="" {
         if "`newname'"!=`"`cframe'"' {
             frame change `newname'
-            __di_frame "(current frame now " `newname' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `newname' ")"
+            }
         }
     }
 end
@@ -1829,12 +1823,11 @@ program _geoframe_symboli
     if _rc==1 exit _rc
     if _rc local shpname "`name'_shp"           // 2nd element is not a name
     else   gettoken shpname anything : anything // 2nd element is a name
-    numlist `"`anything'"', min(3)
-    __geoframe_symbol `name' `shpname' `r(numlist)', `options'
+    __geoframe_symbol `name' `shpname' `anything', _immediate `options'
 end
 
 program __geoframe_symbol
-    syntax anything [if] [in] [, replace/*
+    syntax anything [if] [in] [, _immediate replace/*
         */ SHape(passthru) SIze(passthru) OFFset(passthru) ANGle(passthru)/*
         */ ratio(passthru) n(passthru) CURrent ]
     gettoken newname     anything : anything
@@ -1846,7 +1839,8 @@ program __geoframe_symbol
     }
     local cframe `"`c(frame)'"'
     // generate symbols
-    if `: list sizeof anything' {
+    tempname newframe newshpframe
+    if "`_immediate'"!="" {
         if `"`if'"'!="" {
             di as err "if not allowed"
             exit 101
@@ -1855,35 +1849,17 @@ program __geoframe_symbol
             di as err "in not allowed"
             exit 101
         }
-        tempname frame
-        frame create `frame' double(_X _Y SIZE)
-        while (`"`anything'"'!="") {
-            gettoken x anything : anything
-            local x = real(`"`x'"')
-            gettoken y anything : anything
-            local y = real(`"`y'"')
-            gettoken size anything : anything
-            local size = real(`"`size'"')
-            frame post `frame' (`x') (`y') (`size')
-        }
-        local size size(SIZE)
+        _geoplot_symbol . . `anything', _immediate/*
+            */ _frameonly(`newframe' `newshpframe')/*
+            */ `shape' `size' `offset' `angle' `ratio' `n'
     }
     else {
-        local frame `"`c(frame)'"'
-        __get id, l(ID)
-    }
-    tempname newframe newshpframe
-    frame create `newframe' double(_ID _CX _CY)
-    _geoplot_symbol . . `frame' `if' `in', _frameonly(`newshpframe' `ID')/*
-        */ `shape' `size' `offset' `angle' `ratio' `n'
-    frame `newframe' {
-        qui geoframe append `newshpframe' _ID _CX _CY if _n==1 | _ID!=_ID[_n-1]
-        __geoframe_set_type unit
+        _geoplot_symbol . . `cframe' `if' `in',/*
+            */ _frameonly(`newframe' `newshpframe')/*
+            */ `shape' `size' `offset' `angle' `ratio' `n'
     }
     // cleanup
     frame `newshpframe' {
-        order _ID
-        drop W _CX _CY
         __geoframe_set_type shape
         capt confirm new frame `newshpname'
         if _rc==1 exit 1
@@ -1891,18 +1867,21 @@ program __geoframe_symbol
         frame rename `newshpframe' `newshpname'
     }
     frame `newframe' {
+        __geoframe_set_type unit
         capt confirm new frame `newname'
         if _rc==1 exit 1
         if _rc frame drop `newname'
         frame rename `newframe' `newname'
         qui _geoframe_link `newshpname'
     }
-    __di_frame "(new frame " `newname' " created)"
-    __di_frame "(new frame " `newshpname' " created)"
+    __di_frame "(frame " `newname' " created)"
+    __di_frame "(frame " `newshpname' " created)"
     if "`current'"!="" {
         if "`newname'"!=`"`cframe'"' {
             frame change `newname'
-            __di_frame "(current frame now " `newname' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `newname' ")"
+            }
         }
     }
 end
@@ -1990,12 +1969,14 @@ program _geoframe_grid
         frame rename `newframe' `newname'
         qui _geoframe_link `newshpname'
     }
-    __di_frame "(new frame " `newname' " created)"
-    __di_frame "(new frame " `newshpname' " created)"
+    __di_frame "(frame " `newname' " created)"
+    __di_frame "(frame " `newshpname' " created)"
     if "`current'"!="" {
         if "`newname'"!=`"`cframe'"' {
             frame change `newname'
-            __di_frame "(current frame now " `newname' ")"
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `newname' ")"
+            }
         }
     }
 end
@@ -2092,7 +2073,7 @@ program __geoframe_collapse
             _geoframe_set id `ID'
         }
     }
-    _geoframe_copy `frame1' *, exclude(`ID') quietly
+    qui _geoframe_copy `frame1' *, exclude(`ID')
     if `r(k)'==1 di as txt "(variable " _c
     else         di as txt "(variables " _c
     di as res r(newlist) _c
@@ -2648,8 +2629,7 @@ program _geoframe_copy, rclass
     confirm frame `frame2'
     frame `frame2' {
         syntax [varlist(default=none)] [, EXclude(varlist)/*
-            */ TARget(namelist) id(namelist max=2)/*
-            */ QUIETly ] // undodumented
+            */ TARget(namelist) id(namelist max=2) ]
         local varlist: list varlist - exclude
         __get id, local(id2)
         __get shpframe, local(shpframe2)
@@ -2680,7 +2660,8 @@ program _geoframe_copy, rclass
         local varlist: list varlist - VARLIST
     }
     if `: list sizeof varlist'==0 {
-        `quietly' di as txt "(no variables to copy)"
+        di as txt "(no variables to copy)"
+        return scalar k = 0
         exit
     }
     local tgtvlist
@@ -2701,9 +2682,11 @@ program _geoframe_copy, rclass
                 if _rc==1 exit 1
                 if _rc==0 {
                     local k = r(k)
-                    return add // preserve returns from frget
-                    qui count if (_n==1 | `ID'!=`ID'[_n-1]) & `lnkvar2'>=.
-                    `quietly' _geoframe_copy_di `frame2' `k' `r(N)'
+                    if c(noisily) {
+                        __geoframe_copy_Nmis `ID' `lnkvar2'
+                        __geoframe_copy_di `frame2' `k' `Nmis'
+                    }
+                    return scalar k = `k'
                     exit
                 }
             }
@@ -2716,22 +2699,24 @@ program _geoframe_copy, rclass
                     tempvar merge
                     qui gen byte `merge' = 1
                 }
-                capt _copy_from_shpframe `ID' `ID2' `frame2' `lnkvar'/*
-                    */ "`merge' `varlist'" "`merge' = `merge' `vlist'"
+                capt _copy_from_shpframe `merge' `varlist', id(`ID')/*
+                    */ shpid(`ID2') shpframe(`frame2') lnkvar(`lnkvar')/*
+                    */ vlist(`merge' = `merge' `vlist')
                 if _rc==1 exit 1
                 if _rc==0 {
-                    local k = r(k)
-                    return add // preserve returns from frget
-                    qui count if `merge'>=.
-                    `quietly' _geoframe_copy_di `frame2' `k' `r(N)'
+                    local k = r(k) - 1
+                    if c(noisily) {
+                        qui count if `merge'>=.
+                        __geoframe_copy_di `frame2' `k' `r(N)'
+                    }
+                    return scalar k = `k'
                     exit
                 }
             }
             local lnkvar2
         }
         if "`shpframe2'`shpframe'"!="" {
-            `quietly' di as txt "(existing link failed;"/*
-                */ " trying to link on the fly)"
+            di as txt "(existing link failed; trying to link on the fly)"
         }
     }
     // cases
@@ -2749,17 +2734,19 @@ program _geoframe_copy, rclass
         qui frlink 1:1 `ID', frame(`frame2' `ID2') generate(`lnkvar')
         qui frget `vlist', from(`lnkvar')
         local k = r(k)
-        return add // preserve returns from frget
-        qui count if `lnkvar'>=.
-        local Nmis = r(N)
+        if c(noisily) {
+            qui count if `lnkvar'>=.
+            local Nmis = r(N)
+        }
     }
     else if `uniq2' { // attribute -> shp
         qui frlink m:1 `ID', frame(`frame2' `ID2') generate(`lnkvar')
         qui frget `vlist', from(`lnkvar')
         local k = r(k)
-        return add // preserve returns from frget
-        qui count if (_n==1 | `ID'!=`ID'[_n-1]) & `lnkvar'>=.
-        local Nmis = r(N)
+        if c(noisily) {
+            qui count if (_n==1 | `ID'!=`ID'[_n-1]) & `lnkvar'>=.
+            local Nmis = r(N)
+        }
     }
     else if `uniq' { // shp -> attribute
         frame `frame2' {
@@ -2767,56 +2754,101 @@ program _geoframe_copy, rclass
             qui gen byte `merge' = 1
             qui frlink m:1 `ID2', frame(`frame' `ID') generate(`lnkvar')
         }
-        _copy_from_shpframe `ID' `ID2' `frame2' `lnkvar'/*
-            */ "`merge' `varlist'" "`merge' = `merge' `vlist'"
-        local k = r(k)
-        return add // preserve returns from frget
-        qui count if `merge'>=.
-        local Nmis = r(N)
+        _copy_from_shpframe `merge' `varlist', id(`ID')/*
+            */ shpid(`ID2') shpframe(`frame2') lnkvar(`lnkvar')/*
+            */ vlist(`merge' = `merge' `vlist')
+        local k = r(k) - 1
+        if c(noisily) {
+            qui count if `merge'>=.
+            local Nmis = r(N)
+        }
     }
     else { // shp -> shp
         tempname tmpframe tag
         qui gen byte `tag' = _n==1 | `ID'!=`ID'[_n-1] // tag 1st obs per unit
         frame put `ID' if `tag', into(`tmpframe')
+        frame `frame2' {
+            tempvar merge
+            qui gen byte `merge' = 1
+            qui frlink m:1 `ID2', frame(`tmpframe' `ID') generate(`lnkvar')
+        }
         frame `tmpframe' {
-            frame `frame2' {
-                tempvar merge
-                qui gen byte `merge' = 1
-                qui frlink m:1 `ID2', frame(`tmpframe' `ID') generate(`lnkvar')
+            _copy_from_shpframe `merge' `varlist', id(`ID')/*
+                */ shpid(`ID2') shpframe(`frame2') lnkvar(`lnkvar')/*
+                */ vlist(`merge' = `merge' `vlist')
+            if c(noisily) {
+                qui count if `merge'>=.
+                local Nmis = r(N)
             }
-            _copy_from_shpframe `ID' `ID2' `frame2' `lnkvar'/*
-                */ "`merge' `varlist'" "`merge' = `merge' `vlist'"
-            qui count if `merge'>=.
-            local Nmis = r(N)
         }
         qui frlink m:1 `ID', frame(`tmpframe' `ID') generate(`lnkvar')
         qui frget `vlist', from(`lnkvar')
         local k = r(k)
-        return add // preserve returns from frget
         foreach var of local tgtvlist {
             qui replace `var' = `var'[_n-1] if `tag'==0
         }
     }
-    `quietly' _geoframe_copy_di `frame2' `k' `Nmis'
+    if c(noisily) {
+        __geoframe_copy_di `frame2' `k' `Nmis'
+    }
+    return scalar k = `k'
 end
 
-program _geoframe_copy_di
+program __geoframe_copy_Nmis
+    gettoken id 0 : 0
+    gettoken lnkvar 0 : 0
+    tempname touse nmis
+    qui gen byte `touse' = `lnkvar'>=.
+    mata: st_numscalar("`nmis'", mm_nunique(st_data(., "`id'" , "`touse'")))
+    c_local Nmis = `nmis'
+end
+
+program __geoframe_copy_di
     args frame k Nmis
-    if "`Nmis'"=="0"       local msg all units matched
-    else if "`Nmis'"=="1"  local msg 1 unit unmatched
-    else                   local msg `Nmis' units unmatched
-    di as txt "(`msg')"
+    if "`Nmis'"=="0"/*
+        */ __di_frame "(all units in frame " `c(frame)' " matched)"
+    else if "`Nmis'"=="1"/*
+        */ __di_frame "(1 unit in frame " `c(frame)' " unmatched)"
+    else   __di_frame "(`Nmis' units in frame " `c(frame)' " unmatched)"
     if `k'==1 local msg variable
     else      local msg variables
     __di_frame "(`k' `msg' copied from frame " `frame' ")"
 end
 
+program _copy_from_shpframe
+    _parse comma vars 0 : 0
+    syntax [, id(str) shpid(str) shpframe(str) lnkvar(str) vlist(str) ]
+    if !`:list sizeof vars' exit
+    tempname tmpframe
+    frame `shpframe': frame put `shpid' `vars' if/*
+        */ `lnkvar'<. & (_n==1 | `shpid'!=`shpid'[_n-1]), into(`tmpframe')
+    capt frlink 1:1 `id', frame(`tmpframe' `shpid')
+    if _rc==1 exit 1
+    if _rc { // possibly shpframe is not ordered by ID; select first obs per ID
+        frame `tmpframe' {
+            tempvar touse
+            mata: st_store(., st_addvar("byte", "`touse'"),/*
+                */ mm_unique_tag(st_data(.,"`shpid'"), 1))
+            qui keep if `touse'
+        }
+        qui frlink 1:1 `id', frame(`tmpframe' `shpid')
+    }
+    if `"`vlist'"'=="" {
+        foreach v of local vars {
+            local vlist `vlist' `v' = `v'
+        }
+    }
+    qui frget `vlist', from(`tmpframe')
+end
+
 program _geoframe_append
+    // syntax and sample
     gettoken frame 0 : 0, parse(" ,")
     confirm frame `frame'
     frame `frame' {
-        syntax [varlist] [if] [in] [, EXclude(varlist) /*
-            */ TARget(namelist) touse(varname numeric) ]
+        syntax [varlist] [if] [in] [, EXclude(varlist)/*
+            */ TARget(namelist) touse(varname numeric)/*
+            */ force raw fast ]
         if "`touse'"!="" {
             if `"`if'`in'"'!="" {
                 di as err "touse() not allowed with if or in"
@@ -2828,30 +2860,38 @@ program _geoframe_append
         }
         local varlist: list varlist - exclude
         local types
+        local fmts
         foreach v of local varlist {
             local types `types' `:type `v''
+            local fmts `fmts' `:format `v''
         }
     }
     if `: list sizeof varlist'==0 {
         di as txt "(no variables to append)"
         exit
     }
+    // prepare variables and data types
     local addvars
     local recast
-    local TARGET
+    local ORG
+    local TGT
     foreach v of local varlist {
         gettoken type types : types
+        gettoken fmt fmts : fmts
         gettoken V target : target
         if `"`V'"'=="" local V `v'
+        // append to new variable
         capt unab V : `V'
         if _rc==1 exit _rc
-        if _rc {
+        if _rc { 
             confirm name `V'
-            local addvars `addvars' `type' `V'
-            local TARGET `TARGET' `V'
+            local addvars `addvars' `type' `fmt' `V'
+            local ORG `ORG' `v'
+            local TGT `TGT' `V'
             continue
         }
-        local TARGET `TARGET' `V'
+        // append to existing variable
+        local TGT `TGT' `V'
         if c(stata_version)>=18 {
             if `: isalias `V'' {
                 di as err "`V' is an alias; may not append to alias variables"
@@ -2860,22 +2900,53 @@ program _geoframe_append
         }
         local TYPE: type `V'
         capt n _check_types `type' `TYPE' // may update type
-        if _rc==1   exit _rc
-        if _rc==109 exit _rc // type mismatch
-        if _rc {
+        if _rc==109 {
+            if "`force'"=="" {
+                di as err "type mismatch for {bf:`v'};"/*
+                    */ " may not combine numeric and string"
+                exit 109 // type mismatch
+            }
+            frame `frame' {
+                tempvar tmp
+                local ORG `ORG' `tmp'
+                if substr("`type'",1,3)=="str" {
+                    qui gen double `tmp' = .
+                    qui replace `tmp' = real(`v')
+                    qui recast `TYPE' `tmp' // changes type only if possible
+                }
+                else {
+                    qui gen `TYPE' `tmp' = ""
+                    qui replace `tmp' = strofreal(`v',"%12.0g")
+                }
+                local type: type `tmp'
+                if "`type'"!="`TYPE'" {
+                    local recast `recast' `type' `V'
+                }
+            }
+        }
+        else if _rc==499 {
+            local ORG `ORG' `v'
             local recast `recast' `type' `V'
         }
+        else if _rc exit _rc
+        else {
+            local ORG `ORG' `v'
+        }
     }
-    local dups: list dups TARGET
+    local dups: list dups TGT
     if `"`dups'"'!="" {
         di as err "duplicates not allowed in list of target variables"
         exit 198
     }
+    // append data
+    if "`fast'"=="" preserve
     local K = c(k)
     while (`"`addvars'"'!="") {
         gettoken type addvars : addvars
+        gettoken fmt  addvars : addvars
         gettoken V    addvars : addvars
         mata: (void) st_addvar("`type'", "`V'")
+        if "`raw'"=="" format `fmt' `V'
     }
     while (`"`recast'"'!="") {
         gettoken type recast : recast
@@ -2885,15 +2956,22 @@ program _geoframe_append
     local N = _N
     local cframe = c(frame)
     capt n mata: _append("`frame'", "`touse'",/*
-        */ tokens(st_local("varlist")), tokens(st_local("TARGET")))
+        */ tokens(st_local("ORG")), tokens(st_local("TGT")))
     if _rc {
         frame change `cframe'
         exit _rc
     }
+    // copy labels
+    if "`raw'"=="" {
+        mata: _append_labels("`frame'", /*
+            */ tokens(st_local("ORG")), tokens(st_local("TGT")))
+    }
+    // display
     local N = _N - `N'
     di as txt "(`N' observations appended)"
     local K = c(k) - `K'
     if `K' di as txt "(`K' new variables created)"
+    if "`fast'"=="" restore, not
 end
 
 program _check_types
@@ -2902,8 +2980,7 @@ program _check_types
     local str = substr("`type'",1,3)=="str"
     local STR = substr("`TYPE'",1,3)=="str"
     if `str'!=`STR' {
-        di as err "type mismatch; may not combine numeric and string"
-        exit 109
+        exit 109 // type mismatch
     }
     if `str' {
         local num = substr("`type'",4,.)
@@ -2939,30 +3016,275 @@ program _check_types
     exit 499 // TYPE is bite => recast
 end
 
+program _geoframe_stack
+    // syntax
+    syntax namelist(id="framelist" min=2) [,/*
+        */ into(namelist max=2) NOSHP drop CURrent replace force ]
+    if "`into'"=="" {
+        if "`replace'"=="" {
+            di as err "option {bf:replace} is required"/*
+                */ " if {bf:into()} is omitted"
+            exit 198
+        }
+    }
+    // check frames and look for shape frames
+    local hasSHP 0
+    foreach frame of local namelist {
+        confirm frame `frame'
+        if "`noshp'"=="" {
+            frame `frame': __get shpframe, local(shpframe)
+            capt confirm frame `shpframe'
+            if _rc==1 exit _rc
+            if _rc==0 local hasSHP 1
+        }
+    }
+    // determine target names
+    if "`into'"!="" {
+        gettoken tgtframe into : into
+        if `hasSHP' {
+            gettoken tgtshpframe into : into
+            if "`tgtshpframe'"=="" local tgtshpframe `tgtframe'_shp
+        }
+    }
+    else {
+        gettoken tgtframe : namelist
+        if `hasSHP' {
+            frame `tgtframe': __get shpframe, local(tgtshpframe)
+            if "`tgtshpframe'"=="" local tgtshpframe `tgtframe'_shp
+        }
+    }
+    if "`replace'"=="" {
+        foreach frame in `tgtframe' `tgtshpframe' {
+            confirm new frame `frame'
+        }
+    }
+    tempname tmpframe tmpshpframe
+    // stack frames
+    local n1 0
+    local s1 0
+    local idmax 0
+    local first 1
+    local firstshp 1
+    local hasshp 0
+    tempvar ID
+    foreach frame of local namelist {
+        local n0 = `n1' + 1
+        local s0 = `s1' + 1
+        frame `frame' {
+            if `hasSHP' {
+                __get shpframe, local(shpframe)
+                local hasshp = `"`shpframe'"'!=""
+            }
+            else local hasshp 0
+            if `hasshp' __get id, local(id) strict
+            else        __get id, local(id)
+        }
+        if `first' {
+            frame copy `frame' `tmpframe'
+            frame `tmpframe' {
+                local n1 = _N
+                qui gen byte `ID' = .
+                if `"`id'"'!="" {
+                    qui replace `ID' = `id'
+                    if `"`id'"'!="_ID" drop `id'
+                }
+                else qui replace `ID' = _n
+                capt confirm new variable _FRAME
+                if _rc==1 exit 1
+                if _rc drop _FRAME
+                qui gen str _FRAME = "`frame'"
+            }
+            local first 0
+        }
+        else {
+            frame `tmpframe': qui geoframe append `frame', fast `force'
+            frame `tmpframe' {
+                local n1 = _N
+                if `n1'>=`n0' {
+                    if `"`id'"'!="" {
+                        qui replace `ID' = `id' + `idmax' in `n0'/l
+                        if `"`id'"'!="_ID" drop `id'
+                    }
+                    else qui replace `ID' = _n - (`n0' + `idmax') in `n0'/l
+                    qui replace _FRAME = "`frame'" in `n0'/l
+                }
+            }
+        }
+        if `hasshp' {
+            if `firstshp' {
+                frame copy `shpframe' `tmpshpframe'
+                frame `shpframe': __get id, local(id) strict
+                frame `tmpshpframe' {
+                    local s1 = _N
+                    qui gen byte `ID' = .
+                    qui replace `ID' = `id'
+                    if `"`id'"'!="_ID" drop `id'
+                    capt confirm new variable _FRAME
+                    if _rc==1 exit 1
+                    if _rc drop _FRAME
+                    qui gen str _FRAME = "`shpframe'"
+                    capt drop _GEOFRAME_lnkvar_*
+                }
+                local firstshp 0
+            }
+            else {
+                frame `tmpshpframe': qui geoframe append `shpframe', fast/*
+                    */ `force'
+                frame `shpframe': __get id, local(id) strict
+                frame `tmpshpframe' {
+                    local s1 = _N
+                    if `s1'>=`s0' {
+                        qui replace `ID' = `id' + `idmax' in `s0'/l
+                        if `"`id'"'!="_ID" drop `id'
+                        qui replace _FRAME = "`shpframe'" in `s0'/l
+                    }
+                    capt drop _GEOFRAME_lnkvar_*
+                }
+            }
+        }
+        if `n1'>=`n0' {
+            frame `tmpframe' {
+                su `ID' in `n0'/l, meanonly
+                local idmax = max(`idmax', r(max))
+            }
+        }
+        if `hasshp' {
+            if `s1'>=`s0' {
+                frame `tmpshpframe' {
+                    su `ID' in `s0'/l, meanonly
+                    local idmax = max(`idmax', r(max))
+                }
+            }
+        }
+    }
+    // rename ID
+    frame `tmpframe' {
+        capt confirm new variable _ID
+        if _rc==1 exit 1
+        if _rc drop _ID
+        rename `ID' _ID
+        order _FRAME _ID
+        _geoframe_set id _ID
+        __geoframe_set_shpframe
+        __geoframe_set_linkname
+    }
+    if `hasSHP' {
+        frame `tmpshpframe' {
+            capt confirm new variable _ID
+            if _rc==1 exit 1
+            if _rc drop _ID
+            rename `ID' _ID
+            order _FRAME _ID
+            _geoframe_set id _ID
+        }
+    }
+    // rename frames and link
+    nobreak {
+        capt confirm new frame `tgtframe'
+        if _rc frame drop `tgtframe'
+        if `hasSHP' {
+            capt confirm new frame `tgtshpframe'
+            if _rc frame drop `tgtshpframe'
+        }
+        frame rename `tmpframe' `tgtframe'
+        __di_frame "(frame " `tgtframe' " created)"
+        if `hasSHP' {
+            frame rename `tmpshpframe' `tgtshpframe'
+            __di_frame "(frame " `tgtshpframe' " created)"
+            frame `tgtframe': _geoframe_link `tgtshpframe'
+        }
+    }
+    if "`current'"!="" {
+        if "`tgtframe'"!=`"`c(frame)'"' {
+            frame change `tgtframe'
+            if `"`c(prefix)'"'!="frame" {
+                __di_frame "(current frame now " `tgtframe' ")"
+            }
+        }
+    }
+    // drop frames
+    nobreak {
+        if "`drop'"!="" {
+            local cframe `"`c(frame)'"'
+            local DROP
+            local namelist: list uniq namelist
+            foreach frame of local namelist {
+                if `hasSHP' {
+                    frame `frame': __get shpframe, local(shpframe)
+                    if `"`frame'"'=="`cframe'" {
+                        di as txt "(frame {bf:`frame'} not dropped;"/*
+                            */ " may not drop current frame)"
+                    }
+                    else if `"`frame'"'!="`tgtframe'" {
+                        capt frame drop `frame'
+                        if _rc==0 local DROP `DROP' `frame'
+                    }
+                    if `"`shpframe'"'!="" {
+                        if `"`shpframe'"'=="`cframe'" {
+                            di as txt "(frame {bf:`shpframe'} not dropped;"/*
+                                */ " may not drop current frame)"
+                        }
+                        else if `"`shpframe'"'!="`tgtshpframe'" {
+                            capt frame drop `shpframe'
+                            if _rc==0 local DROP `DROP' `shpframe'
+                        }
+                    }
+                    
+                }
+            }
+            di as txt "(dropped frames: {bf:`DROP'})"
+        }
+    }
+end
+
 program _geoframe_translate
+    // parse subcommand
     gettoken subcmd : 0, parse(" ,")
     local subcmd = strlower(`"`subcmd'"')
-    if `"`subcmd'"'=="esri" gettoken subcmd 0 : 0, parse(" ,")
-    else                    local subcmd esri
+    if      `"`subcmd'"'=="esri"    local subcmd esri
+    else if `"`subcmd'"'=="shp"     local subcmd esri
+    else if `"`subcmd'"'=="json"    local subcmd json
+    else if `"`subcmd'"'=="geojson" local subcmd json
+    else if `"`subcmd'"'=="wkt"     local subcmd wkt
+    else                            local subcmd
+    if "`subcmd'"!="" gettoken subcmd 0 : 0, parse(" ,")
+    // wkt
+    if "`subcmd'"=="wkt" {
+        __geoframe_translate_`subcmd' `0'
+        exit
+    }
+    // other translators: parse [<destination>] [using] <using> [, <options>]
     syntax [anything] [using] [, * ]
     if `:list sizeof using'==0 {
         if `:list sizeof anything'>1 {
-            gettoken outname anything : anything
+            gettoken target anything : anything
         }
         if `:list sizeof anything' {
             local anything `"using `macval(anything)'"'
         }
-        local 0 `macval(outname)' `macval(anything)', `macval(options)'
+        local 0 `"`macval(target)' `macval(anything)', `macval(options)'"'
     }
     syntax [anything] using/ [, * ]
-    if `"`anything'"'=="" local anything `""""'
-    mata: _translate_zipname(st_local("using")) // => zip using shpname
-    if `zip' {
-        __geoframe_ziptranslate `subcmd' `anything' `"`using'"'/*
-            */ `"`shpname'"', `options'
+    // check for zipfile
+    mata: _translate_zipname(st_local("using"))
+        /*  if the path contains a zip file, the following will be returned:
+                zipfile: path and name of zipfile
+                shpfile: internal path/name, if specified
+             e.g. "path/source.zip/location/name.shp" would be returned as
+                zipfile: "path/source.zip"
+                shpfile: "location/name.shp"
+            if path contains no zip file, zipfile will be empty
+        */
+    // translate from zipfile
+    if `"`zipfile'"'!="" {
+        __geoframe_ziptranslate "`subcmd'" `"`anything'"' `"`zipfile'"'/*
+            */ `"`shpfile'"', `options'
     }
+    // translate regular file
     else {
-        __geoframe_translate_`subcmd' `anything' `"`using'"', `options'
+        mata: _translate_findsource("using", "`subcmd'") /* updates subcmd and
+            returns (path and) filename including suffix in using*/
+        __geoframe_translate_`subcmd' `"`anything'"' `"`using'"', `options'
     }
 end
 
@@ -2970,36 +3292,55 @@ program _geoframe_convert
     _geoframe_translate `0'
 end
 
+program __geoframe_loadmsg
+    // add suffix if needed
+    mata: pathsuffix(st_local("0"))!=""/*
+        */ ? st_local("0", st_local("0")+".dta")/*
+        */ : J(0,0,.)
+    // add quotes if needed
+    local 0 `"`"`0'"'"'
+    local 0: list clean 0
+    // display
+    di as txt `"(type {bf:{stata geoframe create `0'}}"'/*
+        */ " to load the data)"
+end
+
 program __geoframe_ziptranslate
     _parse comma lhs 0 : 0
-    gettoken subcmd  lhs : lhs
-    gettoken outname lhs : lhs
-    gettoken using   lhs : lhs
-    gettoken shpname     : lhs
-    while (1) { // find name for temporary directory
+    gettoken subcmd   lhs : lhs
+    gettoken anything lhs : lhs
+    gettoken zipfile  lhs : lhs
+    gettoken shpfile      : lhs
+    // find name for temporary directory
+    while (1) {
         tempname tmpdir
         mata: st_local("dirok", strofreal(!direxists("`tmpdir'")))
-        if `dirok' continue, break
+        if `dirok' {
+            mata: st_local("TMPDIR", pathjoin(pwd(), "`tmpdir'"))
+            continue, break
+        }
     }
-    local using0 `"`using'"'
-    mata: !pathisabs(st_local("using"))/*
-        */ ? st_local("using", pathjoin(pwd(), st_local("using")))/*
+    // make path of zipfile absolute
+    local zipfile0 `"`zipfile'"'
+    mata: !pathisabs(st_local("zipfile"))/*
+        */ ? st_local("zipfile", pathjoin(pwd(), st_local("zipfile")))/*
         */ : J(0,0,.)
     local pwd `"`c(pwd)'"'
     nobreak {
         mkdir `tmpdir'
         capture noisily break {
             qui cd `tmpdir'
-            qui unzipfile `"`using'"', replace
-            mata: _ziptranslate_findshp(st_local("shpname"),/* updates shpname
-                */ "`tmpdir'", st_local("using0"))
+            qui unzipfile `"`zipfile'"', replace
+            mata: _translate_findsource("shpfile", "`subcmd'",/*
+                */ st_local("zipfile0")) /* updates subcmd and returns (path
+                   and) filename including suffix in shpfile*/
+            mata: st_local("shpfile", pathjoin("`tmpdir'", st_local("shpfile")))
             qui cd `"`pwd'"'
-            if strtrim(`"`outname'"')=="" local outname `""""'
-            __geoframe_translate_`subcmd' `outname' `"`shpname'"' `0'
+            __geoframe_translate_`subcmd' `"`anything'"' `"`shpfile'"' `0'
         }
         local rc = _rc
         qui cd `"`pwd'"'
-        mata: _ziptranslate_cleanup("`tmpdir'")
+        mata: _ziptranslate_cleanup(st_local("TMPDIR"), st_local("tmpdir"))
         exit `rc'
     }
 end
@@ -3007,80 +3348,145 @@ end
 program __geoframe_translate_esri
     _parse comma lhs 0 : 0
     syntax [, user replace ]
-    gettoken outname lhs : lhs
-    gettoken using   lhs : lhs
-    mata: _translate_using(st_local("using")) // => using path basename
-    mata: _translate_outname(strtrim(st_local("outname"))) // => outpath outname
-    if `"`outname'"'=="" local outname `"`basename'"'
-    local hasoutpath: list sizeof outpath
-    if `hasoutpath' {
-        mata: st_local("shpfile", pathjoin(`"`outpath'"', `"`outname'"'))
-    }
-    else local shpfile `"`outname'"'
-    local shpfile `"`"`shpfile'"'"'
-    local shpfile: list clean shpfile
-    if `path_has_SHP' {
-        mata: st_local("out_tmp", pathjoin(`"`path'"', `"`outname'"'))
-        mata: st_local("out_fin", pathjoin(`"`outpath'"', `"`outname'"'))
-    }
-    if "`user'"=="" {
-        local cmd spshape2dta `"`using'"', saving(`"`outname'"') `replace'
-    }
-    else {
-        local cmd shp2dta using `"`using'"', database(`"`outname'.dta"') ///
-            coordinates(`"`outname'_shp.dta"') `replace'
-    }
+    gettoken target lhs : lhs
+    gettoken using  lhs : lhs
+    mata: _translate_target(st_local("target"), st_local("using"), "`replace'")
     local pwd = c(pwd)
+    mata: _translate_esri_target(st_local("target"), st_local("using"),/*
+        */ "`replace'")
+    // if source path contains .shp (which causes problems in spshape2dta and
+    // shp2dta): change working directory to source dir and translate from
+    // there; this implies that target files will be added to source dir and
+    // then have to be copied to target dir (unless target dir and source dir
+    // are the same)
+    // else: change working directory to target dir
+    di ""
     nobreak {
-        if `hasoutpath' local pwd = c(pwd)
+        if `"`wd'"'!="" qui cd `"`wd'"'
         capture noisily break {
-            di ""
-            if `path_has_SHP' {
-                // workaround for failure of spshape2dta to handle path
-                // that contains ".shp"
-                qui cd `"`path'"'
-                `cmd'
-                qui cd `"`pwd'"'
-                qui copy `"`out_tmp'.dta"' `"`out_fin'.dta"', `replace'
-                qui copy `"`out_tmp'_shp.dta"' `"`out_fin'_shp.dta"', `replace'
+            if "`user'"=="" {
+                spshape2dta `"`source'"', saving(`"`tgt'"') `replace'
             }
             else {
-                if `hasoutpath' qui cd `"`outpath'"'
-                `cmd'
-            }
-            if "`user'"!="" {
-                di as txt /*
-                    */ `"(files `outname'.dta and `outname'_shp.dta created)"'
+                shp2dta using `"`source'"', database(`"`tgt'.dta"')/*
+                    */ coordinates(`"`tgt'_shp.dta"') `replace'
             }
         }
         local rc = _rc
-        if `path_has_SHP' {
-            qui cd `"`pwd'"'
-            capt erase `"`out_tmp'.dta"'
-            capt erase `"`out_tmp'_shp.dta"'
-        }
-        else if `hasoutpath' {
-            qui cd `"`pwd'"'
-        }
-        if `rc' {
-            if `rc'!=1 {
-                if "`user'"=="" local cmd spshape2dta
-                else            local cmd shp2dta
-                di _n as err "error occurred when calling command {bf:`cmd'}"
+        if `"`wd'"'!="" qui cd `"`pwd'"'
+        if `"`tmptgt'"'!="" {
+            if `rc' {
+                capt erase `"`tmptgt'.dta"'
+                capt erase `"`tmptgt'_shp.dta"'
             }
-            exit `rc'
+            else {
+                capt n copy `"`tmptgt'.dta"' `"`target'.dta"', `replace'
+                capt n copy `"`tmptgt'_shp.dta"' `"`target'_shp.dta"', `replace'
+                capt n erase `"`tmptgt'.dta"'
+                capt n erase `"`tmptgt'_shp.dta"'
+            }
+        }
+        if `rc' exit `rc'
+    }
+    if "`user'"=="" di ""
+    __geoframe_loadmsg `target'
+end
+
+program __geoframe_translate_json
+    // syntax
+    _parse comma lhs 0 : 0
+    syntax [, ALLstring gtype(name) ADDMISsing noDOTs replace ]
+    if "`gtype'"!="" {
+        if inlist("`gtype'","_ID","_CX","_CY") {
+            di as err "gtype() may not be _ID, _CX or _CY"
+            exit 198
+        }
+        local GTYPE `gtype'
+        local gtype gtype(`gtype')
+    }
+    gettoken target lhs : lhs
+    gettoken using  lhs : lhs
+    mata: _translate_target(st_local("target"), st_local("using"), "`replace'")
+    // import json file
+    confirm file `"`using'"'
+    tempname frame
+    frame create `frame' byte _ID _CX _CY `GTYPE' // reserved names
+    frame `frame' {
+        mata: _geojson_import(st_local("using"), "`allstring'"!="",/*
+            */ "`dots'"=="")
+        drop _ID _CX _CY `GTYPE' // drop reserved names
+        qui compress
+    }
+    // translate geometries
+    frame `frame' {
+        __geoframe_json2dta `"`target'"' _GEOMETRY,/*
+            */ `gtype' `addmissing' `dots' `replace'
+    }
+    // msg
+    __geoframe_loadmsg `target'
+end
+
+program __geoframe_translate_wkt
+    _parse comma lhs 0 : 0
+    gettoken target lhs : lhs
+    local 0 `"`lhs'`0'"'
+    syntax varname(string) [if] [in] [, gtype(name) ADDMISsing noDOTs replace ]
+    if "`gtype'"!="" {
+        if inlist("`gtype'","_ID","_CX","_CY") {
+            di as err "gtype() may not be _ID, _CX or _CY"
+            exit 198
+        }
+        local gtype gtype(`gtype')
+    }
+    mata: _translate_target(st_local("target"), "", "`replace'")
+    __geoframe_json2dta `"`target'"' `varlist' `if' `in', wkt/*
+        */ `gtype' `addmissing' `dots' `replace'
+    __geoframe_loadmsg `target'
+end
+
+program __geoframe_json2dta
+    gettoken fn 0 : 0, parse(" ,")
+    syntax varname(string) [if] [in] [,/*
+        */ wkt gtype(name) ADDMISsing noDOTs replace ]
+    local geom `varlist'
+    // prepare data
+    preserve
+    if `"`if'`in'"'!="" qui keep `if' `in'
+    if _N==0 {
+        di as txt "(no observations; nothing to do)"
+        exit
+    }
+    if inlist("`geom'","_ID","_CX","_CX", "`gtype'") {
+        tempvar GEOM
+        rename `geom' `GEOM'
+        local geom `GEOM'
+    }
+    foreach v in _ID _CX _CY `gtype' {
+        capt confirm new variable `v'
+        if _rc==1 exit 1
+        if _rc {
+            di as txt "(replacing variable `v')"
+            drop `v'
         }
     }
-    if "`user'"=="" {
-        di _n as txt "  (type "/*
-            */ `"{bf:{stata geoframe create `shpfile'}}"'/*
-            */ " to load the data)"
-    }
-    else {
-        di as txt "(type "/*
-            */ `"{bf:{stata geoframe create `shpfile'}}"'/*
-            */ " to load the data)"
-    }
+    qui gen byte _ID = .
+    qui replace _ID = _n
+    qui gen double _CX = .
+    qui gen double _CY = .
+    if "`gtype'"!="" qui gen str18 `gtype' = ""
+    order _ID _CX _CY `gtype'
+    di as txt "(number of units = " _N ")"
+    // process geometries
+    tempname frame
+    frame create `frame' `:type _ID' _ID double _X _Y
+    mata: _json2dta(st_data(., 1), st_sdata(., "`geom'"), "`gtype'",/*
+        */ "`addmissing'"!="", "`dots'"=="", "`wkt'"!="")
+    // save files
+    drop `geom'
+    if "`gtype'"!="" qui compress `gtype'
+    qui save `"`fn'.dta"', `replace'
+    frame `frame': qui save `"`fn'_shp.dta"', `replace'
+    di as txt `"(files `fn'.dta and `fn'_shp.dta saved)"'
 end
 
 version 16.1
@@ -3915,33 +4321,85 @@ void _grid(string scalar shpframe, real scalar n, real scalar mesh,
 void _append(string scalar frame, string scalar touse, string rowvector vars,
     string rowvector VARS)
 {
-    real scalar       i, k, n, n0
-    pointer rowvector X
-    string scalar     cframe
+    real scalar   i, n, n0
+    string scalar cframe
+    transmorphic  X
 
     cframe = st_framecurrent()
-    k = length(vars)
-    X = J(1, k, NULL)
+    // add obs
     st_framecurrent(frame)
-    for (i=1;i<=k;i++) {
-        if (st_isstrvar(vars[i])) X[i] = &st_sdata(., vars[i], touse)
-        else                      X[i] =  &st_data(., vars[i], touse)
-    }
-    n = rows(*X[1])
+    n = rows(st_data(., touse, touse))
     st_framecurrent(cframe)
     n0 = st_nobs()
     st_addobs(n)
     n = n0 + n; n0 = n0 + 1
-    for (i=1;i<=k;i++) {
-        if (st_isstrvar(VARS[i])) st_sstore((n0,n), VARS[i], *X[i])
-        else                       st_store((n0,n), VARS[i], *X[i])
+    // copy variables, one by one
+    i = length(vars)
+    for (;i;i--) {
+        st_framecurrent(frame)
+        if (st_isstrvar(vars[i])) {
+            X = st_sdata(., vars[i], touse)
+            st_framecurrent(cframe)
+            st_sstore((n0,n), VARS[i], X)
+        }
+        else {
+            X = st_data(., vars[i], touse)
+            st_framecurrent(cframe)
+            st_store((n0,n), VARS[i], X)
+        }
+    }
+}
+
+void _append_labels(string scalar frame, string rowvector vars,
+    string rowvector VARS)
+{
+    real scalar      i, v
+    string scalar    cframe, vl, lnm, LNM
+    real colvector   val, p
+    string colvector lbl, LBL
+
+    cframe = st_framecurrent()
+    i = length(vars)
+    for (;i;i--) {
+        // collect labels from source
+        st_framecurrent(frame)
+        v = st_varindex(vars[i])
+        vl = st_varlabel(v)
+        lnm = st_varvaluelabel(v)
+        if (lnm!="") {
+            if (st_vlexists(lnm)) st_vlload(lnm, val=., lbl="")
+            else lnm = ""
+        }
+        // add labels to target
+        st_framecurrent(cframe)
+        v = st_varindex(VARS[i])
+        if (st_varlabel(v)=="") st_varlabel(v, vl)
+        if (lnm!="") {
+            LNM = st_varvaluelabel(v)
+            if (LNM=="") {
+                // variable does not yet have value labels; use the variable
+                // name as label name if in the source the label name is
+                // equal to the variable name; else use the label name from the
+                // source variable
+                if (lnm==vars[i]) LNM = VARS[i]
+                else              LNM = lnm
+            }
+            LBL = st_vlmap(LNM, val)
+            if (any(LBL:!=lbl :& LBL:!="")) {
+                printf("{txt}(%s: conflicting labels between source " +
+                    "and target; using target variant)\n", LNM)
+            }
+            p = selectindex(LBL:=="")
+            if (length(p)) st_vlmodify(LNM, val[p], lbl[p])
+            st_varvaluelabel(v, LNM)
+        }
     }
 }
 
 void _translate_zipname(string scalar fn)
 {
-    string scalar bn, shpname, sep
-    pragma unset shpname
+    string scalar bn, shpfile, sep
+    pragma unset shpfile
     
     if (!strpos(fn, ".zip")) {
         st_local("zip", "0")
@@ -3956,153 +4414,369 @@ void _translate_zipname(string scalar fn)
         bn = pathbasename(fn)
         if (substr(bn,-4,.)==".zip") {
             if (!direxists(fn)) { // only if not a directory
-                if (shpname!="") shpname = shpname + sep
+                if (shpfile!="") shpfile = shpfile + sep
                 st_local("zip", "1")
-                st_local("using", fn)
-                st_local("shpname", shpname)
+                st_local("zipfile", fn)
+                st_local("shpfile", shpfile)
                 return
             }
         }
         pathsplit(fn, fn, bn)
-        shpname = pathjoin(bn, shpname)
+        shpfile = pathjoin(bn, shpfile)
     }
     // path contains no file with a .zip suffix
     st_local("zip", "0")
 }
 
-void _ziptranslate_findshp(string scalar shpname, 
-    string scalar tmpdir, string scalar usng)
-{
-    real scalar      i, n
-    string scalar    s, bn
-    string colvector fn
+void _ziptranslate_cleanup(string scalar PATH, string scalar path)
+{   // use with extreme care; can potentially wipe disk 
+    real scalar   rc
+    string scalar Path
     
-    if (!direxists(shpname)) bn = pathbasename(shpname) // directory takes precedence
+    if      (!pathisabs(PATH)) rc = 1
+    else if (!direxists(PATH)) rc = 1
+    else {
+        Path = pathjoin(pwd(), path)
+        if (PATH!=Path) rc = 1
+        else            rc = __ziptranslate_cleanup(PATH)
+    }
+    if (rc) {
+        errprintf("could not remove temporary folder '%s'" +
+            " from working directory\n", path)
+        exit(693)
+    }
+}
+
+real scalar __ziptranslate_cleanup(string scalar path)
+{   // use with extreme care; can potentially wipe disk
+    real scalar      i
+    string colvector dir
+    
+    dir = dir(path, "files", "*", 1)
+    i = rows(dir)
+    for (;i;i--) {
+        if (_unlink(dir[i])) return(1)
+    }
+    dir = dir(path, "dirs", "*", 1)
+    i = rows(dir)
+    for (;i;i--) {
+        if (__ziptranslate_cleanup(dir[i])) return(1)
+    }
+    if (_rmdir(path)) return(1)
+    return(0)
+}
+
+void _translate_findsource(string scalar nm, string scalar subcmd,
+    | string scalar zip)
+{
+    real scalar      i, n, rc
+    string scalar    fn, bn, sfx
+    string colvector FN
+    
+    fn = st_local(nm)
+    // dictionary
+    if      (subcmd=="esri") sfx = (".shp") \ ("esri")
+    else if (subcmd=="json") sfx = (".json", ".geojson") \ ("json", "json")
+    else  sfx = (".json", ".geojson", ".shp") \ ("json", "json", "esri")
+    // check whether path only
+    if (!direxists(fn)) { // directory takes precedence
+        bn = pathbasename(fn) 
+    }
+    // if filename specified (i.e. not only a path)
     if (bn!="") {
-        if (pathsuffix(shpname)=="") s = shpname + ".shp"
-        else                         s = shpname
-        if (!fileexists(s)) {
-            errprintf("shape file %s not found in %s\n", s, usng)
+        // check file without adding suffix
+        rc = fileexists(fn)
+        if (rc) { // file found
+            if (subcmd=="") { // find translator type
+                for (i=cols(sfx);i;i--) {
+                    if (sfx[1,i]==pathsuffix(fn)) {
+                        subcmd = sfx[2,i]
+                        break
+                    }
+                }
+                if (subcmd=="") subcmd = "esri" // default
+            }
+        }
+        // try with suffix
+        else {
+            for (i=cols(sfx);i;i--) {
+                rc = fileexists(fn + sfx[1,i])
+                if (rc) { // file found
+                    fn = fn + sfx[1,i]
+                    subcmd = sfx[2,i]
+                    break
+                }
+            }
+        }
+        // no matching file found
+        if (!rc) {
+            if (zip=="") errprintf("source %s not found\n", fn)
+            else errprintf("source %s not found in %s\n", fn, zip)
             exit(601)
         }
     }
+    // if path only
     else {
-        if (shpname!="") {
-            if (!direxists(shpname)) {
-                errprintf("directory %s not found in %s\n", shpname, usng)
+        // check whether specified folder exists
+        if (fn!="") {
+            if (!direxists(fn)) {
+                if (zip=="") errprintf("directory %s not found\n", fn)
+                else errprintf("directory %s not found in %s\n", fn, zip)
                 exit(601)
             }
         }
-        fn = __ziptranslate_findshp(shpname) // collect all .shp files
-        n = length(fn)
+        // collect shape files in folder (and subfolders if zip!="")
+        n = 0
+        for (i=cols(sfx);i;i--) {
+            FN = __translate_findsource(fn, sfx[1,i], zip!="")
+            n = length(FN)
+            if (n) {
+                subcmd = sfx[2,i]
+                break
+            }
+        }
+        // no matching files found
         if (!n) {
-            errprintf("no shape file found in %s\n", pathjoin(usng,shpname))
+            if (subcmd=="") subcmd = "esri"
+            errprintf("no %s shapefile found in %s\n", subcmd, pathjoin(zip,fn))
             exit(601)
         }
+        // multiple matching files found
         if (n>1) {
-            printf("{txt}multiple shape files found in %s:\n",/*
-                */ pathjoin(usng,shpname))
-            for (i=1;i<=n;i++) printf("{bf:%s}\n", pathrmsuffix(fn[i]))
-            printf("translating {bf:%s}\n", pathrmsuffix(fn[1]))
+            printf("{txt}multiple shapefiles found in %s:\n", pathjoin(zip,fn))
+            for (i=1;i<=n;i++) printf("  %s\n", FN[i])
         }
-        shpname = fn[1] // use first match
+        fn = FN[1] // use first match
+        printf("{txt}(translating %s)\n", pathjoin(zip,fn))
     }
-    st_local("shpname", pathjoin(tmpdir, shpname))
+    // return
+    st_local(nm, fn)
+    st_local("subcmd", subcmd)
 }
 
-string colvector __ziptranslate_findshp(string scalar path)
+string colvector __translate_findsource(string scalar path, string matrix sfx,
+    real scalar recursive)
 {
     real scalar      i, n
     string colvector fn, dir
     
-    fn  = dir(path, "files", "*.shp", 1)
-    dir = dir(path, "dirs", "*")
+    // collect files in current folder
+    fn  = sort(dir(path, "files", "*"+sfx), 1)
+    n = rows(fn)
+    if (n) {
+        fn = select(fn, substr(fn,1,1):!=".") // exclude hidden files
+        n = rows(fn)
+        if (!n) fn = J(0,1,"") // select may return J(0,0,"")
+    }
+    for (i=n;i;i--) fn[i] = pathjoin(path, fn[i]) // add path
+    if (!recursive) return(fn)
+    // collect directories
+    dir = sort(dir(path, "dirs", "*"), 1)
     n = rows(dir)
+    if (n) {
+        dir = select(dir, substr(dir,1,1):!=".") // exclude hidden folders
+        n = rows(dir)
+        if (n) {
+            dir = select(dir, dir:!="__MACOSX") // exclude __MACOSX folder
+            n = rows(dir)
+        }
+        if (!n) dir = J(0,1,"") // select may return J(0,0,"")
+    }
+    // collect files from subfolders (recursively)
     for (i=1;i<=n;i++) {
-        fn = fn \ __ziptranslate_findshp(pathjoin(path, dir[i]))
+        fn = fn \ __translate_findsource(pathjoin(path, dir[i]), sfx, 1)
     }
     return(fn)
 }
 
-void _ziptranslate_cleanup(string scalar path)
+void _translate_target(string scalar fn, string scalar source,
+    string scalar replace)
 {
-    real scalar      i
-    string colvector fn, dir
-    
-    fn = dir(path, "files", "*", 1)
-    i = rows(fn)
-    for (;i;i--) unlink(fn[i])
-    dir = dir(path, "dirs", "*", 1)
-    i = rows(dir)
-    for (;i;i--) _ziptranslate_cleanup(dir[i])
-    rmdir(path)
-}
-
-void _translate_using(string scalar fn)
-{
-    real scalar      i, n
     string scalar    path, bn
-    string colvector dir
-    pragma unset path
     
-    if (!direxists(fn)) bn = pathbasename(fn) // directory takes precedence
-    if (bn!="") { // [path/]filename specified
-        pathsplit(fn, path, bn)
+    // if filename specified (i.e. not only a path)
+    if (pathbasename(fn)!="") {
+        if (pathsuffix(fn)==".dta") fn = pathrmsuffix(fn) // remove .dta suffix
     }
-    else { // only path specified
-        path = fn
-        if (!direxists(path)) {
-            errprintf("directory %s not found\n", path)
-            exit(601)
-        }
-        dir = dir(path, "files", "*.shp")
-        n = length(dir)
-        if (!n) {
-            errprintf("no shape file found in %s\n", path)
-            exit(601)
-        }
-        if (n>1) {
-            printf("{txt}multiple shape files found in %s:\n", path)
-            for (i=1;i<=n;i++) printf("{bf:%s}\n", pathrmsuffix(dir[i]))
-            printf("translating {bf:%s}\n", pathrmsuffix(dir[1]))
-        }
-        bn = dir[1] // use first match
-    }
-    if (!pathisabs(path)) path = pathjoin(pwd(), path) // make path absolute
-    if (strpos(path, ".shp")) {
-        // spshape2dta and shp2dta have problem with .shp in path
-        st_local("using", bn)
-        st_local("path_has_SHP", "1")
-    }
+    // if path only
     else {
-        st_local("using", pathjoin(path, bn))
-        st_local("path_has_SHP", "0")
+        bn = pathrmsuffix(pathbasename(source))
+        fn = pathjoin(fn, bn)
     }
-    st_local("path", path)
-    st_local("basename", pathrmsuffix(bn))
-}
-
-void _translate_outname(fn)
-{
-    string scalar path, bn
-    pragma unset path
-    
-    bn = pathbasename(fn)
-    if (bn!="") { // [path/]filename specified
-        pathsplit(fn, path, bn)
-        bn = pathrmsuffix(bn)
-    }
-    else { // only path specified
-        path = fn
+    // check directory and name
+    pathsplit(fn, path="", bn="")
+    if (path!="") {
         if (!direxists(path)) {
-            errprintf("directory %s does not exist", path)
+            errprintf("directory %s does not exist\n", path)
             exit(601)
         }
     }
-    st_local("outname", bn)
-    st_local("outpath", path)
+    if (bn=="") {
+        errprintf("destination name required\n")
+        exit(198)
+    }
+    // check files
+    if (replace=="") _translate_target_fcheck(path, bn)
+    // return
+    st_local("target", fn) // path and name without .dta suffix
 }
 
+void _translate_target_fcheck(string scalar path, string scalar fn)
+{
+    string colvector FN
+    
+    FN = dir(path, "files", "*.dta")
+    if (anyof(FN, fn+".dta")) {
+        errprintf("file {bf:%s} already exists\n",
+            pathjoin(path, fn+".dta"))
+        exit(602)
+    }
+    if (anyof(FN, fn+"_shp.dta")) {
+        errprintf("file {bf:%s} already exists\n",
+            pathjoin(path, fn+"_shp.dta"))
+        exit(602)
+    }
+}
+
+void _translate_esri_target(string scalar target, string scalar source,
+    string scalar replace)
+{
+    string scalar srcpath, SRCPATH, srcnm
+    string scalar tgtpath, TGTPATH, tgtnm
+    
+    // get paths and basenames
+    pathsplit(source, srcpath="", srcnm="")
+    if (pathisabs(srcpath)) SRCPATH = pathresolve(srcpath, "")
+    else                    SRCPATH = pathjoin(pwd(), srcpath)
+    pathsplit(target, tgtpath="", tgtnm="")
+    if (pathisabs(tgtpath)) TGTPATH = pathresolve(tgtpath, "")
+    else                    TGTPATH = pathjoin(pwd(), tgtpath)
+    // in all cases: return target name w/o path
+    st_local("tgt", tgtnm)
+    // case 1: same directory
+    if (SRCPATH==TGTPATH) {
+        st_local("wd", srcpath)   // source path
+        st_local("source", srcnm) // source name w/o path
+    }
+    // case 2: (absolute) source path contains .shp
+    else if (strpos(SRCPATH, ".shp")) {
+        st_local("wd", srcpath)     // source path
+        st_local("source", srcnm)   // source name w/o path
+        if (replace=="") _translate_target_fcheck(srcpath, tgtnm)
+        st_local("tmptgt", pathjoin(srcpath, tgtnm)) // temporary target
+    }
+    // case 3: source path does not contain .shp
+    else {
+        st_local("wd", tgtpath) // target path
+        st_local("source", pathjoin(SRCPATH, srcnm)) // source with abs path
+    }
+}
+
+void _geojson_import(string scalar fn, real scalar allstr, real scalar dots)
+{
+    real scalar      rc, j, J, n, idx, l
+    string rowvector vars
+    string matrix    S
+    pragma unset rc
+    
+    if (dots) printf("{txt}(importing source ...")
+    S = geo_json_import(fn, rc)
+    n = rows(S) - 2
+    if (n>=0) {
+        vars = strtoname(S[1,]), st_varname(1..st_nvar())
+        st_addobs(n)
+        J = cols(S)
+        for (j=1;j<=J;j++) {
+            if (_st_varindex(vars[j])<.) _geojson_import_vname(vars, j)
+            if (allstr ? 0 : S[2,j]=="numeric") {
+                idx = st_addvar("double", vars[j])
+                st_store(., idx, strtoreal(S[|3,j \ .,j|]))
+            }
+            else {
+                l = max(1 \ strlen(S[|3,j \ .,j|]))
+                idx = st_addvar(l<=2045 ? "str"+strofreal(l) : "strL", vars[j])
+                st_sstore(., idx, S[|3,j \ .,j|])
+            }
+        }
+    }
+    if (dots) printf("{txt} done)\n")
+    if (rc) {
+        printf("{txt}(invalid or incomplete GeoJSON source; " +
+            "please check data)\n")
+    }
+}
+
+void _geojson_import_vname(string rowvector vars, real scalar j)
+{
+    real scalar   i, I
+    string scalar v, n
+    
+    I = 1000
+    v = vars[j]
+    for (i=1;i<=I;i++) {
+        n = strofreal(i)
+        v = substr(vars[j], 1, 32-1-strlen(n)) + "_" + n
+        if (anyof(vars, v)) continue
+        break
+    }
+    if (i>I) {
+        errprintf(
+            "variable %s already exists; could not find alternative name\n",
+            vars[j])
+        exit(499)
+    }
+    vars[j] = v
+}
+
+void _json2dta(real colvector id, string colvector S, string scalar gtype,
+    real scalar mis, real scalar dots, real scalar wkt)
+{
+    real scalar      i, n, r, a, b, d, rc
+    string scalar    cframe, gt
+    string colvector GT
+    real colvector   RC
+    real matrix      XY, xy
+    pragma unset gt
+    
+    cframe = st_framecurrent()
+    st_framecurrent(st_local("frame"))
+    n = rows(id)
+    if (dots) {
+        displayas("txt")
+        printf("(processing geometries)\n")
+        d = _geo_progress_init("(")
+    }
+    xy = J(n,2,.)
+    GT = J(n,1,"")
+    RC = J(n,1,0)
+    b = rc = 0
+    for (i=1;i<=n;i++) {
+        if (wkt) XY =  geo_wkt2xy(S[i], mis!=0, gt, rc)
+        else     XY = geo_json2xy(S[i], mis!=0, gt, rc)
+        GT[i] = gt
+        RC[i] = rc
+        r = rows(XY)
+        xy[i,] = _geo_centroid(XY)
+        if (missing(xy[i,])) xy[i,] = mean(XY) // average if centroid fails
+        a = b + 1
+        b = b + r
+        st_addobs(r)
+        st_store((a,b), 1, J(r,1,id[i]))
+        st_store((a,b), (2,3), XY)
+        if (dots) _geo_progressdots(i/n, d)
+    }
+    st_framecurrent(cframe)
+    st_store(., (2,3), xy)
+    if (gtype!="") st_sstore(., gtype, GT)
+    if (dots) display(")")
+    if (any(RC)) {
+        RC = selectindex(RC)
+        printf("{txt}(empty, incomplete, or invalid geometry in unit%s %s; " +
+            "please check data)\n",
+            rows(RC)==1 ? "" : "s",
+            invtokens(strofreal(RC)'))
+    }
+}
 
 end
 

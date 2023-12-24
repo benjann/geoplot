@@ -1,4 +1,4 @@
-*! version 1.1.6  30oct2023  Ben Jann
+*! version 1.1.7  24dec2023  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -114,21 +114,24 @@ program _geoplot, rclass
             }
             // parse plottype and frame
             gettoken plottype layer : layer_`i', parse(" ,")
-            _parse_plottype `plottype'
-            gettoken lframe : layer, parse(" ,[")
-            if `"`lframe'"'=="" {
-                // frame may have been specified as ""
-                gettoken lframe layer : layer, parse(" ,[")
-                local lframe `"`cframe'"'
-            }
-            else if inlist(`"`lframe'"', ",", "if", "in", "[") {
-                // leave layer as is
-                local lframe `"`cframe'"'
-            }
+            _parse_plottype `plottype' // returns plottype, isimmediate
+            if `isimmediate' local lframe
             else {
-                // remove frame from layer
-                gettoken lframe layer : layer, parse(" ,[")
-                if `"`lframe'"'=="." local lframe `"`cframe'"'
+                gettoken lframe : layer, parse(" ,[")
+                if `"`lframe'"'=="" {
+                    // frame may have been specified as ""
+                    gettoken lframe layer : layer, parse(" ,[")
+                    local lframe `"`cframe'"'
+                }
+                else if inlist(`"`lframe'"', ",", "if", "in", "[") {
+                    // leave layer as is
+                    local lframe `"`cframe'"'
+                }
+                else {
+                    // remove frame from layer
+                    gettoken lframe layer : layer, parse(" ,[")
+                    if `"`lframe'"'=="." local lframe `"`cframe'"'
+                }
             }
             // generate plot
             capt n _geoplot_`plottype' `i' `p' `lframe' `layer' // => plot, p
@@ -263,17 +266,28 @@ program _geoplot, rclass
 end
 
 program _parse_plottype
+    local isimmediate 0
     local l = strlen(`"`0'"')
-    if      `"`0'"'==substr("scatter", 1, max(2,`l'))   local 0 scatter
-    else if `"`0'"'==substr("labels", 1, max(3,`l'))    local 0 label
-    else if `"`0'"'==substr("symbol", 1, max(3,`l'))    local 0 symbol
-    capt mata: assert(st_islmname(st_local("0")))
-    if _rc==1 exit _rc
-    if _rc {
-        di as err `"`0' invalid plottype"'
-        exit 198
+    if      `"`0'"'==substr("areas", 1, max(4,`l'))   local 0 area
+    else if `"`0'"'==substr("lines", 1, max(4,`l'))   local 0 line
+    else if `"`0'"'==substr("points", 1, max(5,`l'))  local 0 point
+    else if `"`0'"'==substr("scatter", 1, max(2,`l')) local 0 scatter
+    else if `"`0'"'==substr("labels", 1, max(3,`l'))  local 0 label
+    else if `"`0'"'==substr("symbols", 1, max(3,`l')) local 0 symbol
+    else if `"`0'"'==substr("pies", 1, max(3,`l'))    local 0 pie
+    else if `"`0'"'==substr("bars", 1, max(3,`l'))    local 0 bar
+    else {
+        capt mata: assert(st_islmname(st_local("0")))
+        if _rc==1 exit _rc
+        if _rc {
+            di as err `"`0' invalid plottype"'
+            exit 198
+        }
+        if substr("`0'",-1,1)=="i" local isimmediate 1 /* this prevents geoplot
+            from adding a frame to the layer specification */
     }
     c_local plottype `"`0'"'
+    c_local isimmediate `isimmediate'
 end
 
 program _parse_aspectratio
@@ -558,11 +572,11 @@ program __zoom
                 local box_origin box_origin
             }
             if "`box_origin'"!="" {
-                _geoplot_symboli . `p' `Xmid' `Ymid' `s', `options'
+                _geoplot_symboli . `p' `Xmid' `Ymid' [`s'], `options'
                 local plots `plots' `plot'
             }
             if "`box_destination'"!="" {
-                _geoplot_symboli . `p' `XMID' `YMID' `S', `options'
+                _geoplot_symboli . `p' `XMID' `YMID' [`S'], `options'
                 local plots `plots' `plot'
             }
         }
@@ -596,11 +610,11 @@ program __zoom
                     local box_origin box_origin
                 }
                 if "`box_origin'"!="" {
-                    _geoplot_symboli . `p' `Xmid' `Ymid' `s', `options'
+                    _geoplot_symboli . `p' `Xmid' `Ymid' [`s'], `options'
                     local plots `plots' `plot'
                 }
                 if "`box_destination'"!="" {
-                    _geoplot_symboli . `p' `XMID' `YMID' `S', `options'
+                    _geoplot_symboli . `p' `XMID' `YMID' [`S'], `options'
                     local plots `plots' `plot'
                 }
             }
@@ -624,8 +638,8 @@ program __zoom
             mata: _zoom_boxconnect("`all'"!="", `Xmax',`Xmin',`Ymax',`Ymin',/*
                 */`XMAX',`XMIN',`YMAX',`YMIN')
         }
-        if `"`YX'"'!="" {
-            _geoplot_pci . `p' `YX', `options'
+        if `"`XY'"'!="" {
+            _geoplot_pci . `p' `XY', `options'
             local plots `plots' `plot'
         }
     }
@@ -1282,7 +1296,7 @@ program _scalebar
     syntax anything [,/*
         */ Length(numlist max=1 >0) Scale(numlist max=1 >0)/*
         */ n(numlist max=1 int >0) even/*
-        */ Units(str) NOLABel LABel(str) TItle(str)/*
+        */ Units(str) NOLABels LABels(str) TItle(str)/*
         */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
         */ Height(numlist max=1 >=0 <=100) POSition(str)/*
         */ XMargin(numlist max=1 >=0 <=100)/*
@@ -1294,7 +1308,7 @@ program _scalebar
     gettoken Xmax    anything : anything // (includes margin)
     if `"`scale'"'=="" local scale 1000
     if "`n'"=="" local n 5
-    _parse_scalerbar_label, `label'
+    _parse_scalerbar_labels, `labels'
     _parse_scalerbar_title `title'
     if `"`color'"'==""       local color color(black)
     if `"`fintensity'"'==""  local fintensity finten(100)
@@ -1363,7 +1377,7 @@ program _scalebar
     // labels
     if `lab_above' local Ylab `Y1'
     else           local Ylab `Y0'
-    if "`nolabel'"=="" {
+    if "`nolabels'"=="" {
         local lblmax `: di `lab_format' `length''
         if `"`units'"'!="" {
             local ul = strlen(`"`units'"')
@@ -1424,7 +1438,7 @@ program _scalebar
     c_local plot `plot'
 end
 
-program _parse_scalerbar_label
+program _parse_scalerbar_labels
     syntax [, minmax Above Format(str) SIze(passthru) Margin(passthru) * ]
     if `"`format'"'=="" local format %8.0g
     if `"`size'"'==""   local size   size(vsmall) 
@@ -1456,7 +1470,7 @@ program _compass
         */ ANGle(real 0)/*
         */ SIze(numlist max=1 >=0)/*
         */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
-        */ NOLABel LABel LABel2(str)/*
+        */ NOLABels LABels LABels2(str asis)/*
         */ noCIRcle noMSPikes /*
         */ POSition(str)/*
         */ XMargin(numlist max=1 >=0 <=100)/*
@@ -1472,10 +1486,10 @@ program _compass
     local options `color' `lwidth' `options'
     if `"`fintensity'"'=="" local fintensity finten(100)
     local aoptions lalign(center) `fintensity' `options' cmissing(n) nodropbase
-    if `"`label2'"'!="" local label label
-    _parse_compass_label, `label2'
+    if `"`labels2'"'!="" local labels labels
+    _parse_compass_labels `type', `labels2'
     if `"`lab_color'"'=="" local lab_color `color'
-    if "`nolabel'"!="" local label // nolabel takes precedence
+    if "`nolabels'"!="" local labels // nolabels takes precedence
     if `"`position'"'=="" local position 5
     else                  _parse_position `position' // compass => clock
     if "`xmargin'"=="" local xmargin 2
@@ -1501,18 +1515,18 @@ program _compass
         mata: _compass_spike1(1, `angle', -1) // outer filled spikes
         local plot `plot' (area Y X in `a'/`b', \`LABEL' `aoptions' )
         // position of labels: local LABEL will be filled in later on
-        if "`nolabel'"=="" {
-            mata: _compass_label1(1 + `lab_gap'/100, `angle')
-            local label label
+        if "`nolabels'"=="" {
+            mata: _compass_labels(`lab_n', 1 + `lab_gap'/100, `angle')
+            local labels labels
         }
     }
     else if `type'==2 {
         mata: _compass_spike2(`angle')
         local plot `plot' (area Y X in `a'/`b', \`LABEL' `aoptions')
-        // position of label: local LABEL will be filled in later on
-        if "`nolabel'"=="" {
-            mata: _compass_store(0, 0.5 + `lab_gap'/100, `angle')
-            local label label
+        // position of labels: local LABEL will be filled in later on
+        if "`nolabels'"=="" {
+            mata: _compass_labels(`lab_n', 0.5 + `lab_gap'/100, `angle')
+            local labels labels
         }
     }
     else if `type'==3 {
@@ -1524,7 +1538,10 @@ program _compass
         local plot `plot' (area Y X in `a'/`b', `aoptions' fcolor(white))
         mata: _compass_spike3(`angle', 1) // filled spike (north)
         local plot `plot' (area Y X in `a'/`b', \`LABEL' `aoptions')
-        if "`label'"!="" mata: _compass_store(0, 0.55+`lab_gap'/100, `angle')
+        // position of labels: local LABEL will be filled in later on
+        if "`labels'"!="" {
+            mata: _compass_labels(`lab_n', 0.55+`lab_gap'/100, `angle')
+        }
     }
     else {
         di as err "invalid specification in type()"
@@ -1577,11 +1594,10 @@ program _compass
     qui replace Y = Y + `Y0' in `a0'/`b'
     qui replace X = X + `X0' in `a0'/`b'
     // collect labels
-    if "`label'"!="" {
+    if "`labels'"!="" {
         local LABEL
-        local lbls "N S E W"
         forv i=`a'/`b' {
-            gettoken lbl lbls : lbls
+            gettoken lbl lab_text : lab_text
             local y `: di %12.0g Y[`i']'
             local x `: di %12.0g X[`i']'
             local LABEL `LABEL' `y' `x' `"`lbl'"'
@@ -1592,10 +1608,18 @@ program _compass
     c_local plot `plot'
 end
 
-program _parse_compass_label
-    syntax [, Gap(numlist max=1 >=0) Color(passthru) SIze(passthru) * ]
+program _parse_compass_labels
+    gettoken type 0 : 0, parse(", ")
+    syntax [, Text(str asis) Gap(numlist max=1 >=0)/*
+        */ Color(passthru) SIze(passthru) * ]
+    if !`: list sizeof text' {
+        if inlist(`type',2,3) local text N
+        else                  local text N S E W
+    }
     if "`gap'"==""    local gap 30
     if `"`size'"'=="" local size size(vsmall)
+    c_local lab_n     = min(4, `:list sizeof text')
+    c_local lab_text  `"`text'"'
     c_local lab_gap   `gap'
     c_local lab_color `color'
     c_local lab_opts  `size' `options'
@@ -1631,144 +1655,226 @@ program _parse_position
 end
 
 program _geoplot_area
-    __geoplot_layer 0 area `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_areas
-    __geoplot_layer 0 area `0'
+    __geoplot_layer area `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_line
-    __geoplot_layer 0 line `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_lines
-    __geoplot_layer 0 line `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_labels
-    _geoplot_label `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_pies
-    _geoplot_pie `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_bars
-    _geoplot_bar `0'
+    __geoplot_layer line `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_point
-    __geoplot_layer 0 scatter `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_points
-    __geoplot_layer 0 scatter `0'
+    __geoplot_layer scatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_scatter
-    __geoplot_layer 0 scatter `0'
+    __geoplot_layer scatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcspike
-    __geoplot_layer 0 pcspike `0'
+    __geoplot_layer pcspike `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pccapsym
-    __geoplot_layer 0 pccapsym `0'
+    __geoplot_layer pccapsym `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcarrow
-    __geoplot_layer 0 pcarrow `0'
+    __geoplot_layer pcarrow `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcbarrow
-    __geoplot_layer 0 pcbarrow `0'
+    __geoplot_layer pcbarrow `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcpoint
-    __geoplot_layer 0 pcscatter `0'
+    __geoplot_layer pcscatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_pcscatter
-    __geoplot_layer 0 pcscatter `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_pointi
-    __geoplot_layer 1 scatteri `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_scatteri
-    __geoplot_layer 1 scatteri `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_pci
-    __geoplot_layer 1 pci `0'
-    c_local plot `plot'
-    c_local p `p'
-end
-
-program _geoplot_pcarrowi
-    __geoplot_layer 1 pcarrowi `0'
+    __geoplot_layer pcscatter `0'
     c_local plot `plot'
     c_local p `p'
 end
 
 program _geoplot_symboli
-    gettoken layer 0 : 0
-    gettoken p 0 : 0
-    _parse comma args 0 : 0
-    tempname frame
-    frame create `frame' double(_X _Y SIZE)
-    while (`"`args'"'!="") {
-        gettoken x args : args
-        local x = real(`"`x'"')
-        gettoken y args : args
-        local y = real(`"`y'"')
-        gettoken size args : args
-        local size = real(`"`size'"')
-        frame post `frame' (`x') (`y') (`size')
-    }
-    syntax [, size(passthru) * ]
-    _geoplot_symbol `layer' `p' `frame', size(SIZE) `options'
+    _parse comma lhs 0 : 0
+    syntax [, * ]
+    _geoplot_symbol `lhs', _immediate `options'
     c_local plot `plot'
     c_local p `p'
+end
+
+program _geoplot_pointi
+    _immediate pointi scatter `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_scatteri
+    _immediate scatteri scatter `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_labeli
+    _immediate labeli label `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pci
+    _immediate pci pcspike `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pccapsymi
+    _immediate pccapsymi pccapsym `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pcarrowi
+    _immediate pcarrowi pcarrow `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pcbarrowi
+    _immediate pcbarrowi pcbarrow `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pcpointi
+    _immediate pcpointi pcpoint `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _geoplot_pcscarreri
+    _immediate pcscarreri pcscatter `0'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _immediate
+    gettoken plottype0 0 : 0
+    gettoken plottype 0 : 0
+    gettoken layer 0 : 0
+    gettoken p 0 : 0, parse(", ")
+    _parse comma values 0 : 0
+    syntax [, LABel(passthru) * ]
+    if `"`label'"'=="" local label label("`plottype0'")
+    local options `label' `options'
+    local pc = substr("`plottype'",1,2)=="pc"
+    if `pc' local XY _X1 _Y1 _X2 _Y2
+    else    local XY _X _Y
+    tempname frame
+    frame create `frame' byte `XY' _POS str1 _LAB
+    frame `frame': _immediate_values `pc' `values' // returns haslab haspos
+    if "`plottype'"=="label" {
+        if `haspos' {
+            local options vposition(_POS) `options'
+        }
+        _geoplot_label `layer' `p' `frame' _LAB, `options'
+        c_local plot `plot'
+        c_local p `p'
+        exit
+    }
+    if `haslab' {
+        if `haspos' {
+            local options mlabvpos(_POS) `options'
+        }
+        local options mlabel(_LAB) `options'
+    }
+    _geoplot_`plottype' `layer' `p' `frame', `options'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _immediate_values
+    gettoken pc 0 : 0
+    if `pc' local xy X1 Y1 X2 Y2
+    else    local xy X Y
+    local n = _N
+    local HASLAB 0
+    local HASPOS 0
+    if `: list sizeof 0'==0 local 0
+    while (`"`0'"'!="") {
+        // #_x #_y ...
+        foreach v of local xy {
+            gettoken `v' 0 : 0, qed(q) match(p)
+            if `q' | "`p'"!="" _immediate_values_err `pc'
+            capt numlist `"``v''"', min(0) missingokay
+            if _rc==1 exit 1
+            else if _rc        _immediate_values_err `pc'
+            if `"``v''"'==""   _immediate_values_err `pc'
+        }
+        local haslab 0
+        local haspos 0
+        gettoken pos : 0, qed(q) match(p)
+        if "`p'"!="" { // ... (clockpos) "label"
+            gettoken pos 0 : 0, match(p)
+            capt confirm integer number `pos'
+            if _rc==1 exit 1
+            else if _rc             _immediate_values_err `pc' "pos"
+            if !inrange(`pos',0,12) _immediate_values_err `pc' "pos"
+            gettoken lab : 0, qed(q)
+            if !`q' local lab
+            else gettoken lab 0 : 0
+            local haslab 1
+            local haspos 1
+        }
+        else if `q' { // ... "label"
+            gettoken lab 0 : 0
+            local pos .
+            local haslab 1
+        }
+        qui set obs `++n'
+        foreach v of local xy {
+            qui replace _`v' = ``v'' in `n'
+        }
+        if `haslab' {
+            qui replace _POS = `pos' in `n'
+            qui replace _LAB = `"`lab'"' in `n'
+            local HASLAB 1
+            if `haspos' local HASPOS 1
+        }
+    }
+    c_local haslab `HASLAB'
+    c_local haspos `HASPOS'
+end
+
+program _immediate_values_err
+    gettoken pc  0 : 0
+    gettoken err 0 : 0
+    di as err "invalid immediate value; syntax for immediate values is"
+    if `pc' di as err "  {it:#_x1} {it:#_y1} {it:#_x2} {it:#_y2} " _c
+    else    di as err "  {it:#_x} {it:#_y} " _c
+    di as err `"[{bf:(}{it:clockpos}{bf:)}] [{bf:"}{it:text}{bf:"}]"'
+    if "`err'"=="pos" {
+        di as err "{it:clockpos} must be an integer between 0 and 12"
+    }
+    exit 198
 end
 
 version 16.1
@@ -1792,9 +1898,8 @@ void _st_circle_tangents(
     real matrix R
     
     R = geo_circle_tangents((x1,y1,r1), (x2,y2,r2))
-    if (length(R)) st_local("YX", invtokens(strofreal(vec(R[,(2,1)]')',
-                   "%18.0g")))
-    else           st_local("YX", "")
+    if (length(R)) st_local("XY", invtokens(strofreal(vec(R')', "%18.0g")))
+    else           st_local("XY", "")
 }
 
 void _zoom_boxconnect(real scalar all,
@@ -1820,8 +1925,8 @@ void _zoom_boxconnect(real scalar all,
         yx = geo_rotate(yx, 90) 
         YX = geo_rotate(YX, 90)
     }
-    P = P :+ (YMIN, YMAX)
-    st_local("YX", invtokens(strofreal(vec(P')', "%18.0g")))
+    P = (P :+ (YMIN, YMAX))[,(2,1)] // flip
+    st_local("XY", invtokens(strofreal(vec(P')', "%18.0g")))
 }
 
 real matrix __zoom_boxconnect(real scalar all, real scalar i, real matrix yx,
@@ -1902,10 +2007,17 @@ void _compass_spike1(real scalar scale, real scalar angle, real scalar dir)
                    J(4, 1, scale * (0, 0, dir*.15, 0, .)'), A)
 }
 
-void _compass_label1(real scalar scale, real scalar angle)
+void _compass_labels(real scalar n, real scalar scale, real scalar angle)
 {
-    _compass_store(scale * (0,  0, 1, -1)',
-                   scale * (1, -1, 0,  0)', angle)
+    real colvector x, y
+    
+    x = (0,  0, 1, -1)'
+    y = (1, -1, 0,  0)'
+    if (n<4) {
+        x = x[|1\n|]
+        y = y[|1\n|]
+    }
+    _compass_store(scale * x, scale * y, angle)
 }
 
 void _compass_spike2(real scalar angle)

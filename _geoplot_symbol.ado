@@ -1,145 +1,349 @@
-*! version 1.1.1  29sep2023  Ben Jann
+*! version 1.1.2  24dec2023  Ben Jann
 
 program _geoplot_symbol
     version 16.1
+    _parse comma lhs 0 : 0
+    syntax [, _immediate _frameonly(passthru) * ]
+    if "`_immediate'"!="" {
+        __geoplot_symboli `lhs', `_frameonly' `options'
+    }
+    else {
+        __geoplot_symbol `lhs', `_frameonly' `options'
+    }
+    if `"`_frameonly'"'!="" exit
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program __geoplot_symboli
+    gettoken layer 0 : 0
+    gettoken p 0 : 0, parse(", ")
+    _parse comma values 0 : 0
+    syntax [, _frameonly(str) SIze(str) * ]
+    local PLOT = `"`_frameonly'"'==""
+    if `PLOT' tempname frame
+    else gettoken frame _frameonly : _frameonly
+    tempname SIZE RELSIZE
+    if `PLOT' local mlab POS str1 LAB
+    frame create `frame' byte _ID _CX _CY `SIZE' `RELSIZE' `mlab'
+    frame `frame': _symboli `"`size'"' `SIZE' `RELSIZE' `PLOT' `values'
+    if `haslab' {
+        local mlabel mlabel(LAB)
+        if `haspos' local mlabvpos mlabvpos(POS)
+    }
+    ___geoplot_symbol `layer' `p' `frame', size(`SIZE' `RELSIZE')/*
+        */ _frameonly(`_frameonly') `mlabel' `mlabvpos' `options'
+    if !`PLOT' exit
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _symboli
+    gettoken Size 0 : 0
+    gettoken SIZE 0 : 0
+    gettoken RELSIZE 0 : 0
+    gettoken PLOT 0 : 0
+    if `"`Size'"'!="" {
+        if substr(`"`Size'"',1,1)=="*" {
+            local Size = substr(`"`Size'"',2,.)
+            local Relsize 1
+        }
+        else local Relsize 0
+        capt confirm number `Size'
+        if _rc==1 exit 1
+        else if _rc {
+            di as error "size(): invalid syntax"
+            exit 198
+        }
+    }
+    else {
+        local Size 1
+        local Relsize 1
+    }
+    local xy X Y
+    local n 0
+    local HASLAB 0
+    local HASPOS 0
+    if `: list sizeof 0'==0 local 0
+    while (`"`0'"'!="") {
+        // #_x #_y ...
+        foreach v of local xy {
+            gettoken `v' 0 : 0, qed(q) match(p)
+            if `q' | "`p'"!="" _symboli_err `PLOT'
+            capt numlist `"``v''"', min(0) missingokay
+            if _rc==1 exit 1
+            else if _rc        _symboli_err `PLOT'
+            if `"``v''"'==""   _symboli_err `PLOT'
+        }
+        qui set obs `++n'
+        foreach v of local xy {
+            qui replace _C`v' = ``v'' in `n'
+        }
+        // ... [[*]size] ...
+        gettoken size : 0, bind
+        if (substr(`"`size'"',1,1)+substr(`"`size'"',-1,1))=="[]" {
+            gettoken size 0 : 0, bind
+            local size = substr(`"`size'"',2,strlen(`"`size'"')-2)
+            if substr(`"`size'"',1,1)=="*" {
+                local size = substr(`"`size'"',2,.)
+                qui replace `RELSIZE' = 1 in `n'
+            }
+            capt confirm number `size'
+            if _rc==1 exit 1
+            else if _rc _symboli_err `PLOT' "size"
+            qui replace `SIZE' = (`size') in `n'
+        }
+        else {
+            qui replace `SIZE'    = `Size' in `n'
+            if `Relsize' {
+                qui replace `RELSIZE' = 1 in `n'
+            }
+        }
+        if !`PLOT' continue
+        // ... [(clockpos)] "label"
+        local haslab 0
+        local haspos 0
+        gettoken pos : 0, qed(q) match(p)
+        if "`p'"!="" { // ... (position) "label"
+            gettoken pos 0 : 0, match(p)
+            capt confirm integer number `pos'
+            if _rc==1 exit 1
+            else if _rc             _symboli_err `PLOT' "pos"
+            if !inrange(`pos',0,12) _symboli_err `PLOT' "pos"
+            gettoken lab : 0, qed(q)
+            if !`q' local lab
+            else gettoken lab 0 : 0
+            local haslab 1
+            local haspos 1
+        }
+        else if `q' { // ... "label"
+            gettoken lab 0 : 0
+            local pos .
+            local haslab 1
+        }
+        if `haslab' {
+            qui replace POS = `pos' in `n'
+            qui replace LAB = `"`lab'"' in `n'
+            local HASLAB 1
+            if `haspos' local HASPOS 1
+        }
+    }
+    qui replace _ID = _n
+    c_local haslab `HASLAB'
+    c_local haspos `HASPOS'
+end
+
+program _symboli_err
+    gettoken ml  0 : 0
+    gettoken err 0 : 0
+    di as err "invalid immediate value; the syntax for immediate values is"
+    di as err "  {it:#_x} {it:#_y} [{bf:[}[{bf:*}]{it:size}{bf:]}]" _c
+    if `ml' di as err `" [{bf:(}{it:clockpos}{bf:)}] [{bf:"}{it:text}{bf:"}]"'
+    else    di as err ""
+    if "`err'"=="pos" {
+        di as err "{it:clockpos} must be an integer between 0 and 12"
+    }
+    else if "`err'"=="size" {
+        di as err "{it:size} must be numeric"
+    }
+    exit 198
+end
+
+program __geoplot_symbol
     gettoken layer 0 : 0
     gettoken p 0 : 0
     gettoken frame 0 : 0, pars(", ")
-    ***
     frame `frame' {
         // syntax
-        qui syntax [varlist(default=none max=1 numeric fv)] [if] [in] [iw/] [,/*
-            */ SHape(passthru) line/*
-            */ SIze(str) OFFset(numlist max=2)/*
-            */ ANGle(real 0) ratio(real 1) n(passthru)/*
-            */ COLORVar(varname numeric fv) LEVels(str) DISCRete/*
+        syntax [varlist(default=none max=1 fv)] [if] [in] [iw/] [,/*
+            */ SIze(str) MLabel(varname) MLABVposition(varname numeric)/*
+            */ COLORVar(varname fv) LEVels(str)/*
             */ COORdinates(varlist numeric min=2 max=2)/*
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ _frameonly(str)/* undocumented; used by geoframe symbol
             */ * ]
-        local NOPLOT = `"`_frameonly'"'!=""
-        if `NOPLOT' {
-            gettoken frame1 _frameonly : _frameonly
-            gettoken ID : _frameonly
+        // mode (plot vs. data only) and name for tempframe
+        local PLOT = `"`_frameonly'"'==""
+        if `PLOT' tempname frame1
+        else gettoken frame1 _frameonly : _frameonly
+        local ORG
+        local TGT
+        // id and coordinates
+        geoframe get id, local(id)
+        if `"`id'"'!="" {
+            local ORG `ORG' `id'
+            local TGT `TGT' _ID
         }
-        else {
-            // check zvar
-            if `"`colorvar'"'!="" local zvar `colorvar'
-            else                  local zvar `varlist'
-            _parse_zvar `zvar' // returns zvar, discrete
-            // plottype
-            if "`line'"!="" local plottype line
-            else            local plottype area
-        }
-        // parse shape() and n()
-         _parse_shape, `n' `shape' // returns shape, arg, n
-        // parse offset
-        gettoken offset oangle : offset
-        gettoken oangle: oangle
-        if "`offset'"=="" local offset 0
-        if "`oangle'"=="" local oangle 0
-        // sample and weights
-        marksample touse
-        tempname wvar
-        if "`weight'"!="" {
-            qui gen double `wvar' = abs(`exp') if `touse'
-            markout `touse' `wvar'
-            local wgt [iw=W]
-        }
-        else qui gen byte `wvar' = 1
-        if "`coordinates'"!="" geoframe flip `coordinates', local(coord)
-        else {
-            geoframe get coordinates, strict flip local(coord)
+        if "`coordinates'"=="" {
+            geoframe get coordinates, strict local(coord)
             if `:list sizeof coord'!=2 {
                 di as err "wrong number of coordinate variables"
                 exit 498
             }
         }
-        markout `touse' `coord' // include nonmissing coordinates only
-        // size
-        local scale 0
+        local ORG `ORG' `coord'
+        local TGT `TGT' _CX _CY
+        // parse size()
+        tempname SIZE RELSIZE
+        local ORG `ORG' `SIZE' `RELSIZE'
+        local TGT `TGT' `SIZE' `RELSIZE'
         if `"`size'"'=="" {
-            local size 1
-            local scale 1
+            qui gen byte `SIZE' = 1
+            qui gen byte `RELSIZE' = 1 // relative size
         }
         else if substr(`"`size'"',1,1)=="*" {
             local size = substr(`"`size'"',2,.)
-            local scale 1
+            if `"`size'"'=="" exit 198
+            qui gen double `SIZE' = (`size')
+            qui gen byte `RELSIZE' = 1 // relative size
         }
-        capt unab SIZE: `size', max(1) // check whether single variable
-        if _rc==1 exit 1
-        if _rc {
-            tempvar SIZE
-            qui gen double `SIZE' = (`size') if `touse'
+        else {
+            qui gen double `SIZE' = (`size')
+            qui gen byte `RELSIZE' = . // absolute size
         }
-        markout `touse' `SIZE'
-        // extra variables to be copied
-        local ORG `wvar'
-        local TGT W
-        if `NOPLOT' {
-            if "`ID'"=="" {
-                tempname ID
-                qui gen byte `ID' = .
-                qui replace `ID' = sum(`touse')
-            }
-            local ORG `ORG' `ID'
-            local TGT `TGT' _ID
-        }
-        else if "`zvar'"!="" {
-            local options `discrete' `options'
-            local ZVAR ZVAR
-            local ORG `ORG' `zvar'
-            local TGT `TGT' `ZVAR'
-            // get variable from levels(, weight())
-            if `"`levels'"'!="" {
-                _parse_levels `levels'
-                local options levels(`levels') `options'
-                if "`lwvar'"!="" {
-                    local ORG `ORG' `lwvar'
-                    local TGT `TGT' lW
+        // collect variables from plot options
+        if `PLOT' {
+            // zvar
+            if `"`colorvar'"'!="" local zvar `colorvar'
+            else                  local zvar `varlist'
+            if "`zvar'"!="" {
+                if substr("`zvar'",1,2)=="i." {    // i.zvar
+                    local zvar = substr("`zvar'",3,.)
+                    local FV "i."
+                }
+                local ZVAR ZVAR
+                local ORG `ORG' `zvar'
+                local TGT `TGT' `ZVAR'
+                // get variable from levels(, weight())
+                if `"`levels'"'!="" {
+                    _parse_levels `levels' // (inserts lW)
+                    local options levels(`levels') `options'
+                    if "`lwvar'"!="" {
+                        local ORG `ORG' `lwvar'
+                        local TGT `TGT' lW
+                    }
                 }
             }
+            // mlabels
+            if "`mlabel'"!="" {
+                local ORG `ORG' `mlabel'
+                local TGT `TGT' LAB
+                local mlabel mlabel(LAB)
+                if "`mlabvposition'"!="" {
+                    local ORG `ORG' `mlabvposition'
+                    local TGT `TGT' POS
+                    local mlabvposition mlabvposition(POS)
+                }
+            }
+            // weights
+            if "`weight'"!="" {
+                tempname wvar
+                qui gen double `wvar' = abs(`exp')
+                local wgt [iw=`wvar']
+                local ORG `ORG' `wvar'
+                local TGT `TGT' `wvar'
+            }
+        }
+        // sample
+        marksample touse, novarlist
+        markout `touse' `coord' `wvar' `SIZE'
+    }
+    // create attribute frame
+    frame create `frame1'
+    frame `frame1' {
+        qui geoframe append `frame' `ORG', target(`TGT') touse(`touse') fast
+        if "`id'"=="" {
+            qui gen byte _ID = .
+            qui replace _ID = _n
+            order _ID
         }
     }
-    if `scale' {
-        if `NOPLOT' local refsize 0
-        else {
-            // get reference size of existing map
-            su Y, meanonly
-            local refsize = r(max) - r(min)
-            su X, meanonly
-            local refsize = min(`refsize', r(max) - r(min))
-        }
-    }
-    frame `frame' {
-        // compute shapes and post coordinates into temporary frame
-        if `"`frame1'"'=="" tempname frame1
-        frame create `frame1'
-        mata: _compute_symbols("`frame1'", "`touse'", "`shape'",/*
-            */ st_local("arg"), `n', `scale', `angle', `ratio',/*
-            */ `offset', `oangle')
-    }
-    if `NOPLOT' exit
-    ***
-    __geoplot_layer 0 `plottype' `layer' `p' `frame1' `ZVAR' `wgt',/*
-        */ lforce lock `options'
+    // create shape frame an plot command
+    ___geoplot_symbol `layer' `p' `frame1' "`FV'`ZVAR'" "`wgt'",/*
+        */ size(`SIZE' `RELSIZE') _frameonly(`_frameonly')/*
+        */ `mlabel' `mlabvposition' `options'
+    if !`PLOT' exit
     c_local plot `plot'
     c_local p `p'
 end
 
-program _parse_zvar
-    if "`0'"=="" exit
-    if substr("`0'",1,2)=="i." {    // i.zvar
-        c_local zvar = substr("`0'",3,.)
-        c_local discrete discrete
-        exit
+program _parse_levels
+    _parse comma lhs 0 : 0
+    syntax [, Weight(varname numeric) * ]
+    if "`weight'"!="" {
+        local options weight(lW) `options'
+        c_local levels `"`lhs', `options'"'
+        c_local lwvar `weight'
     }
-    capt confirm variable `0'
-    if _rc==1 exit _rc
-    if _rc {
-        di as err `"`0' not allowed"'
-        exit 198
+end
+
+program ___geoplot_symbol
+    _parse comma lhs 0 : 0
+    gettoken layer lhs : lhs
+    gettoken p     lhs : lhs
+    gettoken frame lhs : lhs
+    gettoken zvar  lhs : lhs
+    gettoken wgt   lhs : lhs
+    local mlopts MLabel MLABVposition MLABSTYle MLABPosition MLABGap MLABANGle/*
+        */ MLABTextstyle MLABSize MLABColor MLABFormat
+    foreach opt of local mlopts {
+        local MLOPTS `MLOPTS' `opt'(passthru)
     }
+    local mlopts = strlower("`mlopts'")
+    syntax  [iw/] [, size(str) _frameonly(str)/*
+        */ SHape(passthru) n(passthru) OFFset(numlist max=2)/*
+        */ ANGle(real 0) ratio(real 1)/*
+        */ line `MLOPTS' * ]
+    // size(), _frameonly()
+    gettoken size relsize : size
+    gettoken relsize      : relsize
+    local PLOT = `"`_frameonly'"'==""
+    if `PLOT' tempname frame1
+    else      local frame1 `_frameonly'
+    // parse symbol options: size(), shape(), n(), offset()
+    _parse_shape, `n' `shape' // returns shape, arg, n
+    gettoken offset oangle : offset
+    gettoken oangle: oangle
+    if "`offset'"=="" local offset 0
+    if "`oangle'"=="" local oangle 0
+    // plottype
+    if "`line'"!="" local plottype line
+    else            local plottype area
+    // get range of underlying map
+    if `PLOT' {
+        su Y, meanonly
+        local refsize = r(max) - r(min)
+        su X, meanonly
+        local refsize = min(`refsize', r(max) - r(min))
+    }
+    else local refsize 0
+    // write shapes to shape frame
+    frame create `frame1'
+    frame `frame' {
+        mata: _compute_symbols("`frame1'", "`shape'", st_local("arg"),/* 
+            */ `n', `angle', `ratio', "`size'", "`relsize'", `refsize',/*
+            */ `offset', `oangle')
+    }
+    if !`PLOT' exit
+    ***
+    frame `frame': qui geoframe link `frame1'
+    __geoplot_layer `plottype' `layer' `p' `frame' `zvar' `wgt',/*
+        */ lforce lock `options'
+    if "`mlabel'"!="" {
+        local PLOT: copy local plot
+        if "`mlabposition'"=="" local mlabposition mlabposition(0)
+        local MLOPTS
+        foreach opt of local mlopts {
+            local MLOPTS `MLOPTS' ``opt''
+        }
+        local n0 = _N + 1
+        __geoplot_layer scatter . `p' `frame' `zvar',/*
+            */ msymbol(i) `MLOPTS' `options'
+        qui replace LAYER = `layer' in `n0'/l
+        local plot `PLOT' `plot'
+    }
+    c_local plot `plot'
+    c_local p `p'
 end
 
 program _parse_shape
@@ -204,135 +408,78 @@ program _parse_shape
     c_local n     `n'
 end
 
-program _parse_levels
-    _parse comma lhs 0 : 0
-    syntax [, Weight(varname numeric) * ]
-    if "`weight'"!="" {
-        local options weight(lW) `options'
-        c_local levels `"`lhs', `options'"'
-        c_local lwvar `weight'
-    }
-end
-
 version 16.1
 mata:
 mata set matastrict on
 
-void _compute_symbols(string scalar frame, string scalar touse,
+void _compute_symbols(string scalar frame, 
     string scalar shape, string scalar arg, real scalar n,
-    real scalar scale, real scalar angle, real scalar ratio,
+    real scalar angle, real scalar ratio,
+    string scalar SIZE, string scalar RELSIZE, real scalar refsize,
     real scalar off, real scalar oang)
 {
     real scalar      i, a, b, s, haspl
-    real matrix      YX, Z, yx, V
-    real colvector   pl, PL, S
-    string rowvector ORG, TGT, VTYP
-    pointer matrix   INFO
+    real matrix      XY, xy, V
+    real colvector   ID, pl, PL, S
     
     // get origin data
-    ORG  = tokens(st_local("ORG"))
-    YX   = st_data(., st_local("coord"), touse)
-    Z    = st_data(., ORG, touse)
-    INFO = _fmtvl(ORG) // collect formats and labels
-    VTYP = J(1,i=length(ORG),"") // collect data types
-    for (;i;i--) VTYP[i] = st_vartype(ORG[i]) 
-    i = rows(YX)
+    ID = st_data(., "_ID")
+    st_view(XY=., ., "_CX _CY")
+    i = rows(XY)
     // obtain shape
     haspl = 0
     if (shape=="@numlist") {
-        yx = strtoreal(tokens(arg))
-        n  = length(yx) / 2
+        xy = strtoreal(tokens(arg))
+        n  = length(xy) / 2
         if (n!=trunc(n)) {
             errprintf("shape({it:numlist}): even number of values required\n")
             exit(503)
         }
-        yx = colshape(yx, 2)
+        xy = colshape(xy, 2)
     }
     else if (shape=="@matrix") {
-        yx = st_matrix(arg)
-        n  = length(yx) / 2
+        xy = st_matrix(arg)
+        n  = length(xy) / 2
         if (n!=trunc(n)) {
             errprintf("shape({it:matname}): even number of values required\n")
             exit(503)
         }
-        if (cols(yx)!=2) yx = colshape(yx', 2)
+        if (cols(xy)!=2) xy = colshape(xy', 2)
     }
     else {
-        yx = geo_symbol(shape, n, arg)
-        if (cols(yx)>2) {
+        xy = geo_symbol(shape, n, arg)
+        if (cols(xy)>2) {
             haspl = 1
-            pl = yx[,3]
+            pl = xy[,3]
             pl = pl[1] \ pl // duplicate 1st element
+            xy = xy[,(1,2)]
         }
     }
-    yx = yx[,(2,1)] // since input is (X,Y), not (Y,X)
-    n = rows(yx)
+    n = rows(xy)
     // determine size
-    S = st_data(., st_local("SIZE"), touse)
-    if (scale) {
-        s = min(mm_coldiff(colminmax(YX)))
-        s = max((s,strtoreal(st_local("refsize"))))
-        s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
-        S = S * s
-    }
+    s = max((min(mm_coldiff(colminmax(XY))), refsize))
+    s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
+    S = st_data(., SIZE) :* editmissing(st_data(., RELSIZE)*s, 1)
     // apply ratio to shape
-    if (ratio!=1) yx = yx[,1]*ratio, yx[,2]
+    if (ratio!=1) xy = xy[,1], xy[,2]*ratio
     // apply angle to shape
-    _geo_rotate(yx, -angle) // (_geo_rotate() expects XY, not YX)
-    // apply offset to centroids
-    if (off) YX = YX :+ S :*
-        J(rows(S), 1, (off/100)*(sin(oang*pi()/180), cos(oang*pi()/180)))
+    _geo_rotate(xy, angle)
+    // apply offset to centroids (and write back to data)
+    if (off) XY[.,.] = XY :+ S :*
+        J(rows(S), 1, (off/100)*(cos(oang*pi()/180), sin(oang*pi()/180)))
     // prepare destination data
     st_framecurrent(frame)
-    TGT = tokens(st_local("TGT"))
     st_addobs(i * (n+1))
-    st_view(V=., ., st_addvar((J(1,4,"double"), VTYP),
-                      (tokens("_Y _X _CY _CX"), TGT)))
-    _fmtvl(TGT, INFO)
+    st_view(V=., ., st_addvar("double", tokens("_ID _X _Y")))
     if (haspl) st_view(PL=., ., st_addvar("byte", "_PLEVEL"))
     // write shapes to destination data
     a = i * (n+1) + 1
     for (;i;i--) {
         b = a - 1
         a = b - n
-        V[|a,1 \ b,.|] =
-            (J(1,2,.) \ (YX[i,] :+ yx*S[i])), J(n+1, 1, (YX[i,], Z[i,]))
+        V[|a,1 \ b,.|] = J(n+1, 1, ID[i]), (J(1,2,.) \ (XY[i,] :+ xy*S[i]))
         if (haspl) PL[|a \ b|] = pl
     }
-}
-
-pointer matrix _fmtvl(string rowvector V, | pointer matrix INFO)
-{
-    real scalar      i
-    string scalar    vl
-    real colvector   values
-    string colvector text
-    pragma unset values
-    pragma unset text
-    
-    i = length(V)
-    if (args()==2) {
-        for (;i;i--) {
-            st_varformat(V[i], *INFO[i,1])
-            st_varlabel(V[i], *INFO[i,2])
-            if (INFO[i,3]!=NULL) {
-                st_vlmodify(V[i], *((*INFO[i,3])[1]), *((*INFO[i,3])[2]))
-                st_varvaluelabel(V[i], V[i])
-            }
-        }
-        return
-    }
-    INFO = J(i,3,NULL)
-    for (;i;i--) {
-        INFO[i,1] = &st_varformat(V[i])
-        INFO[i,2] = &st_varlabel(V[i])
-        vl = st_varvaluelabel(V[i])
-        if (vl=="") continue
-        if (!st_vlexists(vl)) continue
-        st_vlload(vl, values, text)
-        INFO[i,3] = &(&values,&text)
-    }
-    return(INFO)
 }
 
 end

@@ -1,4 +1,4 @@
-*! version 1.1.1  27sep2023  Ben Jann
+*! version 1.1.2  24dec2023  Ben Jann
 
 program _geoplot_pie
     version 16.1
@@ -102,7 +102,7 @@ program _geoplot_pie
     }
     ***
     if `sym'==1 local ++p
-    __geoplot_layer 0 area `layer' `p' `frame1' `wgt',/*
+    __geoplot_layer area `layer' `p' `frame1' `wgt',/*
         */ colorvar(Z) lock discrete `wmaxopt' `options'
     ***
     if `sym' {

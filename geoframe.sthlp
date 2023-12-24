@@ -1,5 +1,13 @@
 {smcl}
-{* 02nov2023}{...}
+{* 24dec2023}{...}
+{vieweralsosee "geoplot" "help geoplot"}{...}
+{vieweralsosee "[D] frames" "help frames"}{...}
+{vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
+{viewerjumpto "Syntax" "geoframe##syntax"}{...}
+{viewerjumpto "Description" "geoframe##description"}{...}
+{viewerjumpto "Subcommands" "geoframe##subcommands"}{...}
+{viewerjumpto "Examples" "geoframe##examples"}{...}
+{viewerjumpto "Author" "geoframe##author"}{...}
 {hi:help geoframe}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -9,6 +17,7 @@
 {pstd}{hi:geoframe} {hline 2} Command to prepare data for {helpb geoplot}
 
 
+{marker syntax}{...}
 {title:Syntax}
 
 {p 8 15 2}
@@ -21,10 +30,12 @@
 {syntab :Main}
 {p2col :{helpb geoframe##translate:{ul:tr}anslate}}translate shapefile source to Stata format (without loading)
     {p_end}
-{p2col :{helpb geoframe##translate:convert}}synonym for {cmd:geoframe translate}
+{p2col :{helpb geoframe##translate:convert}}synonym for {cmd:translate}
     {p_end}
 {synopt :{helpb geoframe##create:{ul:cr}eate}}load data into geoframe or declare
     current frame as geoframe
+    {p_end}
+{synopt :{helpb geoframe##create:load}}synonym for {cmd:create}
     {p_end}
 {p2col :{helpb geoframe##link:{ul:l}ink}}link shape frame to current frame
     {p_end}
@@ -52,9 +63,11 @@
     {p_end}
 {p2col :{helpb geoframe##generate:{ul:g}enerate}}generate special-purpose variables
     {p_end}
-{p2col :{helpb geoframe##copy:copy}}copy variables between frames
+{p2col :{helpb geoframe##copy:copy}}add variables from other frame
     {p_end}
-{p2col :{helpb geoframe##append:{ul:ap}pend}}append observations between frames
+{p2col :{helpb geoframe##append:{ul:ap}pend}}append observations from other frame
+    {p_end}
+{p2col :{helpb geoframe##stack:stack}}combine multiple geoframes into one
     {p_end}
 
 {syntab :Spatial join}
@@ -72,7 +85,7 @@
     {p_end}
 {p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
     {p_end}
-{p2col :{helpb geoframe##symboli:symboli}}{cmd:geoframe symbol} with immediate arguments
+{p2col :{helpb geoframe##symboli:symboli}}{cmd:symbol} with immediate arguments
     {p_end}
 
 {syntab :Settings}
@@ -97,75 +110,139 @@
 {synoptline}
 
 
+{marker description}{...}
 {title:Description}
 
 {pstd}
     {cmd:geoframe} prepares data for {helpb geoplot}.
 
 
+{marker subcommands}{...}
 {title:Subcommands}
 
 {marker translate}{...}
 {dlgtab:geoframe translate}
 
 {p 8 15 2}
-    {cmd:geoframe} {cmdab:tr:anslate} [{it:translator}] [{it:destination}] [{cmd:using}]
-    {it:source} [{cmd:,} {cmd:replace} {cmd:user} ]
+    {cmd:geoframe} {cmdab:tr:anslate} [{it:translator}] {it:...}
 
 {pstd}
     translates shapefile source data to Stata format, where {it:translator} specifies
-    the type of translation. Currently, the only available translator is {cmd:esri}, which
-    translates ESRI shapefile data to Stata format using official Stata's
-    {helpb spshape2dta} command or, if option {cmd:user} is specified, the
-    user command {helpb shp2dta} (see {bf:{stata ssc describe shp2dta}}). Omitting
-    {it:translator} is equivalent to specifying {cmd:esri}.
+    the type of translation. Available translators are:
 
-{pstd}
-    Optional argument {it:destination} specifies a destination for the translated
-    data. The syntax for {it:destination} is
-
-        [{it:path}][{it:basename}]
-
-{pstd}
-    where {it:path} is an absolute or relative path to an (existing) directory
-    (e.g. {cmd:mydata/shapfiles/} on Mac OS or {cmd:mydata\shapfiles\}
-    on Windows) and {it:basename} provides a custom base name for the created files. If
-    {it:path} is omitted, the files are stored in the working directory. If
-    {it:basename} is omitted, the name of the source will be used. Two files
-    will be created, {it:basename}{cmd:.dta} and
-    {it:basename}{cmd:_shp.dta}. Option {cmd:replace} allows overwriting
-    existing files.
-
-{pstd}
-    Argument {it:source} identifies the source data to be translated. The syntax
-    for {it:source} is
-
-        {it:sourcepath}[{it:sourcename}]
-
-{pstd}
-    where {it:sourcepath} is an absolute or relative path to the directory containing
-    the source (e.g. {cmd:mydata/shapfiles/source/world/} on Mac OS or
-    {cmd:mydata\shapfiles\source\world\} on Windows) and {it:sourcename} specifies the
-    base name of the source to be translated (in case of an ESRI shape file,
-    the source consists of {it:sourcename}{cmd:.shp}, {it:sourcename}{cmd:.dbf},
-    and possibly some additional files with the same base name). If {it:sourcepath}
-    contains multiple sources and {it:sourcename} is omitted, the first source
-    will be translated. Alternatively, {it:source} can be
-
-        {it:zipfile}[{it:separator}[{it:location}][{it:sourcename}]]
-
-{pstd}
-    where {it:zipfile} is the (path and) name of a zip file containing the source
-    (e.g. {cmd:mydata/shapfiles/source/world.zip} on Mac OS or {cmd:mydata\shapfiles\source\world.zip}
-    on Windows), {it:separator} is the operating system's directory separator (i.e. {cmd:/} on Mac OS, {cmd:\} on Windows),
-    {it:location} specifies the directory of the source within the zip file, and
-    {it:sourcename} specifies the name of the source to be translated. For example, you could
-    type {cmd:world.zip/50m/} to translate the first source found in folder {cmd:50m} within
-    zip file {cmd:world.zip}, or you could type {cmd:world.zip/50m/country_borders} to translate
-    the source called {cmd:country_borders} in folder {cmd:50m} within zip file {cmd:world.zip}.
+{p2colset 9 18 20 2}{...}
+{p2col : {helpb geoframe##tr_esri:esri}}translate ESRI shapefile (the default)
+    {p_end}
+{p2col : {helpb geoframe##tr_esri:shp}}synonym for {cmd:geoframe translate esri}
+    {p_end}
+{p2col : {helpb geoframe##tr_json:json}}translate GeoJSON shapefile
+    {p_end}
+{p2col : {helpb geoframe##tr_json:geojson}}synonym for {cmd:geoframe translate json}
+    {p_end}
+{p2col : {helpb geoframe##tr_wkt:wkt}}translate WKT (well-known text) geometries
+    {p_end}
 
 {pstd}
     {cmd:geoframe convert} is a synonym for {cmd:geoframe translate}.
+
+{marker tr_esri}{...}
+{pstd}{ul:ESRI shapefile}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:tr:anslate} [{cmd:esri}] [{it:destination}] [{cmd:using}]
+    {it:source} [{cmd:,} {cmd:user} {cmd:replace} ]
+
+{pstd}
+    translates an ESRI format shapefile to Stata format, using official Stata's
+    {helpb spshape2dta} command or, if option {cmd:user} is specified, the
+    user command {helpb shp2dta} (see {stata ssc describe shp2dta}). Translator {cmd:esri}
+    is implied unless {it:source} contains a {cmd:.geojson} or {cmd:.json} suffix.
+
+{pstd}
+    Optional argument {it:destination} specifies a destination for the translated
+    data. It can be a simple {it:name} (e.g. {cmd:countries}), a name including
+    a path to an (existing) directory (e.g. {cmd:shapefiles/dta/countries}), or a
+    path without name (e.g. {cmd:shapefiles/dta/}). Files {it:name}{cmd:.dta} and
+    {it:name}{cmd:_shp.dta} will be created in the specified directory
+    (or in the working directory if no path is provided). The base name of the source
+    file will be used as destination name if no name is provided. Option {cmd:replace}
+    allows overwriting existing files.
+
+{pstd}
+    Argument {it:source} identifies the source to be translated. It can be
+    a filename with or without path (e.g. {cmd:countries.shp}
+    or {cmd:shapefiles/source/countries}; the file suffix is optional), 
+    or it can be a path without filename (e.g. {cmd:shapefiles/source/}). If the
+    specified directory contains multiple source files,
+    the topmost source in the alphabetical list of files
+    will be translated.
+
+{pstd}
+    Argument {it:source} can also be a zip file. For example, you can
+    specify {cmd:shapefiles/source/countries.zip} to translate the source
+    contained in {cmd:countries.zip}. If the zip file contains multiple source
+    files, the topmost source in the alphabetical list of files
+    will be translated. Alternatively, you can specify an internal path
+    (e.g. {cmd:world.zip/50m/}) and/or name pointing to the source to be translated
+    (e.g. {cmd:world.zip/countries.shp} or {cmd:world.zip/50m/countries}; again, the
+    file suffix is optional).
+
+{marker tr_json}{...}
+{pstd}{ul:GeoJSON shapefile}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:tr:anslate} [{cmd:json}] [{it:destination}] [{cmd:using}]
+    {it:source} [{cmd:,} {it:options} ]
+
+{pstd}
+    translates a GeoJSON format shapefile to Stata format (see
+    {browse "https://en.wikipedia.org/wiki/GeoJSON"}). Arguments
+    {it:destination} and {it:source} are as described for
+    {helpb geoframe##tr_esri:geoframe translate esri} (apart from file
+    suffix). Translator {cmd:json}
+    is implied if {it:source} contains file suffix {cmd:.geojson} or
+    {cmd:.json}. Options are as follows.
+
+{phang}
+    {opt all:string} imports all attributes as string variables.
+
+{phang}
+    {opth gtype(newvar)} adds a variable to the attribute file that contains
+    the geometry type of each unit (e.g. "LineString" or "MultiPolygon").
+
+{phang}
+    {opt addmis:sing} adds missing rows between point geometries. In the
+    translated data, each line or polygon will start with a row of missing values
+    so that the different shape items can be distinguished by {helpb geoplot}. By
+    default, such missing rows are omitted for items obtained from a Point or
+    MultiPoint object (unless the objects are part of a GeometryCollection). Specify
+    {opt addmis:sing} to treat points in the same way as lines and polygons.
+
+{phang}
+    {opt nodot:s} suppresses the progress dots that are displayed by default.
+
+{phang}
+    {cmd:replace} allows overwriting existing files.
+
+{marker tr_wkt}{...}
+{pstd}{ul:WKT geometries}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmdab:tr:anslate} {cmd:wkt} {it:destination} {it:geomvar}
+    {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    where {it:destination} is as described for 
+    {helpb geoframe##tr_esri:geoframe translate esri} (except that a name must be
+    provided in any case) and {it:geomvar} is the name of a string variable
+    containing WKT geometry definitions (see 
+    {browse "https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry"}). That is,
+    the source data is assumed to be in memory (e.g. imported from a CSV or Excel file), with one of the
+    variables containing the WKT geometry definitions, and an attribute file and a shape file
+    are created from this data. Units that do
+    not satisfy the {it:if} and {it:in} qualifiers will not be considered. Options
+    are {cmd:gtype()}, {opt addmis:sing}, {opt nodot:s}, and {cmd:replace} as
+    described for {helpb geoframe##tr_json:geoframe translate json}.
 
 {marker create}{...}
 {dlgtab:geoframe create}
@@ -186,7 +263,8 @@
     name of {it:filename}), the shape file will automatically
     be loaded into a second frame called {it:frame}{cmd:_shp} and a link between
     the two frames will be established. Alternatively,
-    {it:filename} may also be a shape file or any other valid Stata dataset.
+    {it:filename} may also be a shape file or any other valid Stata
+    dataset. {cmd:geoframe load} can be used as a synonym for {cmd:geoframe create}.
 
 {pstd}
     You may also type
@@ -209,8 +287,7 @@
     by default.
 
 {phang}
-    {opt nocur:rent} does not make the created frame the current frame. The default
-    is to make the created frame the current frame.
+    {opt cur:rent} makes the created frame the current frame.
 
 {phang}
     {opt t:ype(type)} declares the type of data included in the
@@ -280,6 +357,9 @@
     {opt nodrop} prevents dropping unmatched units and empty shapes
     when linking the attribute file and the shape file (i.e., do not apply
     {helpb geoframe##clean:geoframe clean}).
+
+{phang}
+    {opt nocl:ean} is a synonym for {cmd:nodrop}.
 
 {marker link}{...}
 {dlgtab:geoframe link}
@@ -558,9 +638,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker select}{...}
 {dlgtab:geoframe select}
@@ -619,9 +697,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker clip}{...}
 {dlgtab:geoframe clip}
@@ -684,9 +760,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker rclip}{...}
 {dlgtab:geoframe rclip}
@@ -786,9 +860,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows {cmd:into()} to overwrite existing frames.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker refine}{...}
 {dlgtab:geoframe refine}
@@ -1044,8 +1116,7 @@ Except for {cmd:robinson}, the projections are computed by user command
 
 {p 8 15 2}
     [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:copy} {it:frame2}
-    {varlist} [{cmd:,} {opt tar:get(namelist)} {opt ex:clude(varlist)}
-    {cmd:id(}{it:id} [{it:id2}]{cmd:)} ]
+    {varlist} [{cmd:,} {it:options} ]
 
 {pstd}
     copies variables from {it:frame2} (source frame) into the current
@@ -1078,17 +1149,17 @@ Except for {cmd:robinson}, the projections are computed by user command
     If a link from {helpb geoframe##create:geoframe create} or
     {helpb geoframe##link:geoframe link} exists between the two frames, the
     existing link will be employed. Otherwise, an appropriate
-    link will be established on the fly. Options are as follows.
+    link will be established on the fly. {it:options} are as follows.
 
 {phang}
-    {opt target(namelist)} specifies alternative variable names to be used
+    {opt tar:get(namelist)} specifies alternative variable names to be used
     in the current frame. {it:varlist} and {cmd:target()}, after applying {cmd:exclude()},
     will be matched one by one. If {cmd:target()} contains fewer
     elements than {it:varlist}, the remaining names will be taken
     from {it:varlist}.
 
 {phang}
-    {opt exclude(varlist)} excludes the specified variables from the main
+    {opt ex:clude(varlist)} excludes the specified variables from the main
     {varlist}. These variables will not be copied.
 
 {phang}
@@ -1102,34 +1173,92 @@ Except for {cmd:robinson}, the projections are computed by user command
     both frames if {it:id2} is omitted.
 
 {pstd}
-    Results stored by the internal call to {helpb frget} are passed through in
-    {cmd:r()}.
+    The number of copied variables is returned in scalar {cmd:r(k)}.
 
 {marker append}{...}
 {dlgtab:geoframe append}
 
 {p 8 15 2}
     [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmdab:ap:pend} {it:frame2}
-    [{varlist}] {ifin}
-    [{cmd:,} {opth tar:get(varlist)} {opth touse(varname)} ]
+    [{varlist}] {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
-    appends observations from {it:frame2} to the current frame. By default, all variables
-    from {it:frame2} will be included, creating new variables in the current
-    frame if necessary. Specify {varlist} to include a selection of variables only.
+    appends the selected observations from {it:frame2} to the current frame. By
+    default, all variables from {it:frame2} will be included, creating new
+    variables in the current frame if necessary. Specify {varlist} to include
+    a selection of variables only. {it:options} are as follows.
 
-{pstd}
-    Option {cmd:target()} specifies the names of the target variables
-    to which the observations be appended. Use this option to append a variable
+{phang}
+    {opt raw} appends raw data only, without copying labels or display
+    formats. By default, {cmd:geoframe append} complements variable labels
+    for variables that do not yet have a label, merges value label definitions for variables
+    that have value labels, and copies display formats for new variables. Specify {cmd:raw} to copy only
+    the data, ignoring labels and display formats.
+
+{phang}
+    {opt force} allows string variables to be appended to numeric variables and
+    vice versa, applying functions {helpb real()} or {helpb strofreal()}
+    to transform data, respectively.
+
+{phang}
+    {opt tar:get(namelist)} specifies alternative variable names to be used
+    in the current frame. Use this option to append a variable
     from {it:frame2} to a variable that has a different name in the current
     frame; {it:varlist} and {cmd:target()} are matched one by one; if {cmd:target()}
     contains fewer elements than {it:varlist}, the remaining names will be taken
     from {it:varlist}. The resulting list of target variable must be unique.
 
-{pstd}
-    Option {cmd:touse()} specifies a variable identifying the observations to be
+{phang}
+    {opth touse(varname)} specifies a variable identifying the observations to be
     appended (i.e. observations for which the specified variable is unequal
-    zero). Use this option as an alternative to {it:{help if}} and {it:{help in}}.
+    zero). Use this option as an alternative to {it:{help if}} and
+    {it:{help in}}. {cmd:touse()} is intended for use by programmers.
+
+{phang}
+    {opt fast} does not restore the original dataset should the user press
+    {cmd:Break}. {cmd:fast} is intended for use by programmers.
+
+{marker stack}{...}
+{dlgtab:geoframe stack}
+
+{p 8 15 2}
+    {cmd:geoframe} {cmd:stack} {it:framelist} [{cmd:,} {it:options} ]
+
+{pstd}
+    stacks the data of the specified frames and also creates
+    a stacked shape frame if any of the specified frames contains a link to a
+    shape frame. {it:framelist} must contain at least two names. A new
+    {cmd:_ID} variable will be generated to identify the units in the stacked frame
+    (replacing the existing IDs; other geoframe settings will be taken from
+    the first frame). Furthermore, variable {cmd:_FRAME} will be
+    added, containing the name of the source frame for each
+    observation. {it:options} are as follows.
+
+{phang}
+    {opt force} allows string variables to be appended to numeric variables and
+    vice versa, applying functions {helpb real()} or {helpb strofreal()}
+    to transform data, respectively.
+
+{phang}
+    {opt noshp} causes linked shape frames to be ignored. That is, if {cmd:noshp}
+    is specified, no stacked shape frame will be created even if the frames in
+    {it:framelist} contain links to shape frames.
+
+{phang}
+    {opt into(newname [newshpname])} specifies a custom name for the frame
+    containing the stacked data (and a custom name for the stacked shape data;
+    {it:newname}{cmd:_shp} is used if {it:newshpname} is omitted). By default,
+    {it:newname} is set to the first name in {it:framelist}.
+
+{phang}
+    {opt replace} allows replacing existing frames. {cmd:replace} is required
+    if {cmd:into()} is omitted.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame.
+
+{phang}
+    {opt drop} drops the source frames from memory after appending them.
 
 {marker collapse}{...}
 {dlgtab:geoframe collapse}
@@ -1303,9 +1432,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows overwriting an existing frame.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker bbox}{...}
 {dlgtab:geoframe bbox}
@@ -1370,9 +1497,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows overwriting an existing frame.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker symbol}{...}
 {dlgtab:geoframe symbol}
@@ -1397,24 +1522,47 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows overwriting an existing frame.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker symboli}{...}
 {dlgtab:geoframe symboli}
 
 {p 8 15 2}
     {cmd:geoframe} {cmd:symboli} {it:newname} [{it:newshpname}]
-    {it:x1} {it:y1} {it:size1} [{it:x2} {it:y2} {it:size2} ...] [{cmd:,} {it:options} ]
+    {it:immediate_values} [{cmd:,} {it:options} ]
 
 {pstd}
-    creates symbol shapes of the specified sizes at the specified
-    positions and stores stores them in a new frame called {it:newname} and an
+    creates symbol shapes at specified positions
+    and stores stores them in a new frame called {it:newname} and an
     associated shape frame called {it:newshpname}; {it:newname}{cmd:_shp} is
-    used as name for the shape frame if {it:newshpname} is omitted. {it:options}
-    are as describes for {helpb geoframe##symbol:geoframe symbol}; option {cmd:size()}
-    will be ignored.
+    used as name for the shape frame if {it:newshpname} is omitted.
+
+{pstd}
+    {it:immediate_values} is one or more of
+
+        {it:#_x} {it:#_y} [{cmd:[}[{cmd:*}]{it:size}{cmd:]}]
+
+{pstd}
+    where {it:#_x} and {it:#_y} specify the position of the symbol and optional argument
+    {it:size} specifies a custom size for the symbol ({it:size} must be enclosed in
+    square brackets). Specify {cmd:*}{it:size} to multiply the default size by
+    {it:size}; specify {it:size} without {cmd:*} for an absolute size. {it:options}
+    are as follows.
+
+{phang}
+    {cmdab:si:ze(}[{cmd:*}]{it:size}{cmd:)} sets the size argument for those
+    symbols for which no custom size has been specified.
+
+{phang}
+    {cmd:shape()}, {cmd:n()}, {cmd:ratio()}, {cmd:angle()}, and
+    {cmd:offset()} are options as described for
+    layertype {helpb geoplot##symbol:symbol} in {helpb geoplot}.
+
+{phang}
+    {opt replace} allows overwriting an existing frame.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame.
 
 {marker set}{...}
 {dlgtab:geoframe set}
@@ -1544,9 +1692,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {opt replace} allows overwriting existing frames.
 
 {phang}
-    {opt cur:rent} makes the created frame the current frame. ({cmd:current} has
-    no effect if the {cmd:frame} prefix is applied, as Stata will immediately switch back
-    to the prior frame.)
+    {opt cur:rent} makes the created frame the current frame.
 
 {pstd}
     Copying geoframes using official Stata's {helpb frame copy} is discouraged
@@ -1622,6 +1768,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {cmd:geoframe detach} requires Stata 18.
 
 
+{marker examples}{...}
 {title:Examples}
 
 {pstd}
@@ -1731,6 +1878,7 @@ Except for {cmd:robinson}, the projections are computed by user command
     {p_end}
 
 
+{marker author}{...}
 {title:Author}
 
 {pstd}
@@ -1743,9 +1891,3 @@ Except for {cmd:robinson}, the projections are computed by user command
     Jann, B. (2023). geoplot: Stata module to draw maps. Available from
     {browse "https://ideas.repec.org/c/boc/bocode/s459211.html"}.
 
-
-{title:Also see}
-
-{psee}
-    Online:  help for
-    {helpb geoplot}, {helpb frames}, {helpb spshape2dta}

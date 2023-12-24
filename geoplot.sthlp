@@ -1,5 +1,16 @@
 {smcl}
-{* 02nov2023}{...}
+{* 24dec2023}{...}
+{vieweralsosee "geoframe" "help geoframe"}{...}
+{vieweralsosee "colorpalette" "help colorpalette"}{...}
+{vieweralsosee "[G-2] graph" "help graph"}{...}
+{vieweralsosee "[D] frames" "help frames"}{...}
+{viewerjumpto "Syntax" "geoplot##syntax"}{...}
+{viewerjumpto "Description" "geoplot##description"}{...}
+{viewerjumpto "Layer types" "geoplot##layertypes"}{...}
+{viewerjumpto "Options" "geoplot##options"}{...}
+{viewerjumpto "Examples" "geoplot##examples"}{...}
+{viewerjumpto "Stored results" "geoplot##results"}{...}
+{viewerjumpto "Author" "geoplot##author"}{...}
 {hi:help geoplot}{...}
 {right:{browse "https://github.com/benjann/geoplot/"}}
 {hline}
@@ -9,6 +20,7 @@
 {pstd}{hi:geoplot} {hline 2} Command to draw maps from shape files
 
 
+{marker syntax}{...}
 {title:Syntax}
 
 {p 8 15 2}
@@ -43,6 +55,8 @@
     {p_end}
 {synopt :{helpb geoplot##point:point}}single-coordinate markers
     {p_end}
+{synopt :{helpb geoplot##point:{ul:sc}atter}}synonym for {cmd:point}
+    {p_end}
 {synopt :{helpb geoplot##labels:{ul:lab}el}}single-coordinate labels
     {p_end}
 {synopt :{helpb geoplot##symbol:{ul:sym}bol}}single-coordinate symbols (circles,
@@ -54,31 +68,22 @@
 {p2coldent:* {helpb geoplot##bar:bar}}stacked bar charts
     {p_end}
 
-{synopt :{helpb geoplot##pcspike:pcspike}}paired-coordinate spikes
-    {p_end}
-{synopt :{helpb geoplot##pcspike:pccapsym}}paired-coordinate spikes capped with
-    symbols
-    {p_end}
-{synopt :{helpb geoplot##pcspike:pcarrow}}paired-coordinate arrows
-    {p_end}
-{synopt :{helpb geoplot##pcspike:pcbarrow}}paired-coordinate arrows with two
-    heads
-    {p_end}
-{synopt :{helpb geoplot##pcspike:pcpoint}}paired-coordinate markers
-    {p_end}
-
 {p2coldent:* {helpb geoplot##pointi:pointi}}{cmd:point} with immediate arguments
     {p_end}
-{p2coldent:* {helpb geoplot##pointi:pci}}{cmd:pcspike} with immediate arguments
+{p2coldent:* {helpb geoplot##pointi:scatteri}}synonym for {cmd:pointi}
     {p_end}
-{p2coldent:* {helpb geoplot##pointi:pcarrowi}}{cmd:pcarrow} with immediate
-    arguments
+{p2coldent:* {helpb geoplot##pointi:labeli}}{cmd:label} with immediate arguments
     {p_end}
 {p2coldent:* {helpb geoplot##symboli:symboli}}{cmd:symbol} with immediate arguments
     {p_end}
+
+{synopt :{helpb geoplot##pcspike:pcspike} etc.}paired-coordinate spikes, arrows, or markers
+    {p_end}
+{p2coldent:* {helpb geoplot##pci:pci} etc.}paired-coordinate plot with immediate arguments
+    {p_end}
 {synoptline}
 {p 4 6 2}
-    * {help geoplot##zopts:{it:zvar_options}} without asterisk not supported.
+    * Unstarred {help geoplot##zopts:{it:zvar_options}} not supported.
 
 
 {synoptset 20 tabbed}{...}
@@ -186,6 +191,7 @@
 {synoptline}
 
 
+{marker description}{...}
 {title:Description}
 
 {pstd}
@@ -213,26 +219,25 @@
         {com}. {stata ssc install moremata}{txt}
 
 
+{marker layertypes}{...}
 {title:Layer types}
 
 {marker area}{...}
 {dlgtab:shapes, potentially filled}
 
 {p 8 15 2}
-    {cmd:area} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
-    [{cmd:,}
-    {it:options} ]
+    {cmd:area} {it:frame} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
+    [{cmd:,} {it:options} ]
 
 {pstd}
     where {it:frame} is the frame containing the shapes to be
-    plotted (see {helpb geoframe}; {it:frame} can be a shape frame or an 
+    plotted (see {helpb geoframe}; {it:frame} can be a shape frame or an
     attribute frame that has been linked to a shape frame), {help geoplot##zvar:{it:zvar}}
     is an optional variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, rescales the coordinates of
-    the shapes by the absolute (and normalized) values of {it:exp}. Type
-    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable. {it:options} are as follows.
+    the shapes by the absolute (and normalized) values of {it:exp}. {it:options}
+    are as follows.
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}} are options determining the look of
@@ -368,20 +373,18 @@
 {dlgtab:shapes, line only}
 
 {p 8 15 2}
-    {cmd:line} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
+    {cmd:line} {it:frame} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
     [{cmd:,}
     {it:options} ]
 
 {pstd}
     where {it:frame} is the frame containing the shapes to be
-    plotted (see {helpb geoframe}; {it:frame} can be a shape frame or an 
+    plotted (see {helpb geoframe}; {it:frame} can be a shape frame or an
     attribute frame that has been linked to a shape frame), {help geoplot##zvar:{it:zvar}}
     is an optional variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, rescales the coordinates of
-    the shapes by the absolute (and normalized) values of {it:exp}. Type
-    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable. {it:options} are as follows.
+    the shapes by the absolute (and normalized) values of {it:exp}. {it:options} are as follows.
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:size()}, {cmd:select()},
@@ -399,7 +402,7 @@
 {dlgtab:single-coordinate markers}
 
 {p 8 15 2}
-    {cmd:point} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
+    {cmd:point} {it:frame} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
     [{cmd:,}
     {it:options} ]
 
@@ -410,14 +413,13 @@
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the size of the
     markers by the absolute (and normalized) values of {it:exp} (also see
-    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}). Type
-    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable. {cmdab:sc:atter} may be used as a synonym for {cmd:point}. {it:options}
+    {help scatter##remarks14:Weighted markers} in {helpb twoway scatter}). {it:options}
     are as follows.
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()},
-    {opt box()}, and {opt coordinates()} are
+    {cmd:ifshp()}, {cmd:lock}, {opt box()}, {opt coordinates()}, {opt id()},
+    and {opt centroids()} are
     options as described for layer type {helpb geoplot##area:area}.
 
 {phang}
@@ -427,11 +429,20 @@
     use option {cmd:msymbol()} to set the marker symbol. Color options
     support {it:colorspec} as described in {helpb colorpalette##colorlist:colorpalette}.
 
+{phang}
+    {cmd:shp} causes points to be plotted at the coordinates from the
+    linked shape frame. By default, layer type {cmd:point} uses the coordinates
+    from {it:frame} even if there is a linked shape frame. Option {cmd:shp} has
+    no effect if {it:frame} is not linked to a shape frame.
+
+{pstd}
+    {cmd:scatter} may be used as a synonym for {cmd:point}.
+
 {marker labels}{...}
 {dlgtab:single-coordinate labels}
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {it:labelspec} [{help geoplot##zvar:{it:zvar}}] {ifin}
+    {cmd:label} {it:frame} {it:labelspec} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin}
     [{cmd:,}
     {it:options} ]
 
@@ -439,15 +450,13 @@
     where {it:frame} is the frame containing the coordinates of the labels to be
     plotted (see {helpb geoframe}), {it:labelspec} provides the labels,
     and {help geoplot##zvar:{it:zvar}} is an optional
-    variable to determine styling. Type
-    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable.
+    variable to determine styling.
 
 {pstd}
     The syntax of {it:labelspec} is as follows. To print labels from a variable, type
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {help varname:{it:labelvar}} [{help geoplot##zvar:{it:zvar}}]
+    {cmd:label} {it:frame} {help varname:{it:labelvar}} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}]
     {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
@@ -456,29 +465,31 @@
 
 {p 8 15 2}
     {cmd:label} {it:frame} {cmd:("}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]{cmd:)}
-    [{help geoplot##zvar:{it:zvar}}] {ifin} [{cmd:,} {it:options} ]
+    [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
-    If {help geoplot##zvar:{it:zvar}} is omitted, the first {cmd:"}{it:text}{cmd:"} element 
+    If {help geoplot##zvar:{it:zvar}} is omitted, the first {cmd:"}{it:text}{cmd:"} element
     will be assigned to all selected observations. Othewise
     the elements will be assigned one-by-one to the levels determined by
     {help geoplot##zvar:{it:zvar}} (using the first element for missing, if there
     are missing values; elements will be recycled if there are fewer elements than
     levels). SMCL markup directives can be used in {it:text}; see
     {help graph_text:{bf:[G-4]} {it:text}}. Finally, to print labels
-    as defined by {helpb geoplot##label:label()} and
+    as defined by options {helpb geoplot##label:label()} and
     {helpb geoplot##missing:missing(label())}, type
 
 {p 8 15 2}
-    {cmd:label} {it:frame} {cmd:.} [{help geoplot##zvar:{it:zvar}}] {ifin} [{cmd:,} {it:options} ]
+    {cmd:label} {it:frame} {cmd:.} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
     {it:options} are as follows.
 
 {phang}
-    {it:{help geoplot##zopts:zvar_options}}, {opt box()}, {cmd:select()}, and
-    {opt coordinates()} are
-    options as described for layer type {helpb geoplot##area:area}.
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:select()}, {cmd:ifshp()},
+    {cmd:lock}, {opt box()}, {opt coordinates()}, {opt id()},
+    and {opt centroids()} are
+    options as described for layer type {helpb geoplot##area:area}; option {cmd:shp}
+    is as described for layer type {helpb geoplot##point:point}.
 
 {phang}
     {opth si:ze(textsizestyle)},
@@ -506,7 +517,7 @@
 {dlgtab:single-coordinate symbols}
 
 {p 8 15 2}
-    {cmdab:sym:bol} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
+    {cmdab:sym:bol} {it:frame} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
     [{cmd:,}
     {it:options} ]
 
@@ -516,9 +527,7 @@
     variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the symbols by the
-    absolute (and normalized) values of {it:exp}. Type
-    {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable. {it:options} are as follows.
+    absolute (and normalized) values of {it:exp}. {it:options} are as follows.
 
 {phang}
     {opt sh:ape(spec)} selects or defines the shape of the symbols. {it:shape} may be
@@ -681,6 +690,9 @@
     {helpb colorpalette##colorlist:colorpalette}.
 
 {phang}
+    {it:{help marker_label_options}} to add marker labels.
+
+{phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()}, {cmd:ecolor()}, {cmd:box()},
     {opt feature()}, and {opt coordinates()} are options as described for layer type
     {helpb geoplot##area:area}.
@@ -796,7 +808,7 @@
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()},
     {it:{help area_options}}, {cmd:box()}, and {opt coordinates()} are options as described
-    for layer type {helpb geoplot##area:area}. {it:zvar_options} without asterisk
+    for layer type {helpb geoplot##area:area}. Unstarred {it:zvar_options}
     will be ignored.
 
 {marker bar}{...}
@@ -876,39 +888,129 @@
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()},
     {it:{help area_options}}, {cmd:box()}, and {opt coordinates()} are options as described
-    for layer type {helpb geoplot##area:area}. {it:zvar_options} without asterisk
+    for layer type {helpb geoplot##area:area}. Unstarred {it:zvar_options}
     will be ignored.
+
+{marker pointi}{...}
+{dlgtab:point with immediate arguments}
+
+{p 8 15 2}
+    {cmd:pointi} {it:immediate_values} [{cmd:,} {it:options} ]
+
+{pstd}
+    where {it:immediate_values} is one or more of
+
+        {it:#_x} {it:#_y} [{cmd:(}{help clockposstyle:{it:clockpos}}{cmd:)}] [{cmd:"}{it:text}{cmd:"}]
+
+{pstd}
+    Arguments {it:#_x} and {it:#_y} specify the position of the point,
+    {bf:"}{it:text}{bf:"} specifies an optional marker label, and
+    {it:clockpos} specifies the location of the label
+    (see {it:{help clockposstyle}}). {it:options} are as follows.
+
+{phang}
+    {opt lab:el(label)} sets a key label
+    for use by {helpb geoplot##legend:legend()}, where {it:label} is
+    {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]. Multiple lines
+    are created if multiple {cmd:"}{it:text}{cmd:"} elements are specified.
+
+{phang}
+    Rendering options as described for layertype {helpb geoplot##point:point}.
+
+{pstd}
+    {cmd:scatteri} may be used as a synonym for {cmd:pointi}.
+
+{marker labeli}{...}
+{dlgtab:label with immediate arguments}
+
+{p 8 15 2}
+    {cmd:labeli} {it:immediate_values} [{cmd:,} {it:options} ]
+
+{pstd}
+    and where {it:immediate_values} is one or more of
+
+        {it:#_x} {it:#_y} [{cmd:(}{help clockposstyle:{it:clockpos}}{cmd:)}] {cmd:"}{it:text}{cmd:"}
+
+{pstd}
+    Arguments {it:#_x} and {it:#_y} specify the anchor point of the label,
+    {bf:"}{it:text}{bf:"} specifies the text of the label, and
+    {it:clockpos} specifies the location of the label
+    (see {it:{help clockposstyle}}; default is {cmd:0}). {it:options} are as follows.
+
+{phang}
+    {opt lab:el(label)} sets a key label
+    for use by {helpb geoplot##legend:legend()}, where {it:label} is
+    {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]. Multiple lines
+    are created if multiple {cmd:"}{it:text}{cmd:"} elements are specified.
+
+{phang}
+    Rendering options as described for layertype {helpb geoplot##labels:label}.
+
+{marker symboli}{...}
+{dlgtab:symbol with immediate arguments}
+
+{p 8 15 2}
+    {cmd:symboli} {it:immediate_values} [{cmd:,} {it:options} ]
+
+{pstd}
+    where {it:immediate_values} is one or more of
+
+        {it:#_x} {it:#_y} [{cmd:[}[{cmd:*}]{it:size}{cmd:]}] [{cmd:(}{help clockposstyle:{it:clockpos}}{cmd:)}] [{cmd:"}{it:text}{cmd:"}]
+
+{pstd}
+    Arguments {it:#_x} and {it:#_y} specify the position of the symbol and optional argument
+    {it:size} specifies a custom size for the symbol ({it:size} must be enclosed in
+    square brackets). Specify {cmd:*}{it:size} to multiply the default size by
+    {it:size}; specify {it:size} without {cmd:*} for an absolute size. Furthermore,
+    {bf:"}{it:text}{bf:"} specifies an optional label and {it:clockpos}
+    specifies the location of the label (see {it:{help clockposstyle}}). Options
+    are as follows.
+
+{phang}
+    {cmdab:si:ze(}[{cmd:*}]{it:size}{cmd:)} sets the size argument for those
+    symbols for which no custom size has been specified.
+
+{phang}
+    {opt lab:el(label)} sets a key label
+    for use by {helpb geoplot##legend:legend()}, where {it:label} is
+    {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]. Multiple lines
+    are created if multiple {cmd:"}{it:text}{cmd:"} elements are specified.
+
+{phang}
+    Rendering options as described for layertype {helpb geoplot##symbol:symbol}.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes, arrows, or markers}
 
 {p 8 15 2}
-    {cmd:pcspike} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin}
-    [{cmd:,} {it:options} ]
-
-{p 8 15 2}
-    {cmd:pccapsym} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin}
-    [{cmd:,} {it:options} ]
-
-{p 8 15 2}
-    {cmd:pcarrow} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin}
-    [{cmd:,}  {it:options} ]
-
-{p 8 15 2}
-    {cmd:pbcarrow} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin}
-    [{cmd:,} {it:options} ]
-
-{p 8 15 2}
-    {cmd:pcpoint} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin}
+    {it:pctype} {it:frame} [{help geoplot##zvar:{it:zvar}}] {ifin}
     [{cmd:,} {it:options} ]
 
 {pstd}
-    where {it:frame} is the frame containing the paired coordinates (see
+    where {it:pctype} is
+
+{p2colset 9 22 25 2}{...}
+{p2col:{cmd:pcspike}}paired-coordinate spikes
+    {p_end}
+{p2col:{cmd:pccapsym}}paired-coordinate spikes capped with
+    symbols
+    {p_end}
+{p2col:{cmd:pcarrow}}paired-coordinate arrows
+    {p_end}
+{p2col:{cmd:pcbarrow}}paired-coordinate arrows with two
+    heads
+    {p_end}
+{p2col:{cmd:pcpoint}}paired-coordinate markers
+    {p_end}
+{p2col:{cmd:pcscatter}}synonym for {cmd:pcpoint}
+    {p_end}
+
+{pstd}
+    and {it:frame} is the frame containing the paired coordinates (see
     {helpb geoframe}) and {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling. Type
     {cmd:i.}{it:zvar} to treat {help geoplot##zvar:{it:zvar}} as a categorical
-    variable. {cmd:pcscatter} may be used as a synonym
-    for {cmd:pcpoint}. {it:options} are as follows.
+    variable. {it:options} are as follows.
 
 {phang}
     {it:{help geoplot##zopts:zvar_options}}, {cmd:select()}, and {opt box()} are
@@ -926,48 +1028,52 @@
     default is to use the variables returned by
     {helpb geoframe##get:geoframe get coordinates}.
 
-{marker pointi}{...}
-{dlgtab:point, spikes, or arrows with immediate arguments}
+{marker pci}{...}
+{dlgtab:paired-coordinate spikes, arrows, or markers with immediate arguments}
 
 {p 8 15 2}
-    {cmd:pointi} {it:immediate_values} [{cmd:,} {opt lab:el(label)} {it:options} ]
-
-{p 8 15 2}
-    {cmd:pci} {it:immediate_values} [{cmd:,} {opt lab:el(label)} {it:options} ]
-
-{p 8 15 2}
-    {cmd:pcarrowi} {it:immediate_values} [{cmd:,} {opt lab:el(label)} {it:options} ]
+    {it:pcitype} {it:immediate_values} [{cmd:,} {it:options} ]
 
 {pstd}
-    where {it:immediate_values} and {it:options} as described in
-    {helpb twoway scatteri}, {helpb twoway pci}, and {helpb twoway pcarrowi},
-    respectively. Color options support {it:colorspec} as described in
-    {helpb colorpalette##colorlist:colorpalette}. {cmd:scatteri} may be used as
-    a synonym for {cmd:pointi}. Option {opt label(label)}, where {it:label} is
-    {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}], sets a key label
-    for use by {helpb geoplot##legend:legend()}. Multiple lines are created if
-    multiple {cmd:"}{it:text}{cmd:"} elements are specified.
+    where {it:pcitype} is
+
+{p2colset 9 22 25 2}{...}
+{p2col:{cmd:pci}}{cmd:pcspike} with immediate arguments
+    {p_end}
+{p2col:{cmd:pccapsymi}}{cmd:pccapsym} with immediate arguments
+    {p_end}
+{p2col:{cmd:pcarrowi}}{cmd:pcarrow} with immediate arguments
+    {p_end}
+{p2col:{cmd:pcbarrowi}}{cmd:pcbarrow} with immediate arguments
+    {p_end}
+{p2col:{cmd:pcpointi}}{cmd:pcpoint} with immediate arguments
+    {p_end}
+{p2col:{cmd:pcscatteri}}synonym for {cmd:pcpointi}
+    {p_end}
 
 {pstd}
-    Note that {cmd:geoplot} passes {it:immediate_values} through to the underlying
-    graph command as is. This means that coordinates must be specified in
-    revere order (i.e. Y followed by X, not X followed by Y).
+    and where {it:immediate_values} is one or more of
 
-{marker symboli}{...}
-{dlgtab:symbol with immediate arguments}
-
-{p 8 15 2}
-    {cmd:symboli} {it:x1} {it:y1} {it:size1} [{it:x2} {it:y2} {it:size2} ...]
-        [{cmd:,} {opt lab:el(label)} {it:options} ]
+        {it:#_x1} {it:#_y1} {it:#_x2} {it:#_y2} [{bf:(}{help clockposstyle:{it:clockpos}}{bf:)}] [{bf:"}{it:text}{bf:"}]
 
 {pstd}
-    where each set of coordinates and size creates a symbol of the specified
-    size at the specified position. Option
-    {opt label(label)} specifies a key label for the legend. {it:options} are
-    as described for layertype {helpb geoplot##symbol:symbol}; option
-    {cmd:size()} will be ignored.
+    Arguments {it:#_x1}, {it:#_y1}, {it:#_x2}, and {it:#_y2} specify the
+    coordinates of the start point and the end point,
+    {bf:"}{it:text}{bf:"} specifies an optional marker label, and
+    {it:clockpos} specifies the location of the label (see
+    {it:{help clockposstyle}}). {it:options} are as follows.
+
+{phang}
+    {opt lab:el(label)} sets a key label
+    for use by {helpb geoplot##legend:legend()}, where {it:label} is
+    {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]. Multiple lines
+    are created if multiple {cmd:"}{it:text}{cmd:"} elements are specified.
+
+{phang}
+    Rendering options as described for layertype {helpb geoplot##pcspike:spcspike}.
 
 
+{marker options}{...}
 {title:Options}
 
 {marker zvar_options}{...}
@@ -975,7 +1081,7 @@
 
 {marker zvar}{...}
 {pstd}
-    Many layer types support (numeric) variable {help varname:{it:zvar}} (or
+    Many layer types support variable {help varname:{it:zvar}} (or
     {cmd:i.}{help varname:{it:zvar}}) as an argument. Specify {it:zvar}
     to determine the colors and other aspects of the
     units displayed in the layer by the values of {it:zvar}. The
@@ -983,15 +1089,19 @@
     level will be represented by a different style. Use the options below to
     determine how {it:zvar} is divided into levels, how the levels will be
     styled, and how the levels will be represented in the legend. Type
-    {cmd:i.}{it:zvar} to treat {help varname:{it:zvar}} as a categorical variable.
+    {cmd:i.}{it:zvar} to treat {help varname:{it:zvar}} as a categorical
+    variable. Each value of {it:zvar} will then be treated as a separate
+    level. Likewise, if {it:zvar} is a string variable, each unique value of
+    {it:zvar} will be treated as a separate level.
 
 {marker discrete}{...}
 {phang}
     {opt discr:ete} treats {help geoplot##zvar:{it:zvar}} as a discrete
-    variable. Each unique value of {help geoplot##zvar:{it:zvar}} will form a
+    variable. Each unique value of {help geoplot##zvar:{it:zvar}} will be treated as a
     separate level. Typing {cmd:i.}{it:zvar} implies {cmd:discrete}. Note that
     {cmd:i.}{it:zvar} only allows positive and integer values, while
-    {cmd:discrete} does not impose such a restriction.
+    {cmd:discrete} does not impose such a restriction. If {it:zvar} is a string
+    variable, {cmd:discrete} is implied.
 
 {marker levels}{...}
 {phang}
@@ -1013,7 +1123,7 @@
     distribution of {help geoplot##zvar:{it:zvar}}. In case of {cmdab:quantile}, weights to be taken
     into account when computing the quantiles can be specified in suboption {cmd:weight()}. Option
     {cmd:levels()} has no effect if {cmd:i.}{it:zvar} or
-    {helpb geoplot##discrete:discrete} is specified.
+    {helpb geoplot##discrete:discrete} is specified, or if {it:zvar} is a string variable.
 
 {marker cuts}{...}
 {phang}
@@ -1022,16 +1132,22 @@
     {help geoplot##zvar:{it:zvar}}. For continuous {help geoplot##zvar:{it:zvar}},
     specify {it:#}+1 breaks to form {it:#} intervals (first interval closed, remaining
     intervals left-open). Observations with values below the first break or above
-    the last break will be ignored. If {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}
+    the last break will be ignored.
+
+{pmore}
+    If {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}
     is specified, {it:numlist} is interpreted as the distinct values of
-    {help geoplot##zvar:{it:zvar}} to be selected.
+    {help geoplot##zvar:{it:zvar}} to be selected. In this case, {it:numlist}
+    also affects the order in which the levels are printed in the legend. Behavior
+    is similar if {it:zvar} is a string variable, except that the
+    values in {it:numlist} are interpreted as indices of alphabetically sorted
+    values.
 
 {marker colorvar}{...}
 {phang}
-    {opt colorvar(zvar)} is an alternative to specifying
-    {help geoplot##zvar:{it:zvar}} as an argument. If both are specified,
-    {opt colorvar()} will take precedence. Type {cmd:colorvar(i.}{it:zvar}{cmd:)}
-    to treat {it:zvar} as categorical.
+    {cmd:colorvar(}[{cmd:i.}]{it:zvar}{cmd:)} is an alternative to specifying
+    [{cmd:i.}]{help geoplot##zvar:{it:zvar}} as an argument. If both are specified,
+    {opt colorvar()} will take precedence.
 
 {marker color}{...}
 {phang}
@@ -1041,9 +1157,10 @@
     palette allowed by {helpb colorpalette} (which can also be a simple list of colors, see
     help {it:{help colorpalette##colorlist:colorlist}}) and {it:palette_options} are
     corresponding options. For example, type {cmd:colors(hcl bluered, reverse)} for a
-    red to blue HCL color scheme. The default is {cmd:color(viridis)} or,
-    if {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete} is specified,
-    {cmd:color(Set1)}. An appropriate number of colors will automatically
+    red to blue HCL color scheme. The default is {cmd:color(Set1)} if
+    {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete} is specified or if
+    {it:zvar} is a string variable; in all other cases the default is
+    {cmd:color(viridis)}. An appropriate number of colors will automatically
     be retrieved from {it:palette} (applying interpolation or recycling, if necessary,
     depending on type of palette). Specify a single color if you do not want
     the color to depend on the values of {help geoplot##zvar:{it:zvar}}.
@@ -1106,9 +1223,8 @@
             [{it:value} [{cmd:=}]] {it:label} [ {it:value} [{cmd:=}] {it:label} {it:...} ]
 
 {pmore}
-    where {it:value} is the index of the level to be affected
-    in case of continuous {it:zvar}, or the relevant value of {it:zvar} in case
-    of {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}, and {it:label} is
+    where {it:value} is the index (continuous or string {it:zvar}) or
+    value (categorical {it:zvar}) of the level to be affected and {it:label} is
 
             {cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]
 
@@ -1118,7 +1234,7 @@
 
 {pmore}
     {it:value} may be {it:#} to select a specific level
-    (e.g., in case of continuous {it:zvar}, {cmd:1} for the 1st level,
+    (e.g., {cmd:1} for the 1st level,
     {cmd:2} for 2nd level, etc.) or it may be a specification including
     wildcard characters {cmd:*} and {cmd:?} to select multiple levels
     (e.g. {cmd:?} for levels 1-9, {cmd:1?} for levels 10-19, {cmd:*} for all
@@ -1137,14 +1253,14 @@
     {p_end}
 {p2col: {cmd:@ub}}upper bound of the interval
     {p_end}
-{p2col: {cmd:@lab}}value label in case of {cmd:i.}{it:zvar} or
-    {helpb geoplot##discrete:discrete}, else equivalent to {cmd:@lb - @ub}
+{p2col: {cmd:@lab}}value label in case of categorical {it:zvar}, {cmd:@lb - @ub} in case of continuous {it:zvar}
     {p_end}
 {p2col: {cmd:@n}}number of units
     {p_end}
 
 {pmore}
-    In case of {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}, the default is
+    In case of {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}, or if {it:zvar} is a string variable,
+    the default is
     {cmd:label("@lab")}. For example, type {cmd:label("@lab (@n)")} to
     include the number of units in the label. For continuous {help geoplot##zvar:{it:zvar}},
     the default is equivalent to {cmd:label(1 = "[@lb,@ub]" * = "(@lb,@ub]")}. For example,
@@ -1503,15 +1619,19 @@
     compass is too large (i.e., has coordinates outside of the plotregion).
 
 {phang2}
-    {opt lab:el}[{cmd:(}{it:options}{cmd:)}] affects the rendering of the compass
-    labels, where {it:options} are {it:{help textbox_options}} such as {opt c:olor()} or
-    {opt si:ze()} (defaults are {cmd:color(black)} and {cmd:size(vsmall)}) as
-    well as {opt g:ap(#)} to determine how far the labels will be moved out from
-    the edge of the compass. Argument {it:#}>0 is in percent of the size
-    (or half-size) of the compass; default is {cmd:gap(30)}. Labels are printed
-    for compass types 1 ("N", "S", "E", and "W") and 2 ("N" only) by default; specify
-    {cmd:label} to print label "N" in compass type 3. Specify {opt nolab:el}
-    to omit the labels in compass types 1 and 2.
+    {opt lab:el}[{cmd:(}{it:options}{cmd:)}] affects the contents and
+    rendering of the compass labels, where {it:options}
+    are: {opt t:ext(labels)} to override the default labels, which are
+    {cmd:text("N" "S" "E" "W")} for compass type 1 and {cmd:text("N")}
+    for compass types 2 and 3; {opt g:ap(#)} to determine how far the
+    labels will be moved out from the edge of the compass, where argument
+    {it:#}, with default value {cmd:30}, is in percent of the size (or half-size)
+    of the compass; as well as {it:{help textbox_options}} such as
+    {opt c:olor()} or {opt si:ze()}. Default settings are
+    {cmd:color(black)} and {cmd:size(vsmall)}. By default, labels are turned on
+    for compass types 1 and 2 and off for compass type 3. Type {opt nolabel}
+    to omit the labels in compass types 1 and 2; type {opt label} to turn labels
+    on in compass type 3.
 
 {phang2}
     {opt nocir:cle} omits the circle in compass types 1 and 3.
@@ -1648,6 +1768,7 @@
     computer time on rendering the graph.
 
 
+{marker examples}{...}
 {title:Examples}
 
 {pstd}
@@ -1751,7 +1872,8 @@
     {p_end}
 
 
-{title:Returned results}
+{marker results}{...}
+{title:Stored results}
 
 {pstd} Scalars:
 
@@ -1804,6 +1926,7 @@
     {cmd:r(z_nobs_}{it:#}{cmd:)} corresponds to the missing category.
 
 
+{marker author}{...}
 {title:Author}
 
 {pstd}
@@ -1824,9 +1947,3 @@
     I am grateful to Asjad Naqvi for extensive testing and many valuable
     suggestions.
 
-
-{title:Also see}
-
-{psee}
-    Online:  help for
-    {helpb geoframe}, {helpb graph}, {helpb frames}, {helpb spshape2dta}

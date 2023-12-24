@@ -7,6 +7,7 @@
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
 *!     {helpb lgeoplot_source##geo_clip:geo_clip()}
 *!     {helpb lgeoplot_source##geo_hull:geo_hull()}
+*!     {helpb lgeoplot_source##geo_json:geo_json_import() and geo_json2xy()}
 *!     {helpb lgeoplot_source##geo_orientation:geo_orientation()}
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
@@ -16,6 +17,7 @@
 *!     {helpb lgeoplot_source##geo_spjoin:geo_spjoin()}
 *!     {helpb lgeoplot_source##geo_symbol:geo_symbol()}
 *!     {helpb lgeoplot_source##geo_welzl:geo_welzl()}
+*!     {helpb lgeoplot_source##geo_wkt2xy:geo_wkt2xy()}
 *! {asis}
 
 version 16.1
@@ -1521,6 +1523,530 @@ real scalar _geo_hull_leftturn(real rowvector p1, real rowvector p2,
 end
 
 *! {smcl}
+*! {marker geo_json}{bf:geo_json_import() and geo_json2xy()}{asis}
+*! version 1.0.1  19dec2023  Ben Jann
+*!
+*! geo_json_import() imports a GeoJSON FeatureCollection from a source file
+*! (see https://en.wikipedia.org/wiki/GeoJSON and https://geojson.org/). The
+*! collection will be returned as a string matrix with properties (variables)
+*! in columns and features (units) in rows.
+*!
+*!      S = geo_json_import(filename [, rc])
+*!
+*!  S         string matrix containing the parsed GeoJSON FeatureCollection;
+*!            for each feature (unit), column one will contain the GeoJSON
+*!            geometry specification; the remaining columns will contain the
+*!            values of the properties; the first row in S will contain the
+*!            property names; the second row indicates the data types of the 
+*!            properties ("string" or "numeric"); data type is "string" if the
+*!            property contains a string value for at least one features, else
+*!            the data type is "numeric"; the data type of the first column 
+*!            (geometry) is always "string"
+*!  filename  string scalar providing the (path and) name of the source file
+*!  rc        real scalar that will be set to 1 if an issue occurred (invalid
+*!            or incomplete GeoJSON specification); else 0
+*!
+*! geo_json2xy() extracts the coordinates form a GeoJSON geometry object (see
+*! https://en.wikipedia.org/wiki/GeoJSON). Supported geometry types are
+*! Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon, and
+*! GeometryCollection (case sensitive). In the returned matrix of coordinates,
+*! each extracted line or polygon and, in case of a GeometryCollection, each
+*! point will start with a row of missing values. Missing rows will be omitted
+*! by default when extracting coordinates from a Point or MultiPoint object.
+*!
+*!      XY = geo_json2xy(s [, mis, gtype, rc])
+*!
+*!  XY      n x 2 real matrix containing the extracted coordinates; J(1,2,.) is
+*!          returned if no coordinates are found
+*!  s       string scalar containing the GeoJSON specification
+*!  mis     mis!=0 enforces separating points by missing in any case
+*!  gtype   string scalar that will be set to the geometry type of s
+*!  rc      real scalar that will be set to 1 if an issue occurred (invalid
+*!          or incomplete GeoJSON specification); else 0
+*!
+
+local Bool  real scalar
+local BoolC real colvector
+local Int   real scalar
+local SS    string scalar
+local SC    string colvector
+local SM    string matrix
+local RR    real rowvector
+local RM    real matrix
+local PC    pointer colvector
+local T     transmorphic
+
+mata:
+mata set matastrict on
+
+`SM' geo_json_import(`SS' fn, | `Bool' rc)
+{
+    `SM' SUB
+    `T'  t, s
+    
+    // parser definition
+    rc = 0
+    t = _geo_json_parser()
+    SUB = (`"\""',"<!DQ!>",`"""')', ("\\","<!BS!>","\")'
+    // import file
+    s = _geo_json_fget(fn, SUB)
+    // parse FeatureCollection
+    tokenset(t, s)
+    s = _geo_json_unbind(tokenget(t), "{}", rc)
+    tokenset(t, "")
+    s = _geo_json_object(t, s, rc)
+    if (asarray(s, "type")!=`""FeatureCollection""') {
+        errprintf("file does not seem to contain a GeoJSON FeatureCollection\n")
+        exit(499)
+    }
+    // collect features and return
+    s = _geo_json_unbind(asarray(s, "features"), "[]", rc)
+    return(_geo_json_features(t, s, SUB, rc))
+}
+
+`SS' _geo_json_fget(`SS' fn, `SM' SUB)
+{
+    `Int' j, fh
+    `SS'  s
+
+    fh = fopen(fn, "r")
+    s = fread(fh, 1073741824) // max length = 1 GB
+    if (fread(fh,1)!=J(0, 0, "")) {
+        fclose(fh)
+        errprintf("file too large; maximum size is 1 GB\n")
+        exit(498)
+    }
+    fclose(fh)
+    for (j=cols(SUB);j;j--) s = subinstr(s, SUB[1,j], SUB[2,j])
+    for (j=9;j<=13;j++)     s = subinstr(s, char(j), " ") // white space
+    return(s)
+}
+
+`SM' _geo_json_features(`T' t0, `SS' s, `SM' SUB, `Bool' rc)
+{
+    `Int'   i, n, J
+    `SM'    S
+    `T'     t, V, F
+    
+    // collect features and store in matrix S
+    t = _geo_json_array_set(t0, s)
+    n = _geo_json_array_n(t, rc)
+    if (!n) return(J(0,0,"")) // empty array
+    V = asarray_create() // for positions of properties in S
+    S = J(n,50,"")
+    J = 1 /*2*/
+    for (i=1;i<=n;i++) {
+        // parse feature object
+        F = _geo_json_object(t0,
+            _geo_json_unbind(_geo_json_array_get(t), "{}", rc), rc)
+        if (asarray(F, "type")!=`""Feature""') {
+            rc = 1
+            continue
+        }
+        // collect id and geometry
+        S[i,1] = asarray(F, "geometry")
+        /*S[i,2] = asarray(F, "id")*/
+        // collect properties
+        _geo_json_features_properties(t0, i, F, V, S, J, rc)
+    }
+    S = S[,1..J]
+    // add names and storage types and cleanup strings
+    S = _geo_json_features_S(S, V)
+    // drop id column if empty
+    /*if (allof(S[|3,2 \ .,2|],"")) S = (J<=2 ? S[,1] : (S[,1], S[,3..J]))*/
+    // revert substitutions
+    for (i=cols(SUB);i;i--) S = subinstr(S, SUB[2,i], SUB[3,i])
+    // return
+    return(S)
+}
+
+void _geo_json_features_properties(`T' t0, `Int' i, `T' F, `T' V, `SM' S,
+    `Int' J, `Bool' rc)
+{
+    `Int'   k, K, j
+    `SS'    key
+    `SC'    keys
+    `T'     A
+    
+    A = asarray(F, "properties")
+    if (A=="") return // "properties": null
+    A = _geo_json_object(t0, _geo_json_unbind(A, "{}", rc), rc)
+    keys = asarray_keys(A)
+    K = rows(keys)
+    for (k=1;k<=K;k++) {
+        key = keys[k]
+        j = asarray(V, key)
+        if (!length(j)) {
+            J++
+            if (J>cols(S)) S = S, J(rows(S),50,"")
+            asarray(V, key, J)
+            j = J
+        }
+        S[i,j] = asarray(A, key)
+    }
+}
+
+`SM' _geo_json_features_S(`SM' S, `t' V)
+{
+    `Int'   j
+    `BoolC' q
+    `SS'    key
+    `SC'    keys, Sj
+    `SM'    L
+    
+    L = J(2,cols(S),"")
+    L[1,1] = "_GEOMETRY"
+    L[2,1] = "string"
+    L[1,2] = "id"
+    keys = asarray_keys(V)
+    for (j=rows(keys);j;j--) {
+        key = keys[j]
+        L[1,asarray(V, key)] = key
+    }
+    for (j=cols(S);j>1;j--) {
+        Sj = S[,j]
+        q = (substr(Sj,1,1)+substr(Sj,-1.1)):==`""""'
+        if (any(q)) {
+            L[2,j] = "string"
+            S[,j]  = substr(Sj, 2, strlen(Sj)-(2:*q))
+        }
+        else L[2,j] = "numeric"
+    }
+    return(L \ S)
+}
+
+`RM' geo_json2xy(`SS' S, | `Bool' mis, `SS' kw, `Bool' rc)
+{
+    `RM' XY
+    `T'  t0, s
+    
+    if (args()<2) mis = 0
+    rc = 0
+    t0 = _geo_json_parser()
+    s = _geo_json_unbind(strtrim(S), "{}", rc)
+    s = _geo_json_object(t0, s, rc)
+    kw = _geo_json_unbind(asarray(s, "type"), `""""')
+    if (kw=="GeometryCollection") {
+        s = _geo_json_unbind(asarray(s, "geometries"), "[]", rc)
+        XY = _geo_json2xy_C(t0, rc, s)
+    }
+    else {
+        s = _geo_json_unbind(asarray(s, "coordinates"), "[]", rc)
+        if      (kw=="Point")           XY = _geo_json2xy_p(rc, s, mis!=0)
+        else if (kw=="MultiPoint")      XY = _geo_json2xy_P(t0, rc, s, mis!=0)
+        else if (kw=="LineString")      XY = _geo_json2xy_l(t0, rc, s)
+        else if (kw=="MultiLineString") XY = _geo_json2xy_L(t0, rc, s)
+        else if (kw=="Polygon")         XY = _geo_json2xy_s(t0, rc, s)
+        else if (kw=="MultiPolygon")    XY = _geo_json2xy_S(t0, rc, s)
+        else {
+            rc = 1
+            kw = ""
+            XY = J(0,2,.)
+        }
+    }
+    if (!rows(XY)) XY = (.,.)
+    return(XY)
+}
+
+// parser for GeometryCollection
+`RM' _geo_json2xy_C(`T' t0, `Bool' rc, `SS' S)
+{
+    `Int' i, n, N, a, b
+    `SS'  kw
+    `RM'  XY
+    `PC'  P
+    `T'   t, s
+    
+    t = _geo_json_array_set(t0, S)
+    n = _geo_json_array_n(t, rc)
+    if (!n) return(J(0,2,.)) // array is empty
+    P = J(n,1,NULL)
+    N = 0
+    for (i=1;i<=n;i++) {
+        s  = _geo_json_unbind(_geo_json_array_get(t), "{}", rc)
+        s  = _geo_json_object(t0, s, rc)
+        kw = _geo_json_unbind(asarray(s, "type"), `""""')
+        s  = _geo_json_unbind(asarray(s, "coordinates"), "[]", rc)
+        if      (kw=="Point")           P[i] = &_geo_json2xy_p(rc, s, 1)
+        else if (kw=="MultiPoint")      P[i] = &_geo_json2xy_P(t0, rc, s, 1)
+        else if (kw=="LineString")      P[i] = &_geo_json2xy_l(t0, rc, s)
+        else if (kw=="MultiLineString") P[i] = &_geo_json2xy_L(t0, rc, s)
+        else if (kw=="Polygon")         P[i] = &_geo_json2xy_s(t0, rc, s)
+        else if (kw=="MultiPolygon")    P[i] = &_geo_json2xy_S(t0, rc, s)
+        else {
+            rc = 1
+            P[i] = &(J(0,2,.))
+        }
+        N = N + rows(*P[i])
+    }
+    XY = J(N,2,.)
+    b = 0
+    for (i=1;i<=n;i++) {
+        a = b + 1
+        b = b + rows(*P[i])
+        if (b<a) continue // empty element
+        XY[|a,1 \ b,2|] = *P[i]
+    }
+    return(XY)
+}
+
+// parser for point
+`RM' _geo_json2xy_p(`Bool' rc, `SS' s, `Bool' mis)
+{
+    return(J(mis,2,.) \ __geo_json2xy_item(rc, s))
+}
+
+// parser for points
+`RM' _geo_json2xy_P(`T' t, `Bool' rc, `SS' s, `Bool' mis)
+{
+    return(_geo_json2xy_array(t, rc, s, mis ? 2 : 1))
+}
+
+// parser for line
+`RM' _geo_json2xy_l(`T' t, `Bool' rc, `SS' s)
+{
+    return(_geo_json2xy_array(t, rc, s, 0))
+}
+
+// parser for lines
+`RM' _geo_json2xy_L(`T' t, `Bool' rc, `SS' s)
+{
+    return(_geo_json2xy_arrays(t, rc, s, 0))
+}
+
+// parser for polygon
+`RM' _geo_json2xy_s(`T' t, `Bool' rc, `SS' s)
+{
+    return(_geo_json2xy_arrays(t, rc, s, 0))
+}
+
+// parser for polygons
+`RM' _geo_json2xy_S(`T' t, `Bool' rc, `SS' s)
+{
+    return(_geo_json2xy_arrays(t, rc, s, 1))
+}
+
+// collect coordinates from (nested) arrays
+`RM' _geo_json2xy_arrays(`T' t0, `Bool' rc, `SS' S, `Int' levl)
+{
+    `Int' i, n, N, a, b
+    `SS'  s
+    `RM'  XY
+    `PC'  P
+    `T'   t
+    
+    t = _geo_json_array_set(t0, S)
+    n = _geo_json_array_n(t, rc)
+    if (!n) return(J(0,2,.)) // array is empty
+    P = J(n,1,NULL)
+    N = 0
+    for (i=1;i<=n;i++) {
+        s = _geo_json_unbind(_geo_json_array_get(t), "[]", rc)
+        if (levl) P[i] = &_geo_json2xy_arrays(t0, rc, s, levl-1)
+        else      P[i] = &_geo_json2xy_array(t0, rc, s, 0)
+        N = N + rows(*P[i])
+    }
+    XY = J(N,2,.)
+    b = 0
+    for (i=1;i<=n;i++) {
+        a = b + 1
+        b = b + rows(*P[i])
+        if (b<a) continue // empty element
+        XY[|a,1 \ b,2|] = *P[i]
+    }
+    return(XY)
+}
+
+// collect coordinates from single array
+// pt: 0 line/polygon; 1 points w/o missings, 2 points w missings
+`RM' _geo_json2xy_array(`T' t0, `Bool' rc, `SS' s, `Int' pt)
+{
+    `Int' i, n
+    `RM'  XY
+    `T'   t
+    
+    t = _geo_json_array_set(t0, s)
+    n = _geo_json_array_n(t, rc)
+    if (!n) return(J(0,2,.)) // array is empty
+    XY = J(n, 2, .)
+    for (i=1;i<=n;i++) {
+        XY[i,] = __geo_json2xy_item(rc,
+            _geo_json_unbind(_geo_json_array_get(t), "[]", rc))
+    }
+    if      (!pt)   XY = (.,.) \ XY // add leading missing
+    else if (pt==2) XY = _geo_json2xy_array_addmis(XY)
+    return(XY)
+}
+
+`RM' _geo_json2xy_array_addmis(`RM' xy)
+{
+    `Int' n
+    `RM'  XY
+    
+    n = rows(xy)
+    XY = J(2*n,cols(xy),.)
+    XY[(1::n)*2,] = xy
+    return(XY)
+}
+
+// collect coordinates from single item
+`RR' __geo_json2xy_item(`Bool' rc, `SS' s)
+{
+    `Int' j
+    `RR'  xy
+    
+    xy = strtoreal(tokens(subinstr(s,","," ")))
+    j = length(xy)
+    if (j!=2) {
+        rc = 1
+        if (j>2)       xy = xy[(1,2)] // too many elements
+        else if (j==1) xy = (xy,.)    // too few element
+        else           xy = (.,.)     // too few element
+    }
+    return(xy)
+}
+
+// JSON parser definition
+`T' _geo_json_parser()
+{
+    return(tokeninit(" ", (",", ":"), (`""""', "{}", "[]")))
+}
+
+// return JSON object as associative array; assumes that {} binding has already
+// been removed
+`T' _geo_json_object(`T' t0, `SS' S, | `Bool' rc)
+{
+    `SS' key, s
+    `T'  t, A
+
+    // setup associative array
+    A = asarray_create()
+    asarray_notfound(A, "")
+    // collect members: "key" : value [, "key" : value ...]
+    t = t0
+    tokenset(t, S)
+    s = tokenget(t) // get first key
+    if (s=="") return(A) // object is empty
+    while (1) {
+        if (s==",") { // element is empty; skip comma and continue
+            rc = 1
+            s = tokenget(t)
+            if (s=="") break // reached end
+            continue
+        }
+        if (s==":") { // key is missing; skip next token and comma and continue
+            rc = 1
+            s = tokenget(t)
+            if (s!=",") s = tokenget(t)
+            s = tokenget(t)
+            if (s=="") break // reached end
+            continue
+        }
+        key = _geo_json_unbind(s, `""""', rc)
+        s = tokenget(t) // get colon
+        if (s==":") s = tokenget(t) // get value
+        else        rc = 1 // colon is missing
+        if (s==",") { // value is missing; skip comma and continue
+            rc = 1
+            s = tokenget(t)
+            if (s=="") break // reached end
+            continue
+        }
+        if (s=="") { // value is missing and reached end
+            rc = 1
+            break
+        }
+        if      (s=="true")  s = "1"
+        else if (s=="false") s = "0"
+        else if (s=="null")  s = ""
+        asarray(A, key, s) // post key and value
+        s = tokenget(t) // get comma
+        if (s=="") break // reached end
+        if (s!=",") { // comma is missing; treat as next key
+            rc = 1
+            continue
+        }
+        s = tokenget(t) // get next key
+        if (s=="") { // reached end; last element is empty
+            rc = 1
+            break
+        }
+    }
+    return(A)
+}
+
+// parse JSON array; assumes that [] binding has already been removed
+// - setup parser
+`T' _geo_json_array_set(`T' t0, `SS' s)
+{
+    `T' t
+    
+    t = t0
+    tokenset(t, s)
+    return(t)
+}
+// - count number of (remaining) elements
+`Int' _geo_json_array_n(`T' t, | `Bool' rc)
+{
+    `SS'  s
+    `Int' n, p
+    
+    p = tokenoffset(t)
+    s = tokenget(t)
+    if (s=="") return(0) // array is empty
+    n = 0
+    while (1) {
+        n++
+        if (s==",") { // element is empty
+            rc = 1
+            s = tokenget(t)
+            continue
+        }
+        s = tokenget(t) // skip comma
+        if (s=="") break // reached end
+        if (s!=",") { // comma is missing
+            rc = 1
+            continue
+        }
+        s = tokenget(t)
+        if (s=="") { // last element empty
+            rc = 1
+            n++
+            break
+        }
+    }
+    tokenoffset(t, p) // move back to start
+    return(n)
+}
+// - get next element
+`SS' _geo_json_array_get(`T' t)
+{
+    `SS'  s
+    
+    
+    s = tokenget(t)
+    if (s==",") return("") // element is empty
+    if (s=="")  return("") // element is empty
+    if (tokenpeek(t)==",") (void) tokenget(t) // skip comma after element
+    return(s)
+}
+
+// remove binding characters; type
+//    s = _geo_json_unbind(s, `""""')   for quotes
+//    s = _geo_json_unbind(s, "{}")     for braces
+//    s = _geo_json_unbind(s, "[]")     for brackets
+`SS' _geo_json_unbind(`SS' s, `SS' lr, | `Bool' rc)
+{
+    if ((substr(s,1,1)+substr(s,-1,1))!=lr) {
+        rc = 1
+        return(s)
+    }
+    return(substr(s,2,strlen(s)-2))
+}
+
+end
+
+*! {smcl}
 *! {marker geo_orientation}{bf:geo_orientation()}{asis}
 *! version 1.0.1  10oct2023  Ben Jann
 *!
@@ -1910,7 +2436,7 @@ end
 *!  inside  real scalar equal to 1 if point is inside, 0 else
 *!  x       real scalar containing X coordinate of point
 *!  y       real scalar containing Y coordinate of point
-*!  YX      n x 2 real matrix containing (X,Y) coordinates of polygon
+*!  XY      n x 2 real matrix containing (X,Y) coordinates of polygon
 *!
 
 mata:
@@ -2837,6 +3363,257 @@ void _geo_welzl_frames_append(`Frames' frames, `PFrame' f)
 `RS' _geo_welzl_dist(`Point' a, `Point' b)
 {
     return(sqrt((a[1] - b[1])^2 + (a[2] - b[2])^2))
+}
+
+end
+
+*! {smcl}
+*! {marker geo_wkt2xy}{bf:geo_wkt2xy()}{asis}
+*! version 1.0.0  02dec2023  Ben Jann
+*!
+*! Extracts the coordinates form a WKT geometry specification ("Well-known text
+*! representation of geometry geometry; see
+*! https://en.wikipedia.org/wiki/Well-known_text_representation_of_geometry).
+*! Supported geometry types are Point, MultiPoint, LineString, MultiLineString,
+*! Polygon, MultiPolygon, and GeometryCollection (case insensitive).
+*! In the returned matrix of coordinates, each extracted line or polygon and,
+*! in case of a GeometryCollection, each point will start with a row of missing
+*! values. Missing rows will be omitted by default when extracting coordinates
+*! from a Point or MultiPoint specification.
+*!
+*!      XY = geo_wkt2xy(s [, mis, gtype, rc])
+*!
+*!  XY      n x 2 real matrix containing the extracted coordinates; J(1,2,.) is
+*!          returned if no coordinates are found
+*!  s       string scalar containing the WKT specification
+*!  mis     mis!=0 enforces separating points by missing in any case
+*!  gtype   string scalar that will be set to the geometry type of s
+*!  rc      real scalar that will be set to 1 if an issue occurred (invalid
+*!          or incomplete WKT specification); else 0
+*!
+
+local Bool real scalar
+local Int  real scalar
+local RR   real rowvector
+local RM   real matrix
+local SS   string scalar
+local SR   string rowvector
+local T    transmorphic
+
+mata:
+mata set matastrict on
+
+// main function: determine geometry type and launch relevant parser
+`RM' geo_wkt2xy(`SS' S, | `Bool' mis, `SS' kw, `Bool' rc)
+{
+    `SS' s
+    `RM' XY
+    `T'  t
+    
+    if (args()<2) mis = 0
+    rc = 0
+    t = tokeninit("", ",", "()")
+    tokenset(t, S)
+    kw = strtrim(strlower(tokenget(t)))
+    s  = tokenget(t)
+    _geo_wkt2xy_pstrip(rc, t, s)
+    if (tokenrest(t)!="") rc = 1
+    XY = J(0,2,.)
+    if (kw=="point") {
+        kw = "Point"
+        _geo_wkt2xy_p(rc, XY, s, mis!=0)
+    }
+    else if (kw=="multipoint") {
+        kw = "MultiPoint"
+        _geo_wkt2xy_P(t, rc, XY, s, mis!=0)
+    }
+    else if (kw=="linestring") {
+        kw = "LineString"
+        _geo_wkt2xy_l(rc, XY, s)
+    }
+    else if (kw=="multilinestring") {
+        kw = "MultiLineString"
+        _geo_wkt2xy_L(t, rc,  XY, s)
+    }
+    else if (kw=="polygon") {
+        kw = "Polygon"
+        _geo_wkt2xy_s(t, rc, XY, s)
+    }
+    else if (kw=="multipolygon") {
+        kw = "MultiPolygon"
+        _geo_wkt2xy_S(t, rc, XY, s)
+    }
+    else if (kw=="geometrycollection") {
+        kw = "GeometryCollection"
+        _geo_wkt2xy_C(t, rc, XY, s)
+    }
+    else {
+        rc = 1
+        kw = ""
+    }
+    if (!rows(XY)) XY = (.,.)
+    return(XY)
+}
+
+// parser for geometrycollection
+void _geo_wkt2xy_C(`T' t0, `Bool' rc, `RM' XY, `SS' S)
+{
+    `SS' kw, s
+    `T'  t
+    
+    t = t0
+    tokenset(t, S)
+    while ((kw = tokenget(t))!="") {
+        if (kw==",") continue
+        kw = strtrim(strlower(kw))
+        s  = tokenget(t)
+        _geo_wkt2xy_pstrip(rc, t, s)
+        if      (kw=="point")           _geo_wkt2xy_p(rc, XY, s, 1)
+        else if (kw=="multipoint")      _geo_wkt2xy_P(t0, rc, XY, s, 1)
+        else if (kw=="linestring")      _geo_wkt2xy_l(rc, XY, s)
+        else if (kw=="multilinestring") _geo_wkt2xy_L(t0, rc,  XY, s)
+        else if (kw=="polygon")         _geo_wkt2xy_s(t0, rc, XY, s)
+        else if (kw=="multipolygon")    _geo_wkt2xy_S(t0, rc, XY, s)
+        else rc = 1
+    }
+}
+
+// parser for point
+void _geo_wkt2xy_p(`Bool' rc, `RM' XY, `SS' S, `Bool' mis)
+{
+    XY = XY \ J(mis, 2, .) \ __geo_wkt2xy_xy(rc, S)
+}
+
+// parser for points
+void _geo_wkt2xy_P(`T' t0, `Bool' rc, `RM' XY, `SS' S, `Bool' mis)
+{
+    `SS' s
+    `T'  t
+    
+    t = t0
+    tokenset(t, S)
+    while ((s = tokenget(t))!="") {
+        if (s==",") continue
+        if (strtrim(s)=="") continue
+        // note; parentheses are optional; cannot use _geo_wkt2xy_pstrip()
+        if (substr(s,1,1)=="(") {
+            s = strltrim(substr(s,2,.))
+            if (substr(s,-1,1)==")") s = strrtrim(substr(s,1,strlen(s)-1))
+            else rc = 1 // opening paren only
+        }
+        else if (substr(s,-1,1)==")") {
+            s = strrtrim(substr(s,1,strlen(s)-1))
+            rc = 1 // closing paren only
+        }
+        _geo_wkt2xy_p(rc, XY, s, mis)
+    }
+}
+
+// parser for line
+void _geo_wkt2xy_l(`Bool' rc, `RM' XY, `SS' S)
+{
+    XY = XY \ _geo_wkt2xy_xy(rc, S)
+}
+
+// parser for lines
+void _geo_wkt2xy_L(`T' t0, `Bool' rc, `RM' XY, `SS' S)
+{
+    `SS' s
+    `T'  t
+    
+    t = t0
+    tokenset(t, S)
+    while ((s = tokenget(t))!="") {
+        if (s==",") continue
+        if (strtrim(s)=="") continue
+        _geo_wkt2xy_pstrip(rc, t, s)
+        _geo_wkt2xy_l(rc, XY, s)
+    }
+}
+
+// parser for polygon
+void _geo_wkt2xy_s(`T' t0, `Bool' rc, `RM' XY, `SS' S)
+{
+    `SS' s
+    `T'  t
+    
+    t = t0
+    tokenset(t, S)
+    while ((s = tokenget(t))!="") {
+        if (s==",") continue
+        if (strtrim(s)=="") continue
+        _geo_wkt2xy_pstrip(rc, t, s)
+        XY = XY \ _geo_wkt2xy_xy(rc, s)
+    }
+}
+
+// parser for multipolygon
+void _geo_wkt2xy_S(`T' t0, `Bool' rc, `RM' XY, `SS' S)
+{
+    `SS' s
+    `T'  t
+    
+    t = t0
+    tokenset(t, S)
+    while ((s = tokenget(t))!="") {
+        if (s==",") continue
+        if (strtrim(s)=="") continue
+        _geo_wkt2xy_pstrip(rc, t, s)
+        _geo_wkt2xy_s(t0, rc, XY, s)
+    }
+}
+
+// collect coordinates of a single item
+`RM' _geo_wkt2xy_xy(`Bool' rc, `SS' s)
+{
+    `Int' i, n
+    `SR'  S
+    `RM'  XY
+    
+    S = tokens(s, ",")
+    S = select(S, S:!=",")
+    n = length(S)
+    if (!n) { // item is empty
+        rc = 1
+        return(J(0,2,.))
+    }
+    XY = J(n, 2, .)
+    for (i=1;i<=n;i++) XY[i,] = __geo_wkt2xy_xy(rc, S[i])
+    return((.,.) \ XY) // add leading row containing missing
+}
+
+`RR' __geo_wkt2xy_xy(`Bool' rc, `SS' s)
+{
+    `Int' j
+    `RR'  xy
+    
+    xy = strtoreal(tokens(s))
+    j = length(xy)
+    if (j!=2) {
+        rc = 1
+        if (j>2)       xy = xy[(1,2)] // too many elements
+        else if (j==1) xy = (xy,.)    // too few element
+        else           xy = (.,.)     // too few element
+    }
+    return(xy)
+}
+
+// remove outer parentheses (sets rc = 1 if no outer parentheses)
+void _geo_wkt2xy_pstrip(`Bool' rc, `T' t, `SS' s)
+{
+    if (substr(s,1,1)=="(") {
+        s = strltrim(substr(s,2,.))
+        if (substr(s,-1,1)==")") s = strrtrim(substr(s,1,strlen(s)-1))
+        else {
+            rc = 1
+            s = s + tokenrest(t) // add rest if closing paren is missing
+            tokenset(t, "")
+        }
+    }
+    else {
+        if (substr(s,-1,1)==")") s = strrtrim(substr(s,1,strlen(s)-1))
+        rc = 1
+    }
 }
 
 end
