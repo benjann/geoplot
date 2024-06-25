@@ -1,4 +1,4 @@
-*! version 1.1.7  24dec2023  Ben Jann
+*! version 1.1.7  24jun2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -42,24 +42,8 @@ program geoplot
 end
 
 program _geoplot, rclass
-    _parse comma lhs 0 : 0
-    syntax [, /*
-        */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis)/*
-        */ SBAR SBAR2(str asis) COMPass COMPass2(str asis)/*
-        */ ANGle(real 0) tight Margin(str) REFdim(str) ASPECTratio(str)/*
-        */ YSIZe(passthru) XSIZe(passthru) SCHeme(passthru) /*
-        */ frame(str) NOGRAPH * ]
-    local legend  = `"`legend'`legend2'"'!=""
-    local clegend = `"`clegend'`clegend2'"'!=""
-    if !`legend' & !`clegend' & "`nolegend'"=="" local legend 1
-    _parse_aspectratio `aspectratio' // returns ar, ar_opts
-    if "`margin'"=="" local margin 0 0 0 0
-    else              _parse_margin `margin'
-    _parse_refdim `refdim'
-    _parse_frame `frame' // returns frame, replace, nocurrent
-    
     // parse layers
-    _parse expand layer lg : lhs
+    _parse expand layer lg : 0
     if `"`lg_if'"'!="" {
         di as err "global {bf:if} not allowed"
         exit 198
@@ -68,9 +52,35 @@ program _geoplot, rclass
         di as err "global {bf:in} not allowed"
         exit 198
     }
-    if `"`lg_op'"'!="" {
-        error 198
-    }
+    local 0 , `lg_op'
+    
+    // parse global options
+    syntax [, /*
+        */ NOLEGend LEGend LEGend2(str asis) CLEGend CLEGend2(str asis)/*
+        */ SBAR SBAR2(str asis) COMPass COMPass2(str asis)/*
+        */ PROJect PROJect2(str) ANGle(real 0) rotate(real 0)/*
+        */ BACKground BACKground2(str) grid GRID2(str) tissot TISSOT2(str)/*
+        */ tight Margin(str) REFdim(str) ASPECTratio(str)/*
+        */ YSIZe(passthru) XSIZe(passthru) axes SCHeme(passthru) /*
+        */ frame(str) NOGRAPH * ]
+    if `"`project2'"'!=""    local project project
+    if "`project'"!=""       _parse_project `project2'
+    if `"`background2'"'!="" local background background
+    if "`background'"!=""    _parse_background `project', `background2'
+    if `"`grid2'"'!=""       local grid grid
+    if "`grid'"!=""          _parse_grid, `grid2'
+    if `"`tissot2'"'!=""     local tissot tissot
+    if "`tissot'"!=""        _parse_tissot, `tissot2'
+    if !`angle' local angle `rotate'
+    local legend  = `"`legend'`legend2'"'!=""
+    local clegend = `"`clegend'`clegend2'"'!=""
+    if !`legend' & !`clegend' & "`nolegend'"=="" local legend 1
+    _parse_aspectratio `aspectratio' // returns ar, ar_opts
+    if "`margin'"!=""         _parse_margin `margin'
+    else if "`grid_lbls'"!="" local margin 10 10 5 5
+    else                      local margin 0 0 0 0
+    _parse_refdim `refdim'
+    _parse_frame `frame' // returns frame, replace, nocurrent
     
     // prepare frame
     local cframe = c(frame)
@@ -98,10 +108,19 @@ program _geoplot, rclass
         gen double X = .
         qui set obs 2
         gen double W = _n - 1 // 0 and 1
-        
-    // process layers
-        local p 0
+    
+    // background: generate plot with empty coordinates
+        local p  0
+        local p0 0
         local plots
+        if "`background'"!="" {
+            _background `p' `background_n' `"`background_feat'"'/*
+                */ `"`background2'"' // => plot, p
+            local p0 `p'
+            local plots `plots' `plot'
+        }
+    
+    // process layers
         forv i = 1/`layer_n' {
             // provide tempnames for returns (matrices)
             if `"`: char LAYER[CUTS]'"'=="" {
@@ -137,20 +156,55 @@ program _geoplot, rclass
             capt n _geoplot_`plottype' `i' `p' `lframe' `layer' // => plot, p
             if _rc==1 exit 1
             if _rc {
-                di as err "(error in layer `i': `plottype' ...)"
+                di as err "error in layer `i': `plottype' ..."
                 exit _rc
             }
             local plots `plots' `plot'
         }
         char LAYER[CUTS]
         char LAYER[NOBS]
-        if !`p' {
+        if `p'<=`p0' {
             return scalar layers = 0
             char LAYER[layers]
             di as txt "(nothing to plot)"
             exit
         }
         
+    // background: fill in coordinates
+        local N1 = _N
+        if "`background'"!="" {
+            _background_fillin `N1' `background_n' `background_pad'/*
+                */ `background_limits'
+        }
+    
+    // grid lines and Tissot's indicatrices
+        local N1 = _N
+        if "`grid'"!="" {
+            _grid `p' `"`grid2'"' `"`grid_opts'"' "`grid_lbls'"/*
+                */ `"`grid_lbls2'"' // => plot, p
+            local plots `plots' `plot'
+            local N2 = _N
+        }
+        if "`tissot'"!="" {
+            _tissot `N1' `p' `"`tissot2'"' `"`tissot_opts'"'/*
+                */ `"`tissot_mark'"' // => plot, p
+            local plots `plots' `plot'
+        }
+        if "`grid'"!="" & "`background'"!="" {
+            // update background to cover grid (unless all limits are custom
+            // or padding is negative
+            if `background_pad'>=0 {
+                foreach l of local background_limits {
+                    if `l'<. continue
+                    _background_fillin `N2' `background_n' 0 `background_limits'
+                    continue, break
+                }
+            }
+        }
+        
+    // project map
+        _project `"`project2'"' `"`project_opts'"'
+    
     // rotate map
         _rotate `angle'
         capt drop cY cX
@@ -158,6 +212,9 @@ program _geoplot, rclass
     // zoom
         _zoom `p' `layer_n' `options' // updates options
         local plots `plots' `plot'
+    
+    // axes option
+        _parse_axes, `axes' `options'
         
     // graph dimensions
         _grdim, margin(`margin') refdim(`refdim') aratio(`ar') `options'
@@ -232,9 +289,7 @@ program _geoplot, rclass
     // draw graph
         local graph /*
             */ graph twoway `plots', `legend' `clegend' /*
-            */ graphregion(margin(small) style(none) istyle(none))/*
-            */ plotregion(margin(zero) style(none) istyle(none))/*
-            */ bgcolor(white) `scheme' `aspectratio' `ysize' `xsize' `options'
+            */ `scheme' `aspectratio' `ysize' `xsize' `options'
         if "`nograph'"=="" {
             `graph'
         }
@@ -366,6 +421,233 @@ program _parse_frame
     c_local frame `frame'
     c_local replace `replace'
     c_local nocurrent `nocurrent'
+end
+
+program _parse_background
+    _parse comma project 0 : 0
+    syntax [, Limits(numlist max=4 missingok) n(numlist max=1 >0)/*
+        */  PADding(real 0) water * ]
+    if "`n'"=="" {
+        if "`project'"!="" local n 100
+        else               local n 1
+    }
+    while (`: list sizeof limits'<4) {
+        local limits `limits' .
+    }
+    c_local background_limits `limits'
+    c_local background_pad `padding'
+    c_local background_n `n'
+    c_local background_feat `water'
+    c_local background2 `options'
+end
+
+program _background
+    args p n feat opts
+    tempname background
+    frame create `background' byte(_ID) double(_X _Y)
+    frame `background' {
+        qui set obs `=`n'*4 + 2'
+        qui replace _ID = 1
+        if `"`feat'"'!="" {
+            geoframe set feature `feat'
+        }
+    }
+    _geoplot_area . `p' `background', `opts'
+    c_local plot `plot'
+    c_local p `p'
+end
+
+program _background_fillin
+    args N n pad Xmin Xmax Ymin Ymax
+    foreach x in X Y {
+        if ``x'min'>=. | ``x'max'>=. {
+            su `x' in 1/`N', meanonly
+            if ``x'min'>=. local `x'min = r(min) - (r(max)-r(min))*(`pad'/100)
+            if ``x'max'>=. local `x'max = r(max) + (r(max)-r(min))*(`pad'/100)
+        }
+    }
+    local a 4
+    local b = `a' + `n'
+    mata: st_store((`a',`b'), "X", rangen(`Xmin',`Xmax',`n'+1))
+    mata: st_store((`a',`b'), "Y", J(`n'+1,1,`Ymin'))
+    local a = `b'
+    local b = `a' + `n'
+    mata: st_store((`a',`b'), "X", J(`n'+1,1,`Xmax'))
+    mata: st_store((`a',`b'), "Y", rangen(`Ymin',`Ymax',`n'+1))
+    local a = `b'
+    local b = `a' + `n'
+    mata: st_store((`a',`b'), "X", rangen(`Xmax',`Xmin',`n'+1))
+    mata: st_store((`a',`b'), "Y", J(`n'+1,1,`Ymax'))
+    local a = `b'
+    local b = `a' + `n'
+    mata: st_store((`a',`b'), "X", J(`n'+1,1,`Xmin'))
+    mata: st_store((`a',`b'), "Y", rangen(`Ymax',`Ymin',`n'+1))
+end
+
+program _parse_grid
+    syntax [, x(passthru) y(passthru) tight PADing(passthru) RADian/*
+        */ n(passthru) noEXtend mesh LABels LABels2(str) * ]
+    if `"`labels2'"'!="" local labels labels
+    if "`labels'"!="" _parse_grid_lbls, `labels2' // => labels, labels2
+    c_local grid2 `x' `y' `tight' `padding' `radian' `n' `extend' `mesh'
+    c_local grid_opts `options'
+    c_local grid_lbls  `labels'
+    c_local grid_lbls2 `labels2'
+end
+
+program _parse_grid_lbls
+    syntax [, Positions(str) COLor(passthru) * ]
+    if `"`color'"'=="" local color color(gray)
+    capt n _parse_grid_labels `positions' // => labels
+    if _rc==1 exit 1
+    if _rc {
+        di as err "error in grid(labels(positions()))"
+        exit _rc
+    }
+    c_local labels `labels'
+    c_local labels2 `color' `options'
+end
+
+program _parse_grid_labels
+    while ("`0'"!="") {
+        gettoken m 0 : 0, parse("= ")
+        if !inlist(`"`m'"',"l","r","b","t") {
+            di as err `"{bf:`m'} not allowed"'
+            exit 198
+        }
+        gettoken eq : 0, parse("= ")
+        if `"`eq'"'=="=" gettoken eq 0 : 0, parse("= ") // remove "="
+        gettoken tok : 0 // check next token
+        if `"`eq'"'=="=" confirm number `tok'
+        capt numlist `"`tok'"', min(1) max(1) int range(>=0 <=12)
+        if _rc==1 exit 1
+        if _rc==0 { // valid clockpos specified
+            local pos `r(numlist)'
+            gettoken tok 0 : 0 // remove token
+        }
+        else {
+            if      "`m'"=="l" local pos 9
+            else if "`m'"=="r" local pos 3
+            else if "`m'"=="b" local pos 6
+            else /*m=t*/       local pos 12
+        }
+        local labels `labels' `m' `pos'
+    }
+    if "`labels'"=="" local labels l 9 b 6
+    c_local labels `labels'
+end
+
+program _grid
+    args p grid2 opts lbls lbls2
+    tempname grid grid_shp
+    geoframe set coordinates X Y
+    qui geoframe grid `grid' `grid_shp', `grid2'
+    geoframe set coordinates
+    _geoplot_line . `p' `grid', `opts'
+    local plots `plot'
+    if "`lbls'"!="" {
+        frame `grid' {
+            qui generate double X = cond(axis==2,_CY,_CX)
+            local 0 `", `lbls2'"'
+            syntax [, Format(str) * ]
+            if `"`format'"'=="" local format: format X
+            capt confirm format `format'
+            if _rc==1 exit 1
+            if _rc==0 {
+                // format(%fmt)
+                capt confirm string format `format'
+                if _rc==1 exit 1
+                if _rc local format string(X, "`format'")
+                else   local format string(X) // string format specified
+            }
+            else {
+                // format(exp)
+                local 0 `", `lbls2'"'
+                syntax [, Format(str asis) * ]
+            }
+            generate str _LAB = `format'
+        }
+    }
+    while ("`lbls'"!="") {
+        gettoken m   lbls : lbls
+        gettoken pos lbls : lbls
+        if      "`m'"=="l" local tmp if axis==2, coord(xmin ymin) 
+        else if "`m'"=="r" local tmp if axis==2, coord(xmax ymin)
+        else if "`m'"=="b" local tmp if axis==1, coord(xmin ymin)
+        else /*m=t*/       local tmp if axis==1, coord(xmin ymax)
+        _geoplot_label . `p' `grid' _LAB `tmp' position(`pos') `options'
+        local plots `plots' `plot'
+    }
+    c_local plot `plots'
+    c_local p `p'
+end
+
+program _parse_tissot
+    syntax [, r(passthru) x(passthru) y(passthru) tight PADing(passthru) /*
+        */ RADian n(passthru) MARKers MARKers2(str) * ]
+    if `"`markers2'"'=="" & "`markers'"!="" local markers2 " "
+    c_local tissot2 `r' `x' `y' `tight' `padding' `radian' `n'
+    c_local tissot_opts `options'
+    c_local tissot_mark `"`markers2'"'
+end
+
+program _tissot
+    args Nlast p tissot2 opts mark
+    tempname tissot tissot_shp
+    geoframe set coordinates X Y
+    qui geoframe tissot `tissot' `tissot_shp' in 1/`Nlast', `tissot2'
+    geoframe set coordinates
+    _geoplot_area . `p' `tissot', `opts'
+    local plots `plot'
+    if `"`mark'"'!="" {
+        _geoplot_point . `p' `tissot', `mark'
+        local plots `plots' `plot'
+    }
+    c_local plot `plots'
+    c_local p `p'
+end
+
+program _parse_project
+    _parse comma project 0 : 0
+    syntax [, RADian ]
+    if `"`project'"'=="" local project webmercator
+    else {
+        gettoken pname : project
+        mata: (void) _geo_project_find(`"`pname'"')
+    }
+    c_local project2 `"`project'"'
+    c_local project_opts `radian'
+end
+
+program _project
+    args project opts
+    if strtrim(`"`project'"')=="" exit
+    local XY X Y
+    capt confirm variable Y2, exact
+    if _rc==1 exit 1
+    if !_rc local XY `XY' X2 Y2
+    capt confirm variable cY, exact
+    if _rc==1 exit 1
+    if _rc==0 { // lock non-rotating shapes
+        local XY `XY' cX cY
+        tempvar dY dX rescale
+        qui gen double `dY' = Y - cY if cY<.
+        qui gen double `dX' = X - cX if cX<.
+        qui replace Y = cY if cY<.
+        qui replace X = cX if cX<.
+        su X, meanonly
+        scalar `rescale' = r(max) - r(min)
+    }
+    geoframe project `project', `opts' xy(`XY') fast
+    if "`dY'"!="" { // rescale and restore non-rotating shapes
+        su X, meanonly
+        scalar `rescale' = (r(max) - r(min)) / `rescale'
+        if `rescale'>=. {
+            scalar `rescale' = 1
+        }
+        qui replace Y = Y + `dY'*`rescale' if cY<.
+        qui replace X = X + `dX'*`rescale' if cX<.
+    }
 end
 
 program _rotate
@@ -668,8 +950,95 @@ program _zoom_parse_positition
     c_local pos_clock `position'
 end
 
+program _parse_axes
+     syntax [, axes/*
+         */ XSCale(str) YSCale(str)/*
+         */ XLABels(str asis) YLABels(str asis)/*
+         */ XTItle(str asis) YTItle(str asis)/*
+         */ GRAPHRegion(str) PLOTRegion(str) BGColor(passthru) * ]
+    if "`axes'"=="" {
+        foreach x in x y {
+            _parse_axes_xscale `x', ``x'scale' // updates `x'scale
+            _parse comma lhs rhs : `x'labels
+            _parse_axes_xlabels `rhs' // updates rhs
+            if `"`lhs'"'=="" local lhs "none"
+            local `x'labels `x'labels(`lhs'`rhs')
+        }
+        _parse_axes_plotr, `plotregion' // updates plotregion
+        _parse_axes_graphr, `graphregion' // updates graphregion
+        if `"`bgcolor'"'=="" local bgcolor bgcolor(white)
+     }
+     else {
+         foreach x in x y {
+             if `"``x'scale'"'!="" local `x'scale `x'scale(``x'scale')
+             _parse comma lhs rhs : `x'labels
+             _parse_axes_xlabels `rhs' // updates rhs
+             if `"`lhs'"'=="" local lhs "#10"
+             local `x'labels `x'labels(`lhs'`rhs')
+         }
+         _parse_axes_graphrm, `graphregion' // updates graphregion
+         if `"`plotregion'"'!="" local plotregion plotregion(`plotregion')
+     }
+     foreach x in x y {
+         _parse comma lhs rhs : `x'title
+         _parse_axes_xtitle `rhs' // updates rhs
+         if `"`lhs'"'=="" local lhs `""""'
+         local `x'title `x'title(`lhs'`rhs')
+     }
+     local options `bgcolor' `options'
+     local options `plotregion' `graphregion' `options'
+     local options `yscale' `options'
+     local options `xscale' `options'
+     c_local options `xlabels' `ylabels' `xtitle' `ytitle' `options'
+end
+
+program _parse_axes_xscale
+    _parse comma x 0 : 0
+    syntax [, off on * ]
+    if "`on'"!="" local options on `options'
+    else          local options off `options'
+    c_local `x'scale `x'scale(`options')
+end
+
+program _parse_axes_xlabels
+    syntax [, LABSize(passthru) * ]
+    if `"`labsize'"'!="" exit
+    c_local rhs , labsize(vsmall) `options'
+end
+
+program _parse_axes_xtitle
+    syntax [, SIze(passthru) * ]
+    if `"`size'"'!="" exit
+    c_local rhs , size(small) `options'
+end
+
+program _parse_axes_plotr
+    syntax [, STYle(passthru) ISTYle(passthru) Margin(passthru) * ]
+    if `"`style'"'==""  local style style(none)
+    if `"`istyle'"'=="" local istyle istyle(none)
+    if `"`margin'"'=="" local margin margin(zero)
+    local options `style' `istyle' `margin' `options'
+    c_local plotregion plotregion(`options')
+end
+
+program _parse_axes_graphr
+    syntax [, STYle(passthru) ISTYle(passthru) Margin(passthru) * ]
+    if `"`style'"'==""  local style style(none)
+    if `"`istyle'"'=="" local istyle istyle(none)
+    if `"`margin'"'=="" local margin margin(small)
+    local options `style' `istyle' `margin' `options'
+    c_local graphregion graphregion(`options')
+end
+
+program _parse_axes_graphrm
+    syntax [, Margin(passthru) * ]
+    if `"`margin'"'=="" local margin margin(small)
+    local options `margin' `options'
+    c_local graphregion graphregion(`options')
+end
+
 program _grdim
-    syntax [, margin(str) refdim(str) aratio(str)/*
+    syntax [, margin(str) refdim(str) aratio(str) /*
         */ XSCale(str asis) YSCale(str asis) * ]
     // get dimensions of coordinates on map
     foreach v in X Y {
@@ -732,10 +1101,10 @@ program _grdim
     else             c_local ar = `yxratio' * `aratio'
     c_local ar_units `units'
     c_local yxratio = `yxratio' * `aratio'
-    c_local options xscale(range(`Xmin' `Xmax') `Xscale_opts')/*
+    c_local options/*
+        */ xscale(range(`Xmin' `Xmax') `Xscale_opts')/*
         */ yscale(range(`Ymin' `Ymax') `Yscale_opts')/*
-        */ xlabel(none, labsize(vsmall)) ylabel(none, labsize(vsmall))/*
-        */ xtitle("")  ytitle("") `options'
+        */ `options'
 end
 
 program _grdim_parse_scale
@@ -743,9 +1112,7 @@ program _grdim_parse_scale
     gettoken v    lhs : lhs
     gettoken vmin lhs : lhs
     gettoken vmax lhs : lhs
-    syntax [, Range(numlist) off on * ]
-    if "`on'"=="" local off off
-    else          local off on
+    syntax [, Range(numlist) * ]
     if `"`range'"'!="" {
         mata: st_local("range", invtokens(strofreal(/*
             */ minmax(strtoreal(tokens(st_local("range"))))/*
@@ -761,7 +1128,7 @@ program _grdim_parse_scale
     }
     c_local `v'min `vmin'
     c_local `v'max `vmax'
-    c_local `v'scale_opts `off' `options'
+    c_local `v'scale_opts `options'
 end
 
 program _grdim_parse_label
@@ -948,7 +1315,7 @@ program _legend
             capt n numlist `"`l'"', int range(>0)
             if _rc==1 exit 1
             if _rc {
-                di as err "(error in legend(layer()))"
+                di as err "error in legend(layer())"
                 exit _rc
             }
             local L `r(numlist)'

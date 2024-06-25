@@ -6,99 +6,133 @@
 *!     {helpb lgeoplot_source##geo_centroid:geo_centroid()}
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
 *!     {helpb lgeoplot_source##geo_clip:geo_clip()}
+*!     {helpb lgeoplot_source##geo_gtype:geo_gtype()}
 *!     {helpb lgeoplot_source##geo_hull:geo_hull()}
 *!     {helpb lgeoplot_source##geo_json:geo_json_import() and geo_json2xy()}
 *!     {helpb lgeoplot_source##geo_orientation:geo_orientation()}
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
 *!     {helpb lgeoplot_source##geo_pointinpolygon:geo_pointinpolygon()}
+*!     {helpb lgeoplot_source##geo_project:geo_project()}
+*!     {helpb lgeoplot_source##geo_refine:geo_refine()}
 *!     {helpb lgeoplot_source##geo_rotate:geo_rotate()}
 *!     {helpb lgeoplot_source##geo_simplify:geo_simplify()}
 *!     {helpb lgeoplot_source##geo_spjoin:geo_spjoin()}
 *!     {helpb lgeoplot_source##geo_symbol:geo_symbol()}
+*!     {helpb lgeoplot_source##geo_tissot:geo_tissot()}
 *!     {helpb lgeoplot_source##geo_welzl:geo_welzl()}
 *!     {helpb lgeoplot_source##geo_wkt2xy:geo_wkt2xy()}
+*!     {helpb lgeoplot_source##_geo_progress:_geo_progress()}
 *! {asis}
 
 version 16.1
 
 *! {smcl}
 *! {marker geo_area}{bf:geo_area()}{asis}
-*! version 1.0.1  30jun2023  Ben Jann
+*! version 1.0.2  29dec2023  Ben Jann
 *!
-*! Computes area of each unit using the Shoelace formula
-*! See https://en.wikipedia.org/wiki/Shoelace_formula
-*! assuming (1) that the polygons belonging to a unit are separated by a row
-*! or missing coordinates, (2) that the coordinates of each polygon are in
-*! order (clockwise or counter-clockwise), (3) that the polygons wrap around
-*! (first coordinate = last coordinate), (4) that the polygons are grouped by
-*! unit ID, (5) that nested polygons within a unit switch orientation (so that
-*! "holes" will be deducted from the total area of the unit)
+*! Computes area of each unit using the Shoelace formula; see
+*! https://en.wikipedia.org/wiki/Shoelace_formula. Only polygons are considered.
+*! Nested polygons within a unit are assumed to switch orientation (so that
+*! "holes" will be deducted from the total area of the unit). Zero will be
+*! returned for units that do not contain polygons.
 *!
-*! Syntax 1:
+*! geo_gtype() is used to classify the geometry items within a unit; polygons
+*! are assumed to start with missing.
 *!
 *!      result = geo_area(rtype, ID, XY)
 *!
-*!  rtype   results type: if rtype!=0 the result is a real colvector of length
-*!          n containing repeated area values, else the result is a r x 2 matrix
-*!          with ID in 1st row and area in 2nd row, where r is the number of units
-*!  ID      real colvector of unit IDs; can also specify ID as real scalar if
-*!          there is only a single unit
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
-*!
-*! Syntax 2:
-*!
-*!      result = _geo_area(XY)
-*!
-*!  result  real scalar containing area
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!  rtype   results type: if rtype!=0 the result is a n x 1 vector containing
+*!          repeated area values, else the result is a r x 1 matrix with ID in
+*!          1st column and area in 2nd column, where r is the number of units
+*!  ID      n x 1 real colvector of unit IDs (or, possibly, scalar if single
+*!          unit); rows are assumed to be grouped by unit ID
+*!  XY      n x 2 or n x 4 real matrix of (X,Y) coordinates of the geometry
+*!          items; if XY is n x 4 (paired coordinates), area will be zero for
+*!          all units
 *!
 
 mata:
 mata set matastrict on
 
-real matrix geo_area(real scalar rtype, real colvector id, real matrix XY)
+real matrix geo_area(real scalar rtype, real colvector ID, real matrix XY)
 {
-    real scalar    n, i, ai, bi
-    real colvector a, b, A
-    pointer scalar ID
+    real scalar    i, n, a, b
+    real colvector p
+    real matrix    A
     
+    if (!anyof((2,4), cols(XY))) {
+        errprintf("{it:XY} must have two or four columns\n")
+        exit(3200)
+    }
     n = rows(XY)
-    if (length(id)==1) ID = &J(n,1,id)
-    else               ID = &id
-    a = selectindex(_mm_unique_tag(*ID))
-    i = rows(a)
-    if (i<=1) b = n
-    else      b = a[|2 \. |] :- 1 \ n
-    if (rtype) {
-        A = J(n,1,.)
+    i = rows(ID)
+    if (i!=1) {
+        if (i!=n) exit(error(3200))
+    }
+    if (!n) return(J(0, 1 + !rtype, .)) // no data
+    if (n==1) { // single obs
+        if (rtype) return(0)
+        else       return(ID, 0)
+    }
+    if (rows(ID)==1) { // single unit
+        p = 1
+        A = _geo_area(XY)
+    }
+    else {
+        p = selectindex(_mm_unique_tag(ID))
+        i = rows(p)
+        if (i==n) { // one obs per unit
+            if (rtype) return(J(i,1,0))
+            else       return(ID, J(i,1,0))
+        }
+        A = J(i,1,.)
+        a = n + 1
         for (;i;i--) {
-            ai = a[i]; bi = b[i]
-            A[|ai \ bi|] = J(bi-ai+1, 1, _geo_area(XY[|ai,1 \ bi,.|]))
+            b = a - 1; a = p[i]
+            A[i] = _geo_area(XY[|a,1 \ b,.|])
+        }
+    }
+    if (rtype) {
+        i = rows(p)
+        a = n + 1
+        A = A \ J(n-i,1,.)
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            A[|a \ b|] = J(b-a+1, 1, A[i,])
         }
         return(A)
     }
-    A = J(i,1,.)
-    for (;i;i--) A[i] = _geo_area(XY[|a[i],1 \ b[i],.|])
-    return(((*ID)[a],A))
+    else return(ID[p], A)
 }
 
-real scalar _geo_area(real matrix XY)
+real rowvector _geo_area(real matrix XY)
 {
-    real scalar n, d
+    real colvector g, cnt
     
-    n = rows(XY)
-    if (n==0) return(J(0,1,.))
-    if (n==1) return(0)
-    d = sum(XY[,1] :* (XY[|2,2\.,2|]\.) - (XY[|2,1\.,1|]\.) :* XY[,2])
-    return(abs(d)/2)
+    if (cols(XY)>2) return(0) // pc
+    g = geo_gtype(3, ., geo_pid(., XY), XY, cnt=.)
+    if (cnt[4]) { // area of polygons
+        if (sum(cnt)==cnt[4]) return(__geo_area(XY))
+        return(__geo_area(select(XY, g:==3)))
+    }
+    return(0)
+}
+
+real rowvector __geo_area(real matrix XY)
+{
+    real scalar A
+    
+    if (rows(XY)<2) return(0)
+    A = sum(rowsum((1,-1) :* XY :* (XY[|2,1\.,.|] \ (.,.))[,(2,1)]))
+    return(abs(editmissing(A,0))/2)
 }
 
 end
 
 *! {smcl}
 *! {marker geo_bbox}{bf:geo_bbox()}{asis}
-*! version 1.0.0  30jun2023  Ben Jann
+*! version 1.0.1  01jun2024  Ben Jann
 *!
 *! Determine (minimum) bounding box around cloud of points
 *! minimum bounding box algorithm loosely based on
@@ -109,8 +143,8 @@ end
 *!      result = geo_bbox(XY [, type])
 *!
 *!  result  real matrix containing (X,Y) of bounding box (counterclockwise)
-*!  XY      n x 2 real matrix containing points; X in col 1, Y in col 2;
-*!             should not contain missing values
+*!  XY      n x 2 real matrix containing the points; rows containing missing
+*!          will be ignored
 *!  type    real scalar selecting type of box and algorithm
 *!           0 = regular (unrotated) bounding box (the default)
 *!           1 = minimum-area bounding box using rotating calipers algorithm
@@ -124,14 +158,25 @@ mata set matastrict on
 
 real matrix geo_bbox(real matrix XY, | real scalar type)
 {
+    if (args()<2) type = 0
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    if (!hasmissing(XY)) return(_geo_bbox(XY, type))
+    return(_geo_bbox(select(XY, !rowmissing(XY)), type))
+}
+
+real matrix _geo_bbox(real matrix XY, real scalar type)
+{
     if (type==1)  return(_geo_bbox_rc(XY))
     if (type==2)  return(_geo_bbox_rc(XY, 1))
     if (type==-1) return(_geo_bbox_tilt(XY))
     if (type==-2) return(_geo_bbox_tilt(XY,1))
-    return(_geo_bbox(XY))
+    return(_geo_bbox_regular(XY))
 }
 
-real matrix _geo_bbox(real matrix XY)
+real matrix _geo_bbox_regular(real matrix XY)
 {
     real matrix xy
     
@@ -152,7 +197,7 @@ real matrix _geo_bbox_rc(real matrix XY, | real scalar perim)
     
     if (args()<2) perim = 0
     // get convex hull
-    xy = geo_hull(XY)
+    xy = _geo_hull(XY)
     n = rows(xy)
     if (n==0) return(J(5,2,.))
     if (n==1) return(J(5,1,xy[1,]))
@@ -221,7 +266,7 @@ real matrix _geo_bbox_tilt(real matrix XY, | real scalar perim)
     real matrix xy, xy0, b, B
     
     if (args()<2) perim = 0
-    xy = geo_hull(XY)
+    xy = _geo_hull(XY)
     n = rows(xy)
     if (n==0) return(J(5,2,.))
     if (n==1) return(J(5,1,xy[1,]))
@@ -271,127 +316,168 @@ end
 
 *! {smcl}
 *! {marker geo_bshare}{bf:geo_bshare()}{asis}
-*! version 1.0.0  17oct2023  Ben Jann
+*! version 1.2.0  24jun2024  Ben Jann
 *!
-*! Algorithm to identify points that lie on shared borders between shape items
+*! Algorithm to extract/identify shared borders between shape items; a shared
+*! border is defined as an identical sequence of vertices (apart from
+*! orientation) that exists in two shape items.
 *!
 *! Syntax:
 *!
 *!      result = geo_bshare(ID, PID, XY [, rtype, nodots ])
 *!
-*!  result  n x 1 colvector tagging points that lie on shared border (0 no,
-*!          1 yes)
+*!  result  result depending on rtype (see below)
 *!  ID      real colvector of unit IDs
 *!  PID     real colvector of within-unit shape item IDs
 *!  XY      n x 2 real matrix containing the (X,Y) coordinates of the shape
-*!          items; shape items may have leading or trailing missings but are
-*!          assumed non-missing in between
-*!  rtype   rtype==0: tag all points that are on shared borders
-*!          rtype>0:  tag only start and end points of shared borders
-*!          rtype<0:  tag points that are not on shared borders (except
-*!                    start and end points of line segments)
+*!          items
+*!  rtype   real scalar setting the type of output
+*!          0: result will be a r x 5 matrix containing shape items representing
+*!             shared borders; each shared border is only included once; columns
+*!             are (id, id1, id2, x, y), where id contains a unique id for each
+*!             item, id1 and id2 contain the ids of the units that share the
+*!             border, x and y are the coordinates; r is the total length across
+*!             all items; id1 and id2 will be the same for shared borders
+*!             between items within a single item
+*!          1: result will be a 2*r x 3 matrix containing shape items
+*!             representing the shared borders of each unit (each shared border
+*!             will be included twice); columns are (id, x, y) where id is the
+*!             unit id and x and y are the coordinates
+*!          2: result will be a r x 3 matrix containing for each unit a set of
+*!             shape items representing the segments that are not shared
+*!             borders; columns are (id, x, y) where id is the unit id and x and
+*!             y are the coordinates; q is the total length across all included
+*!             items
+*!          3: result will be a n x 1 vector that tags all points in XY equal to
+*!             the start or the end of a shared border
+*!          4: result will be a n x 1 vector that tags all points in XY that are
+*!             part of a shared border
+*!          5: result will be a n x 1 vector that tags all points in XY equal to
+*!             the start of a path with the length of the path
+*!          default is 0; values other than the ones above are treated as 0
 *!  nodots  nodots!=0 suppresses progress dots
 *!
+*! The algorithm assumed that the shape items have no repeated points, apart
+*! from the first and last point in a polygon.
+*!
 
-local Bool  real scalar
-local BoolC real colvector
-local Int   real scalar
-local IntC  real colvector
-local RS    real scalar
-local RC    real colvector
-local RR    real rowvector
-local RM    real matrix
-local POLYGON   _geo_bshare_POLYGON
-local Polygon   struct `POLYGON' scalar
-local pPolygons pointer (`Polygon') vector
+local Bool    real scalar
+local BoolC   real colvector
+local Int     real scalar
+local IntC    real colvector
+local IntM    real matrix
+local RS      real scalar
+local RC      real colvector
+local RR      real rowvector
+local RM      real matrix
+local ITEM    _geo_bshare_ITEM
+local Item    struct `ITEM' scalar
+local pItems  pointer (`Item') colvector
+local BRDR    _geo_bshare_BRDR
+local Brdr    struct `BRDR' scalar
+local pBrdrs  pointer (`Brdr') colvector
+local BRDRS   _geo_bshare_BRDRS
+local Brdrs   struct `BRDRS' scalar
+local NBRDRS  _geo_bshare_NBRDRS
+local Nbrdrs  struct `NBRDRS' scalar
+local pNbrdrs pointer (`RM') colvector
 
 mata:
 
-struct `POLYGON' {
-    `Int'  a, b   // data range of polygon
-    `Int'  mtop   // missing rows at top
-    `Int'  mbot   // missing rows at bottom
-    `RM'   XY     // coordinates (without missing at top/bottom)
-    `RS'   xmin, xmax, ymin, ymax
+struct `ITEM' {    // shape item
+    `Int'  id, pid // unit id and within-unit item id
+    `Int'  a, b    // range indices of item in original data
+    `Int'  gt      // 1 = point, 2 = line, 3 = polygon, 0 = empty
+    `Bool' mis     // has leading row
+    `RM'   XY      // coordinates of item (without leading row)
+    `RS'   xmin, xmax, ymin, ymax // limits of data range 
 }
 
-`BoolC' geo_bshare(`RC' ID, `RC' PID, `RM' XY, | `Int' rtype, `Bool' nodots)
+struct `BRDR' {        // shared-border info
+    `Int'    id1, id2  // internal ids of involved items
+    `Int'    a1, a2    // within-item start indices
+    `Int'    l         // length of shared border
+}
+
+struct `BRDRS' { // collection of shared border infos
+    `Int'    n   // current length
+    `pBrdrs' B   // stack of borders
+}
+
+struct `NBRDRS' { // collection of non-shared border infos
+    `Int'     n   // current length
+    `pNbrdrs' B   // stack of borders
+}
+
+`RM' geo_bshare(`RC' ID, `RC' PID, `RM' XY, | `Int' rtype, `Bool' nodots)
 {
-    `Int'       i, j, d0, dn, d
-    `BoolC'     B
-    `pPolygons' p
+    `Int'    i, j, d0, dn, d
+    `pItems' P
+    `Brdrs'  B
     
     if (args()<4) rtype = 0
     if (args()<5) nodots = 0
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
     // collect polygons
-    p = _geo_bshare_polygons(runningsum(_mm_uniqrows_tag((ID,PID))), XY)
+    P = _geo_bshare_items(ID, PID, XY)
     // tag points on common borders
-    i = length(p)
+    i = length(P)
     if (!nodots) {
         displayas("txt")
         printf("(search for shared borders among %g shape items)\n", i)
         d0 = _geo_progress_init("(")
-        dn = comb(i, 2)
-        d = 0
+        dn = comb(i, 2); d = 0
     }
-    B = J(rows(XY),1,0)
+    B.n = 0 // initialize stack
     for (;i;i--) {
         for (j=i-1;j;j--) {
-            _geo_bshare_tag(B, *p[i], *p[j], rtype>0)
-            if (!nodots) _geo_progressdots(++d/dn, d0)
+            _geo_bshare(B, *P[i], *P[j], i, j)
+            if (!nodots) _geo_progress(d0, ++d/dn)
         }
     }
-    if (!nodots) display(")")
-    // handle rtype<0 (non-borders)
-    if (rtype<0) {
-        for (i=length(p);i;i--) _bshare_not(B, *p[i])
-    }
-    // handle missing rows
-    for (i=length(p);i;i--) _geo_bshare_mis(B, *p[i])
+    if (!nodots) _geo_progress_end(d0, ")")
     // return
-    return(B)
+    if (rtype==1) return(_geo_bshare_r1(B, P))
+    if (rtype==2) return(_geo_bshare_r2(B, P, rows(XY)))
+    if (rtype==3) return(_geo_bshare_tag(3, B, P, rows(XY)))
+    if (rtype==4) return(_geo_bshare_tag(4, B, P, rows(XY)))
+    if (rtype==5) return(_geo_bshare_tag(5, B, P, rows(XY)))
+                  return(_geo_bshare_r0(B, P))
 }
 
-`pPolygons' _geo_bshare_polygons(`RC' PID, `RM' XY)
-{
-    `Int'       i, n
-    `IntC'      a, b
-    `pPolygons' p
+`pItems' _geo_bshare_items(`RC' ID, `RC' PID, `RM' XY)
+{   // return pointer vector of all shape items
+    `Int'    i, a, b
+    `IntC'   p
+    `pItems' P
     
-    n = rows(XY)
-    a = selectindex(_mm_uniqrows_tag(PID))
-    i = rows(a)
-    if (i<=1) b = n
-    else      b = a[|2 \. |] :- 1 \ n
-    p = J(i, 1, NULL)
+    p = selectindex(_mm_uniqrows_tag((ID,PID)))
+    i = rows(p)
+    P = J(i, 1, NULL)
+    a = rows(XY) + 1
     for (;i;i--) {
-        p[i] = &(_geo_bshare_polygon(XY, a[i], b[i]))
+        b = a - 1; a = p[i]
+        P[i] = &_geo_bshare_item(ID, PID, XY, a, b)
     }
-    return(p)
+    return(P)
 }
 
-`Polygon' _geo_bshare_polygon(`RM' XY, `Int' a, `Int' b)
-{
-    `Int'     i0, i1
-    `RM'      minmax
-    `Polygon' p
+`Item' _geo_bshare_item(`RC' ID, `RC' PID, `RM' XY, `Int' a, `Int' b)
+{   // collect shape item
+    `RM'   minmax
+    `Item' p
     
-    p.a = a
-    p.b = b
-    for (i0=a;i0<=b;i0++) {
-        if (!hasmissing(XY[i0,])) break
-    }
-    p.mtop = i0 - a
-    if (i0>b) { // all missing
-        p.XY = J(0,2,.)
-        p.mbot = 0
-        return(p)
-    }
-    for (i1=b; i1; i1--) {
-        if (!missing(XY[i1,])) break
-    }
-    p.mbot = b - i1
-    p.XY = XY[|i0,1 \ i1,2|]
+    p.id   = ID[a]
+    p.pid  = PID[a]
+    p.gt   = _geo_gtype(XY, a, b)
+    p.a    = a
+    p.b    = b
+    p.mis  = b>a // ignore first row if more than one row
+    if (!p.gt) return(p) // empty item
+    p.XY   = XY[|a+p.mis,1 \ b,2|]
     minmax = colminmax(p.XY)
     p.xmin = minmax[1,1]
     p.xmax = minmax[2,1]
@@ -400,446 +486,500 @@ struct `POLYGON' {
     return(p)
 }
 
-void _bshare_not(`BoolC' B0, `Polygon' p)
-{
-    `Int'   n
-    `BoolC' B
+void _geo_bshare_add_brdr(`Brdrs' B, `Int' id1, `Int' id2, `Int' a1, `Int' a2,
+    `Int' l)
+{   // add info on shared border to collection
+    `Brdr' b
     
-    B = B0[|p.a+p.mtop \ p.b-p.mbot|]
-    n = rows(B)
-    if (!n) return // empty shape
-    if (all(B))       B = J(n,1,0) // all points on shared border
-    else if (!any(B)) B = J(n,1,1) // no points on shared border
-    else {
-        if (p.XY[1,]==p.XY[n,]) B = _bshare_not_wrap(B, n)   // polygon
-        else                    B = _bshare_not_nowrap(B, n) // line
+    b.id1 = id1
+    b.id2 = id2
+    b.a1  = a1
+    b.a2  = a2
+    b.l   = l
+    B.n = B.n + 1
+    if (B.n>length(B.B)) B.B = B.B \ J(100,1,NULL)
+    B.B[B.n] = &b
+}
+
+void _geo_bshare_add_nbrdr(`Nbrdrs' N, `RM' idxy)
+{   // add data of non-shared border to collection
+    N.n = N.n + 1
+    if (N.n>length(N.B)) N.B = N.B \ J(100,1,NULL)
+    N.B[N.n] = &idxy[.,.]
+}
+
+`RM' _geo_bshare_r0(`Brdrs' A, `pItems' P)
+{   // return shared borders (unique)
+    `Int'  i, id, n, a, b
+    `Item' p
+    `Brdr' B
+    `RM'   R
+    
+    n = 0
+    for (i=A.n;i;i--) n = n + A.B[i]->l + 1
+    R = J(n,5,.) // id, id1, id2, x, y
+    id = b = 0
+    for (i=A.n;i;i--) {
+        id++
+        B = *A.B[i]
+        p = *P[B.id1]
+        a = b + 1; b = a + B.l
+        R[|a,1 \ b,3|] = J(b-a+1, 1, (id, p.id, P[B.id2]->id))
+        a++
+        R[|a,4 \ b,5|] = __geo_bshare_r0(p.XY, B.a1, B.l)
     }
-    B0[|p.a+p.mtop \ p.b-p.mbot|] = B
+    return(R)
 }
 
-`BoolC' _bshare_not_wrap(`BoolC' B0, `Int' n)
-{
-    `Int'   i, j, ni
-    `BoolC' B
+`RM' __geo_bshare_r0(`RM' XY, `Int' a, `Int' l)
+{   // extract path from XY
+    `Int' b, n
     
-    B = B0
-    ni = n - 1 // skip last point
-    for (j=1;j<=ni;j++) {
-        i = mod(j-1, ni) + 1
-        if (!B[i]) continue
-        if      (!B0[mod(i-2, ni)+1]) B[i] = 0 // last point of shared border
-        else if (!B0[mod(i,   ni)+1]) B[i] = 0 // first point of stared border
+    n = rows(XY)
+    b = a + l - 1
+    if (b<=n) return(XY[|a,1 \ b,2|])
+    return(XY[|a,1 \ n,2|] \ XY[|2,1 \ b-n+1,2|])
+}
+
+`RM' _geo_bshare_r1(`Brdrs' A, `pItems' P)
+{   // return shared borders (with duplicates)
+    `Int'   i, n, a, b
+    `Item'  p
+    `Brdr'  B
+    `RM'    R
+    
+    n = 0
+    for (i=A.n;i;i--) n = n + A.B[i]->l + 1
+    R = J(2*n,3,.) // id, x, y
+    b = 0
+    for (i=A.n;i;i--) {
+        B = *A.B[i]
+        // Item 1
+        p = *P[B.id1]
+        a = b + 1; b = a + B.l
+        R[|a,1 \ b,1|] = J(b-a+1, 1, p.id)
+        a++
+        R[|a,2 \ b,3|] = __geo_bshare_r0(p.XY, B.a1, B.l)
+        // Item 2
+        p = *P[B.id2]
+        a = b + 1; b = a + B.l
+        R[|a,1 \ b,1|] = J(b-a+1, 1, p.id)
+        a++
+        R[|a,2 \ b,3|] = __geo_bshare_r0(p.XY, B.a2, B.l)
     }
-    B[n] = B[1]
-    return(!B)
+    return(mm_sort(R,1,1))
 }
 
-`BoolC' _bshare_not_nowrap(`BoolC' B0, `Int' n)
-{
-    `Int'   i
-    `BoolC' B
+`RM' _geo_bshare_r2(`Brdrs' B, `pItems' P, `Int' n)
+{   // return non-shared borders
+    `Int'    r, i, a, b
+    `IntC'   R, S
+    `Nbrdrs' N
+    `RM'     idxy
     
-    B = B0
-    // handle first and last point
-    if (B[1] & !B0[2])   B[1] = 0
-    if (B[n] & !B0[n-1]) B[n] = 0
-    // handle rest
-    for (i=2;i<n;i++) {
-        if (!B[i]) continue
-        if      (!B0[i+1]) B[i] = 0 // last point of shared border
-        else if (!B0[i-1]) B[i] = 0 // first point of stared border
+    // tag shared borders
+    R = _geo_bshare_tag(3, B, P, n) + _geo_bshare_tag(4, B, P, n)
+    S = _geo_bshare_tag(5, B, P, n)
+    // extract non-shared borders
+    N.n = r = 0 // initialize stack
+    for (i=rows(P);i;i--) __geo_bshare_r2(N, r, R, S, *P[i])
+    // collect results
+    idxy = J(r, 3, .) // id, x, y
+    b = 0
+    for (i=N.n;i;i--) {
+        a = b + 1
+        b = b + rows(*N.B[i])
+        idxy[|a,1 \ b,3|] = *N.B[i]
     }
-    return(!B)
+    return(mm_sort(idxy,1,1))
 }
 
-void _geo_bshare_mis(`IntC' B, `Polygon' p)
-{
-    if (!p.mtop & !p.mbot) return
-    if (!any(B[|p.a+p.mtop \ p.b-p.mbot|])) return // no points on shared border
-    // turn missing rows on
-    if (p.mtop) B[|p.a \ p.a+p.mtop-1|] = J(p.mtop, 1, 1)
-    if (p.mbot) B[|p.b-p.mbot+1 \ p.b|] = J(p.mbot, 1, 1)
-}
-
-void _geo_bshare_tag(`IntC' B, `Polygon' pi, `Polygon' pj, `Bool' limits)
-{   // limits!=0: only mark start and end
-    `Int'   i, ni, j, nj, dir
-    `IntC'  ab
-    `RR'    xy
-    `IntC'  Bi, Bj
+void __geo_bshare_r2(`Nbrdrs' N, `Int' r, `IntC' R, `IntC' S, `Item' p)
+{   // extract segments of shape item that are not shared boders
+    `Int'  a, a0, b, n, l
+    `IntC' T, U
     
-    if (pi.ymax < pj.ymin) return
-    if (pi.xmax < pj.xmin) return
-    if (pj.ymax < pi.ymin) return
-    if (pj.xmax < pi.xmin) return
-    ni = rows(pi.XY)
-    Bi = J(ni,1,0)
-    nj = rows(pj.XY)
-    Bj = J(nj,1,0)
-    for (i=ni;i;i--) {
-        xy = pi.XY[i,]
-        if (xy[1] < pj.xmin) continue
-        if (xy[2] < pj.ymin) continue
-        if (xy[1] > pj.xmax) continue
-        if (xy[2] > pj.ymax) continue
-        for (j = nj; j; j--) {
-            if (xy==pj.XY[j,]) {
-                // common point found
-                Bi[i] = j; Bj[j] = i
-                if (i==1) break // done; no more points in pi
-                // get direction of common path in pj
-                dir = _geo_bshare_tag_dir(pi.XY[i-1,], pj.XY, j, nj)
-                if (dir==0) break // single common point; move to next i
-                // follow common path
-                _geo_bshare_tag_path(dir, Bi, pi.XY, i, Bj, pj.XY, j, nj)
-                break 
-            }
+    T = R[|p.a+p.mis \ p.b|]
+    U = S[|p.a+p.mis \ p.b|]
+    n = rows(T)
+    if (n==1) { // point item
+        if (!T) _geo_bshare_add_nbrdr(N, (J(2,1,p.id), ((.,.) \ p.XY)))
+        return
+    }
+    b = .
+    a0 = 0
+    for (a=n-1; a>a0; a--) { // look for sequences of type 2[0...]2
+        if (T[a]==1) continue
+        if (T[a]==0) continue
+        // reached only if T[a]==2
+        if (U[a]>1) { // current point is start of a path of length>1
+            b = a
+            continue
         }
+        if (b>=.) {
+            if (p.gt==3) { // wrap around
+                for (; a0<a;a0++) {
+                    if (T[a0+1]==0) continue
+                    break // reached only if T[a0+1]==2
+                }
+                if (a0) { // moved at least one position
+                    l = 2 + n - a + a0
+                    r = r + l
+                    _geo_bshare_add_nbrdr(N, (J(l,1,p.id),
+                        ((.,.) \ p.XY[|a,1 \ n,2|] \ p.XY[|2,1 \ a0+1,2|])))
+                    continue
+                }
+            }
+            b = n
+        }
+        l = b - a + 2
+        r = r + l
+        _geo_bshare_add_nbrdr(N, (J(l,1,p.id), ((.,.) \ p.XY[|a,1 \ b,2|])))
     }
-    if (!any(Bi)) return // no matching points
-    // select start and end of segments if limits!=0
-    _geo_bshare_tag_limits(Bi, pi.XY, ni, Bj, pj.XY, nj, limits)
-    // return
-    ab = pi.a + pi.mtop \ pi.a + pi.mtop + ni - 1
-    B[|ab|] = B[|ab|] :| Bi
-    ab = pj.a + pj.mtop \ pj.a + pj.mtop + nj - 1
-    B[|ab|] = B[|ab|] :| Bj
+    if (!a) { // collect first segment if T starts with 0
+        if (T[1]) return
+        if (b>=.) { // item has no shared borders
+            r = r + n + 1
+            _geo_bshare_add_nbrdr(N, (J(n+1,1,p.id), ((.,.) \ p.XY)))
+            return
+        }
+        l = b + 1
+        r = r + l
+        _geo_bshare_add_nbrdr(N, (J(l,1,p.id), ((.,.) \ p.XY[|1,1 \ b,2|])))
+    }
 }
 
-`Int' _geo_bshare_tag_dir(`RR' xy, `RM' XY, `Int' j, `Int' nj)
-{
-    if (j<nj) {
-        if (XY[j+1,]==xy) return(1)  // up
+`BoolC' _geo_bshare_tag(`Int' rtype, `Brdrs' A, `pItems' P, `Int' n)
+{   // tag points on shared border
+    `Int'   i
+    `Item'  p
+    `Brdr'  B
+    `BoolC' R
+    pointer (function) scalar f
+    
+    if      (rtype==4) f = &_geo_bshare_r4() // tag all points on shared border
+    else if (rtype==5) f = &_geo_bshare_r5() // store length in first point
+    else               f = &_geo_bshare_r3() // tag start and end
+    R = J(n,1,0)
+    for (i=A.n;i;i--) {
+        B = *A.B[i]
+        // handle item 1
+        p = *P[B.id1]
+        (*f)(R, p.a+p.mis, p.b, B.a1, B.l, p.gt!=3)
+        // handle item 2
+        p = *P[B.id2]
+        (*f)(R, p.a+p.mis, p.b, B.a2, B.l, p.gt!=3)
     }
-    if (j>1) {
-        if (XY[j-1,]==xy) return(-1) // down
+    return(R)
+}
+
+void _geo_bshare_r3(`BoolC' R, `Int' a, `Int' b, `Int' i, `Int' l,
+    `Bool' nowrap)
+{   // tag start and end points of shared borders
+    `Int' j
+
+    R[a + i - 1] = 1
+    j = a + i + l - 2
+    if (nowrap)   R[j] = 1
+    else if (j<b) R[j] = 1
+    else if (j>b) R[a + j-b] = 1
+    else          R[a] = R[b] = 1 
+}
+
+void _geo_bshare_r4(`BoolC' R, `Int' a, `Int' b, `Int' i, `Int' l,
+    `Bool' nowrap)
+{   // tag all points that are on a shared border
+    `Int' j0, j1
+
+    j0 =  a + i - 1
+    j1 = j0 + l - 1
+    if (nowrap)    R[|j0\j1|] = J(l,1,1)
+    else if (j1<b) R[|j0\j1|] = J(l,1,1)
+    else {
+        R[|a\a+j1-b|] = J(j1-b+1,1,1)
+        R[|j0\b|]     = J(b-j0+1,1,1)
+    }
+}
+
+void _geo_bshare_r5(`BoolC' R, `Int' a, `Int' b, `Int' i, `Int' l,
+    `Bool' nowrap)
+{   // store length of shared border in first point of shared border (use
+    // the length of the longest path if the point is the start of multiple
+    // shared borders)
+    `Int' j
+    
+    j = a + i - 1
+    R[j] = max((l,R[j]))
+    if (nowrap) return
+    if      (j==a) R[b] = max((l,R[b]))
+    else if (j==b) R[a] = max((l,R[a]))
+}
+
+void _geo_bshare(`Brdrs' B, `Item' pi, `Item' pj, `Int' id1, `Int' id2)
+{   // find shared borders among shape items
+    `Int'   i0, i, ni, j, nj, l
+    `BoolC' tj
+    `IntC'  J
+    `RR'    xy
+    `RM'    iXY, jXY
+    
+    if (!(pi.gt))          return // pi is empty
+    if (!(pj.gt))          return // pj is empty
+    if (pi.xmax < pj.xmin) return // pi left of pj
+    if (pi.xmin > pj.xmax) return // pi right of pj
+    if (pi.ymax < pj.ymin) return // pi below pj
+    if (pi.ymin > pj.ymax) return // pi above pj
+    if (pi.gt==3) iXY = pi.XY[|2,1\.,.|]
+    else          iXY = pi.XY
+    if (pj.gt==3) jXY = pj.XY[|2,1\.,.|]
+    else          jXY = pj.XY
+    ni = rows(iXY); nj = rows(jXY)
+    J = 1::nj; tj = J(nj,1,1) // initialize pj search index
+    i0 = 0
+    for (i=ni;i>i0;i--) {
+        xy = iXY[i,]
+        if (xy[1] < pj.xmin) continue // xy left of pj
+        if (xy[1] > pj.xmax) continue // xy right of pj
+        if (xy[2] < pj.ymin) continue // xy below pj
+        if (xy[2] > pj.ymax) continue // xy above pj
+        j = _geo_bshare_match(xy, jXY, J) // find match in pj
+        if (!j) continue // no match found in pj
+        tj[j] = 0 // mark point in pj as used
+        l = _geo_bshare_path(i0, i, ni, pi.gt, iXY, j, nj, pj.gt, jXY, tj)
+        _geo_bshare_add_brdr(B, id1, id2, i+(pi.gt==3), j+(pj.gt==3), l)
+        J = selectindex(tj) // update pj search index
+    }
+}
+
+`Int' _geo_bshare_match(`RR' xy, `RM' XY, `BoolC' J)
+{   // find match of point in XY; use the last match in case of ties
+    `Int' j
+    
+    for (j=rows(J);j;j--) {
+        if (xy==XY[J[j],]) return(J[j])
     }
     return(0)
 }
 
-void _geo_bshare_tag_path(`Int' dir, `IntC' Bi, `RM' XYi, `Int' i,
-                                 `IntC' Bj, `RM' XYj, `Int' j, `Int' nj)
-{
-    `Int' i0, j0
-    
-    i0 = --i
-    if (dir>0) {
-        j0 = ++j
-        for (;j<=nj;j++) {
-            if (XYi[i,]!=XYj[j,]) break
-            if (!(--i)) {; j++; break; }
+`Int' _geo_bshare_path(`Int' i00, `Int' i, `Int' ni, `Int' gti, `RM' iXY,
+    `Int' j, `Int' nj, `Int' gtj, `RM' jXY, `BoolC' tj)
+{   // follow common path in item pi and item pj, starting from an initial match
+    `Int' l, ii, i0, jj, j0, d
+
+    // setup
+    l = 1 // length is at least 1
+    d = 0 // relative direction (-1 same, 0 not yet set, 1 opposite)
+    // follow path downwards in item 2
+    ii = i; jj = j
+    __geo_bshare_path(l, min((i-1,j-1)), 0,ii,iXY, 0,jj,jXY, tj)
+    j0 = jj // save start index of path in item 2
+    if (jj==1 & gtj==3) { // wrap around if item 2 is polygon
+        jj = nj + 1
+        __geo_bshare_path(l, min((ii-1,nj+1-j)), 0,ii,iXY, 0,jj,jXY, tj)
+        if (jj<=nj) j0 = jj // save start index of path in item 2
+    }
+    if (l>1) d = -1
+    // follow path upwards in item 2 if downward search was not successful
+    if (!d) {
+        ii = i; jj = j
+        __geo_bshare_path(l, min((i-1,nj-j)), 0,ii,iXY, 1,jj,jXY, tj)
+        if (jj==nj & gtj==3) { // wrap around if item 2 is polygon
+            jj = 0
+            __geo_bshare_path(l, min((ii-1,j)), 0,ii,iXY, 1,jj,jXY, tj)
         }
-        j--
-        i++
-        Bj[|j0 \ j|] = i0::i
-        Bi[|i \ i0|] = j::j0
+        if (l>1) d = 1
+    }
+    if (i<ni | gti!=3) {; i = ii; j = j0; return(l); }
+    // follow path upwards in item 1 (i.e. wrap around) if item 1 is polygon
+    // and matching point is at end of item 1
+    i0 = ii // save start index of path in item 1
+    if (d<=0) { // follow path upwards in item 2
+        ii = 0; jj = j
+        __geo_bshare_path(l, min((i0,nj-j,nj+1-l)), 1,ii,iXY, 1,jj,jXY, tj)
+        if (jj==nj & gtj==3) { // wrap around if item 2 is polygon
+            jj = 0
+            __geo_bshare_path(l, min((i0-ii,nj+1-l)), 1,ii,iXY, 1,jj,jXY, tj)
+        }
+        if (l>1) d = -1 // preserve direction if not yet set
+    }
+    if (d>=0) { // follow path downwards in item 2
+        ii = 0; jj = j
+        __geo_bshare_path(l, min((i0,j-1,nj+1-l)), 1,ii,iXY, 0,jj,jXY, tj)
+        j0 = jj // save start index of path in item 2
+        if (jj==1 & gtj==3) { // wrap around if item 2 is polygon
+            jj = nj + 1
+            __geo_bshare_path(l, min((i0-ii,nj+1-l)), 1,ii,iXY, 0,jj,jXY, tj)
+            if (jj<=nj) j0 = jj // save start index of path in item 2
+        }
+    }
+    if (ii>0) i00 = ii // update item 1 search range
+    i = i0; j = j0     // return start indices
+    return(l)          // return length of path (including first point)
+}
+
+void __geo_bshare_path(`Int' l, `Int' k, `Bool' iup, `Int' i, `RM' iXY,
+    `Bool' jup, `Int' j, `RM' jXY, `BoolC' tj)
+{   // follow path up or down
+    // k = max possible remaining length of path in the specified direction
+    if (iup) {
+        if (jup) {
+            for (;k;k--) {
+                if (iXY[++i,]!=jXY[++j,]) {; i--; j--; break; }
+                l++
+                tj[j] = 0 // mark point in pj as used
+            }
+            return
+        }
+        for (;k;k--) {
+            if (iXY[++i,]!=jXY[--j,]) {; i--; j++; break; }
+            l++
+            tj[j] = 0 // mark point in pj as used
+        }
         return
     }
-    j0 = --j
-    for (;j;j--) {
-        if (XYi[i,]!=XYj[j,]) break
-        if (!(--i)) {; j--; break; }
-    }
-    j++
-    i++
-    Bj[|j \ j0|] = i::i0
-    Bi[|i \ i0|] = j::j0
-}
-
-void _geo_bshare_tag_limits(`IntC' Bi, `RM' XYi, `Int' ni, 
-                        `IntC' Bj, `RM' XYj, `Int' nj, `Bool' limits)
-{
-    `Bool' polyi, polyj
-    
-    // update first point if pj is a polygon
-    polyj = XYj[1,]==XYj[nj,]
-    if (polyj) {
-        if (Bj[nj]) Bj[1] = 1
-    }
-    if (!limits) return
-    // select limits
-    polyi = XYi[1,]==XYi[ni,]
-    if (polyi) {
-        if (all(Bi)) {
-            if (polyj) {
-                if (all(Bj)) _geo_bshare_tag_limits_1(Bi, ni, Bj, nj) // 1
-                else         _geo_bshare_tag_limits_2(Bi, ni, Bj, nj) // 2
-            }
-            else {
-                if (all(Bj)) _geo_bshare_tag_limits_3(Bi, ni, Bj, nj) // 3
-                else         _geo_bshare_tag_limits_4(Bi, ni, Bj, nj) // 4
-            }
+    if (jup) {
+        for (;k;k--) {
+            if (iXY[--i,]!=jXY[++j,]) {; i++; j--; break; }
+            l++
+            tj[j] = 0 // mark point in pj as used
         }
-        else {
-            if (polyj) {
-                if (all(Bj)) _geo_bshare_tag_limits_2(Bj, nj, Bi, ni) // 5->2
-                else         _geo_bshare_tag_limits_6(Bi, ni, Bj, nj) // 6
-            }
-            else {
-                if (all(Bj)) _geo_bshare_tag_limits_7(Bi, ni, Bj, nj) // 7
-                else         _geo_bshare_tag_limits_8(Bi, ni, Bj, nj) // 8
-            }
-        }
+        return
     }
-    else {
-        if (all(Bi)) {
-            if (polyj) {
-                if (all(Bj)) _geo_bshare_tag_limits_3(Bj, nj, Bi, ni) //  9->3
-                else         _geo_bshare_tag_limits_7(Bj, nj, Bi, ni) // 10->7
-            }
-            else {
-                if (all(Bj)) _geo_bshare_tag_limits_11(Bi, ni, Bj, nj) // 11
-                else         _geo_bshare_tag_limits_12(Bi, ni, Bj, nj) // 12
-            }
-        }
-        else {
-            if (polyj) {
-                if (all(Bj)) _geo_bshare_tag_limits_4(Bj, nj, Bi, ni) // 13->4
-                else         _geo_bshare_tag_limits_8(Bj, nj, Bi, ni) // 14->8
-            }
-            else {
-                if (all(Bj)) _geo_bshare_tag_limits_12(Bj, nj, Bi, ni) // 15->12
-                else         _geo_bshare_tag_limits_16(Bi, ni, Bj, nj) // 16
-            }
-        }
+    for (;k;k--) {
+        if (iXY[--i,]!=jXY[--j,]) {; i++; j++; break; }
+        l++
+        tj[j] = 0 // mark point in pj as used
     }
-}
-
-void _geo_bshare_tag_limits_1(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon with all points matched
-    // j is polygon with all points matched
-    // set start in both to first point of polygon i
-    `Int'  j0
-    
-    Bj = Bj * 0
-    j0 = Bi[1]
-    if (anyof((1,nj), j0)) Bj[1]  = Bj[nj] = 1
-    else                   Bj[j0] = 1
-    Bi = Bi * 0
-    Bi[1] = Bi[ni] = 1
-}
-
-void _geo_bshare_tag_limits_2(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon with all points matched
-    // j is polygon without all points matched
-    // set start in i to first match after gap in polygon j
-    // (this case should never occur)
-    `Int'  i0
-    
-    i0 = _geo_bshare_tag_limits_poly(Bj, nj)
-    Bi = Bi * 0
-    if (anyof((1,ni), i0)) Bi[1]  = Bi[ni] = 1
-    else                   Bi[i0] = 1
-}
-
-void _geo_bshare_tag_limits_3(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon with all points matched
-    // j is line with all points matched
-    // mark first and last point in j; set start in i to first point in j 
-    `Int'  i0
-    
-    i0 = Bj[1]
-    Bj = Bj * 0
-    Bj[1] = Bj[nj] = 1
-    Bi = Bi * 0
-    if (anyof((1,ni), i0)) Bi[1]  = Bi[ni] = 1
-    else                   Bi[i0] = 1
-}
-
-void _geo_bshare_tag_limits_4(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon with all points matched
-    // j is line without all points matched
-    // mark start and end of each segment in j; set start in i to first
-    // matched point in j
-    `Int'  i0
-    
-    i0 = _geo_bshare_tag_limits_line(Bj, nj, 1)
-    Bi = Bi * 0
-    if (anyof((1,ni), i0)) Bi[1]  = Bi[ni] = 1
-    else                   Bi[i0] = 1
-}
-
-void _geo_bshare_tag_limits_6(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon without all points matched
-    // j is polygon without all points matched
-    // mark start/end individually
-    (void) _geo_bshare_tag_limits_poly(Bi, ni)
-    (void) _geo_bshare_tag_limits_poly(Bj, nj)
-}
-
-void _geo_bshare_tag_limits_7(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon without all points matched
-    // j is line with all points matched
-    // mark start/end in i individually; mark first and last point in j
-    (void) _geo_bshare_tag_limits_poly(Bi, ni)
-    Bj = Bj * 0
-    Bj[1] = Bj[nj] = 1
-}
-
-void _geo_bshare_tag_limits_8(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is polygon without all points matched
-    // j is line without all points matched
-    // mark start/end individually
-    (void) _geo_bshare_tag_limits_poly(Bi, ni)
-    (void) _geo_bshare_tag_limits_line(Bj, nj, 0)
-}
-
-void _geo_bshare_tag_limits_11(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is line with all points matched
-    // j is line with all points matched
-    // mark first and last point in i and in j
-    Bi = Bi * 0
-    Bi[1] = Bi[ni] = 1
-    Bj = Bj * 0
-    Bj[1] = Bj[nj] = 1
-}
-
-void _geo_bshare_tag_limits_12(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is line with all points matched
-    // j is line without all points matched
-    // mark first and last point in i; mark start/end of segments in j
-    Bi = Bi * 0
-    Bi[1] = Bi[ni] = 1
-    (void) _geo_bshare_tag_limits_line(Bj, nj, 0)
-}
-
-void _geo_bshare_tag_limits_16(`IntC' Bi, `Int' ni, `IntC' Bj, `Int' nj)
-{   // i is line without all points matched
-    // j is line without all points matched
-    // mark start/end of segments in in an j
-    (void) _geo_bshare_tag_limits_line(Bi, ni, 0)
-    (void) _geo_bshare_tag_limits_line(Bj, nj, 0)
-}
-
-`Int' _geo_bshare_tag_limits_poly(`IntC' B, `Int' n)
-{
-    `Int'   i, i0, j, ni
-    `BoolC' B0
-    
-    // find point after gap
-    i = n
-    if (B[i]) {
-        for (--i;i;i--) {
-            if (!B[i]) break
-        }
-        i0 = i + 1
-    }
-    else {
-        for (--i;i;i--) {
-            if (B[i]) break
-        }
-        for (--i;i;i--) {
-            if (!B[i]) break
-        }
-        i0 = i + 1
-    }
-    // mark start and end of segments
-    B0 = B
-    ni = n - 1 // skip last point
-    for (j=1;j<ni;j++) {
-        i = mod(j+i0-1, ni) + 1
-        if (!B0[i])              continue // target point
-        if (!B0[mod(i-2, ni)+1]) continue // point above
-        if (!B0[mod(i,   ni)+1]) continue // point below
-        B[i] = 0
-    }
-    // fix last point
-    B[n] = B[1]
-    return(B0[i0])
-}
-
-`Int' _geo_bshare_tag_limits_line(`IntC' B, `Int' n, `Bool' id)
-{
-    `Int'   i
-    `BoolC' B0
-
-    B0 = B
-    for (i=n-2;i;i--) {
-        if (!B0[i+1]) continue // target point
-        if (!B0[i+2]) continue // point above
-        if (!B0[i])   continue // point below
-        B[i] = 0
-    }
-    if (id) return(select(B0, B)[1])
-    return(.)
 }
 
 end
 
 *! {smcl}
 *! {marker geo_centroid}{bf:geo_centroid()}{asis}
-*! version 1.0.1  30jun2023  Ben Jann
+*! version 1.0.2  29dec2023  Ben Jann
 *!
-*! Computes centroid of each unit; see https://en.wikipedia.org/wiki/Centroid
-*! assuming (1) that the polygons belonging to a unit are separated by a row
-*! or missing coordinates, (2) that the coordinates of each polygon are in
-*! order (clockwise or counter-clockwise), (3) that the polygons wrap around
-*! (first coordinate = last coordinate), (4) that the polygons are grouped by
-*! unit ID, (5) that nested polygons within a unit switch orientation (so that
-*! "holes" will be deducted from the total area of the unit)
+*! Computes centroid of each unit. If a unit contains at least one polygon,
+*! the formula for polygons is used (https://en.wikipedia.org/wiki/Centroid) and
+*! lines and points in the unit will be ignored. Nested polygons within a unit
+*! are assumed to switch orientation (so that "holes" will be deducted from the
+*! total area of the unit). If a unit contains at least one line (but no 
+*! polygons), the formula for lines will be used (weighted mean of midpoints of
+*! line segments) and points in the unit will be ignored. If a unit only
+*! contains points, the formula for points will be used (mean).
 *!
-*! Syntax 1:
+*! geo_gtype() is used to classify the geometry items within a unit; polygons
+*! and lines are assumed to start with missing.
 *!
 *!      result = geo_centroid(rtype, ID, XY)
 *!
 *!  rtype   results type: if rtype!=0 the result is a n x 2 matrix containing
 *!          repeated centroids, else the result is a r x 3 matrix with ID in
-*!          1st row, X of centroid in 2nd row, and Y of centroid in 3rd row,
-*!          where r is the number of units
-*!  ID      real colvector of unit IDs; can also specify ID as real scalar if
-*!          there is only a single unit
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
-*!
-*! Syntax 2:
-*!
-*!      result = _geo_centroid(XY)
-*!
-*!  result  1 x 2 real vector containing centroid
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!          1st column and centroid coordinates in columns 2 and 3, where r is
+*!          the number of units
+*!  ID      n x 1 real colvector of unit IDs (or, possibly, scalar if single
+*!          unit); rows are assumed to be grouped by unit ID
+*!  XY      n x 2 or n x 4 real matrix of (X,Y) coordinates of the geometry
+*!          items; if XY is n x 4 (paired coordinates), centroids are computed
+*!          from the first coordinate
 *!
 
 mata:
 mata set matastrict on
 
-real matrix geo_centroid(real scalar rtype, real colvector id, real matrix XY)
+real matrix geo_centroid(real scalar rtype, real colvector ID, real matrix XY)
 {
-    real scalar    n, i, ai, bi
-    real colvector a, b
+    real scalar    i, n, a, b
+    real colvector p
     real matrix    C
-    pointer scalar ID
     
+    if (!anyof((2,4), cols(XY))) {
+        errprintf("{it:XY} must have two or four columns\n")
+        exit(3200)
+    }
     n = rows(XY)
-    if (length(id)==1) ID = &J(n,1,id)
-    else               ID = &id
-    a = selectindex(_mm_unique_tag(*ID))
-    i = rows(a)
-    if (i<=1) b = n
-    else      b = a[|2 \. |] :- 1 \ n
-    if (rtype) {
-        C = J(n,2,.)
+    i = rows(ID)
+    if (i!=1) {
+        if (i!=n) exit(error(3200))
+    }
+    if (!n) return(J(0, 2 + !rtype, .)) // no data
+    if (n==1) { // single obs
+        C = editmissing(XY[,(1,2)], .)
+        if (rtype) return(C)
+        else       return(ID, C)
+    }
+    if (rows(ID)==1) { // single unit
+        p = 1
+        C = _geo_centroid(XY)
+    }
+    else {
+        p = selectindex(_mm_unique_tag(ID))
+        i = rows(p)
+        C = J(i,2,.)
+        if (i==n) {
+            for (;i;i--) C[i,] = editmissing(XY[i,(1,2)], .)
+            if (rtype) return(C)
+            else       return(ID, C)
+        }
+        a = n + 1
         for (;i;i--) {
-            ai = a[i]; bi = b[i]
-            C[|ai,1 \ bi,2|] = J(bi-ai+1, 1, _geo_centroid(XY[|ai,1 \ bi,.|]))
+            b = a - 1; a = p[i]
+            C[i,] = _geo_centroid(XY[|a,1 \ b,.|])
+        }
+    }
+    if (rtype) {
+        i = rows(p)
+        a = n + 1
+        C = C \ J(n-i,2,.)
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            C[|a,1 \ b,2|] = J(b-a+1, 1, C[i,])
         }
         return(C)
     }
-    C = J(i,2,.)
-    for (;i;i--) C[i,] = _geo_centroid(XY[|a[i],1 \ b[i],.|])
-    return(((*ID)[a],C))
+    else return(ID[p], C)
 }
 
 real rowvector _geo_centroid(real matrix XY)
 {
-    real scalar    n, x, y
-    real colvector d
+    real colvector g, cnt
     
-    n = rows(XY)
-    if (n==0) return(J(0,2,.))
-    if (n==1) return(XY[1,])
-    d = XY[,1] :* (XY[|2,2\.,2|]\.) - (XY[|2,1\.,1|]\.) :* XY[,2]
-    x = sum((XY[,1] + (XY[|2,1\.,1|]\.)) :* d)
-    y = sum((XY[,2] + (XY[|2,2\.,2|]\.)) :* d)
-    return((x, y) :/ (3 * sum(d)))
+    if (cols(XY)>2) return(mean(XY[,(1,2)])) // pc
+    g = geo_gtype(3, ., geo_pid(., XY), XY, cnt=.)
+    if (cnt[4]) { // centroid of polygons
+        if (sum(cnt)==cnt[4]) return(__geo_centroid(1, XY))
+        return(__geo_centroid(1, select(XY, g:==3)))
+    }
+    if (cnt[3]) { // centroid of lines
+        if (sum(cnt)==cnt[3]) return(__geo_centroid(0, XY))
+        return(__geo_centroid(0, select(XY, g:==2)))
+    }
+    if (cnt[2]) { // centroid of points
+        if (sum(cnt)==cnt[2]) return(mean(XY))
+        return(mean(select(XY, g:==1)))
+    }
+    return(J(1,2,.)) // all empty
+}
+
+real rowvector __geo_centroid(real scalar poly, real matrix XY)
+{
+    real scalar    A
+    real colvector a
+    real matrix    XY2
+    
+    if (rows(XY)<2) return(editmissing(XY, .))
+    XY2 = XY[|2,1\.,.|] \ (.,.)
+    // polygon
+    if (poly) {
+        a = rowsum((1,-1) :* XY :* XY2[,(2,1)])
+        A = sum(a)
+        if (A & A<.) return(colsum(a :* (XY + XY2)) / (3 * A))
+    }
+    // line
+    a = sqrt(rowsum((XY2 - XY):^2))
+    A = sum(a)
+    if (A & A<.) return(colsum(a :* (XY + XY2)) / (2 * A))
+    // point
+    return(mean(XY))
 }
 
 end
@@ -893,35 +1033,43 @@ end
 
 *! {smcl}
 *! {marker geo_clip}{bf:geo_clip()}{asis}
-*! version 1.0.2  10oct2023  Ben Jann
+*! version 1.0.3  19jun2024  Ben Jann
 *!
-*! Applies convex polygon or polyline clipping using a modified
-*! Sutherland–Hodgman algorithm (divided polygons will be returned 
-*! if appropriate)
-*! (https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm)
+*! Clips or selects shape items by a convex mask; a modified Sutherland–Hodgman
+*! algorithm is used for clipping (returning divided polygons if appropriate);
+*! see https://en.wikipedia.org/wiki/Sutherland%E2%80%93Hodgman_algorithm
+*!
+*! geo_pid() is used to identify shape items; polygons and lines are assumed
+*! to start with missing
 *!
 *! Syntax:
 *!
-*!      result = geo_clip(XY, mask [, line])
+*!      result = geo_clip(XY, mask [, method])
 *!
-*!  result   coordinates of clipped polygons (first and/or last row equal to
-*!           missing if input started and/or ended with missing); separate shapes
-*!           divided by missing; J(0,2,.) is returned if no points are inside
-*!           clipping mask 
-*!  XY       n x 2 real matrix containing the (X,Y) coordinates of the polygons
-*!           or polylines to be clipped; separate shapes divided by missing;
-*!           a shape is interpreted as a polygon if its first point is equal
-*!           to its last point, else the shape is interpreted as polyline; point
-*!           data is assumed if XY does not contain missing
+*!  result   coordinates of clipped/selected shapes
+*!  XY       n x 2 real matrix containing the (X,Y) coordinates of the shape
+*!           to be clipped or selected; can also be a n x 4 matrix with each
+*!           row containing a separate paired-coordinates item (X1, Y1, X2, Y2)
 *!  mask     n x 2 real matrix containing the (X,Y) coordinates of the convex
 *!           clipping mask; invalid results will be returned if the clipping
 *!           mask is not convex
-*!  line     line!=0 enforces polyline clipping for polygons (i.e. do not
-*!           close the clipped polygons)
+*!  method   real scalar setting the method:
+*!           0 = regular clipping
+*!           1 = enforce line clipping (i.e., do not close the clipped polygons)
+*!           2 = apply selection rather than clipping; shape items with at least
+*!               one point inside the mask will be retained, all other items
+*!               will be removed
+*!           3 = like 2, but an item will only be retained if all points of the
+*!               item are inside the mask
+*!           4 = like 2, but all items will be retained if at least one item has
+*!               a point inside the mask; else all items will be removed
+*!           5 = like 3, but all items will be removed if at least one item has
+*!               a point outside the mask, else all items will be retained
+*!           default is 0; values other than the ones above are treated as 0
 *!
-*! For rectangular clipping, you may also use the following function:
+*! In case of a rectangular mask, you can also use the following function:
 *!
-*!      result = geo_rclip(XY, limits [, line])
+*!      result = geo_rclip(XY, limits [, method])
 *!
 *!  limits   vector specifying the clipping limits: (Xmin, Xmax, Ymin, Ymax)
 *!           (missing will be interpreted as +/- infinity)
@@ -933,6 +1081,7 @@ local Bool      real scalar
 local BoolC     real colvector
 local Int       real scalar
 local IntC      real colvector
+local IntM      real matrix
 local RS        real scalar
 local RC        real colvector
 local RR        real rowvector
@@ -944,10 +1093,9 @@ local PC        pointer colvector
 mata:
 mata set matastrict on
 
-`RM' geo_clip(`RM' XY, `RM' mask, | `Bool' line)
+`RM' geo_clip(`RM' XY, `RM' mask, | `Int' method)
 {
-    if (args()<3) line = 0
-    return(_geo_clip(XY, _geo_clip_mask(mask), line))
+    return(_geo_clip_or_select(XY, _geo_clip_mask(mask), method))
 }
 
 `RM' _geo_clip_mask(`RM' mask0, | `SS' nm)
@@ -968,16 +1116,15 @@ mata set matastrict on
         errprintf("{it:%s} must contain at least two unique points\n", nm)
         exit(3200)
     }
-    if (_geo_orientation(mask)==-1) {
+    if (geo_orientation(mask)==-1) {
         mask = mask[1::rows(mask),] // make counterclockwise
     }
     return(mask)
 }
 
-`RM' geo_rclip(`RM' XY, `RM' limits, | `Bool' line)
+`RM' geo_rclip(`RM' XY, `RM' limits, | `Int' method)
 {
-    if (args()<3) line = 0
-    return(_geo_clip(XY, _geo_rclip_limits(limits), line))
+    return(_geo_clip_or_select(XY, _geo_rclip_limits(limits), method))
 }
 
 `RC' _geo_rclip_limits(`RM' limits)
@@ -989,91 +1136,214 @@ mata set matastrict on
     return(mask)
 }
 
-`RM' _geo_clip(`RM' XY, `RM' mask, `Bool' line)
-{
-    `Bool'  mfirst, mlast, hasmis
-    `Int'   a, b
-    `RM'    xy
-    
-    // defaults and checks
-    if (args()<3) line = 0
-    if (cols(XY)!=2) {
-        errprintf("{it:XY} must have two columns\n")
+`RM' _geo_clip_or_select(`RM' XY, `RM' mask, `Int' method, | `Bool' map)
+{   // map will be replaced by an r x 4 matrix of input and output indices; each
+    // row contains (a0,b0,a1,b2) where (a0,b0) are the start and end indices of
+    // the original item in XY and (a1,b1) are the start and end indices of the
+    // transformed item (or set of items) in the output; a1>b1 for dropped items
+    if (args()<4) map = 0
+    if (!(anyof((2,4), cols(XY)))) {
+        errprintf("{it:XY} must have two or four columns\n")
         exit(3200)
     }
-    // handle missings
-    a = 1; b = rows(XY)
-    if (b==0) return(J(0,2,.))  // empty input
-    mfirst = hasmissing(XY[a,]) // has leading missings
-    mlast  = hasmissing(XY[b,]) // has trailing missings
-    if (mfirst) {
-        for (++a;a<=b;a++) {
-            if (!hasmissing(XY[a,])) break
-        }
-        if (a>b) return(J(1,2,.)) // input all missing
-    }
-    if (mlast) {
-        for (--b;b;b--) {
-            if (!hasmissing(XY[b,])) break
-        }
-    }
-    hasmis = hasmissing(XY[|a,1 \ b,2|])
-    // apply clipping
-    if (hasmis) { // multiple shape items
-        xy = _geo_clip_apply(&__geo_clip(), XY, mask, line, a, b)
-    }
-    else { // single shape item
-        if (!mfirst & !mlast) return(_geo_clip_point(XY, mask)) // point data
-        xy = __geo_clip(J(1,2,.) \ XY[|a,1 \ b,2|], mask, line)
-    }
-    // return
-    if (rows(xy)) {
-        if (!mfirst) xy = xy[|2,1\.,.|]
-        if (mlast)   xy = xy \ J(1,2,.)
-    }
-    return(xy)
+    if (anyof((2,3,4,5), method)) return(_geo_select(XY, mask, method, map))
+    return(_geo_clip(XY, mask, method==1, map))
 }
 
-`RM' _geo_clip_apply(`PS' f, `RM' XY, `RM' mask, `Bool' line, `Int' a, `Int' b)
+`RM' _geo_select(`RM' XY, `RM' mask, `Int' method, `Bool' map)
 {
-    `BoolC' mis
-    `Int'   i, j, J
-    `IntC'  A, B
+    `Int'   i, n, a, b
+    `IntC'  p
+    `BoolC' I
+    
+    // identify shape items
+    n = rows(XY)
+    p = selectindex(_mm_unique_tag(geo_pid(., XY)))
+    i = rows(p)
+    // handle all items together if point data
+    if (i==n) {
+        if (cols(mask)==1) I = __geo_rclip_point(XY, mask)
+        else               I =  __geo_clip_point(XY, mask)
+    }
+    // else loop over items
+    else {
+        I = J(n, 1, .)
+        a = n + 1
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            I[|a\b|] = __geo_select(XY, a, b, mask, method)
+        }
+    }
+    // select items
+    if (method==4 | method==5) {
+        if (method==4 ? any(I) : all(I)) { // at least one inside / all inside
+            if (map) map = J(1,2,(p, (p:-1\n)[|2\.|]))
+            return(XY)
+        }
+        else { // else drop all
+            if (map) map = p, (p:-1\n)[|2\.|], J(rows(p),2,.)
+            return(J(0, cols(XY), .))
+        }
+    }
+    if (map) map = _geo_select_map(p, I)
+    return(select(XY, I))
+}
+
+`IntM' _geo_select_map(`IntC' p, `BoolC' I)
+{
+    `Int'  i, a, b, r
+    `IntM' map
+    
+    i = rows(p)
+    map = J(i, 4, .)
+    a = rows(I) + 1
+    r = 0
+    for (;i;i--) {
+        map[i,2] = b = a - 1
+        map[i,1] = a = p[i]
+        map[i,4] = r + 1
+        r = r + sum(I[|a\b|])
+        map[i,3] = r
+    }
+    map[,(3,4)] = (r+1) :- map[,(3,4)]
+    return(map)
+}
+
+`BoolC' __geo_select(`RM' XY, `Int' a, `Int' b, `RM' mask, `Int' method)
+{   // first row in XY assumed missing
+    `BoolC' I
+
+    if (cols(mask)==1) I = __geo_rclip_point(XY[|a+1,1\b,2|], mask)
+    else               I =  __geo_clip_point(XY[|a+1,1\b,2|], mask)
+    if (method==2) {
+        if (any(I)) return(J(b-a+1,1,1)) // at least one point inside
+        else        return(J(b-a+1,1,0)) // else drop all
+    }
+    if (method==3) {
+        if (all(I)) return(J(b-a+1,1,1)) // all points inside
+        else        return(J(b-a+1,1,0)) // else drop all
+    }
+    if (any(I)) return(1 \ I)
+    else        return(0 \ I)
+}
+
+`RM' _geo_clip(`RM' XY, `RM' mask, `Bool' line, `Bool' map)
+{
+    `Int'   i, a, b, r
+    `IntC'  p
+    `IntM'  M
     `RM'    xy
     `PC'    I
     
-    // collect indices of shape items
-    mis = selectindex(rowmissing(XY[|a,1 \ b,2|])) :+ (a - 1)
-    i = rows(mis) + 1
-    A = B = J(i, 1, .)
-    A[1] = a; B[i] = b
-    for (--i;i;i--) {
-        A[i+1] = mis[i] + 1
-        B[i]   = mis[i] - 1
-    }
-    // process each item 
-    i = rows(A)
+    // identify shape items
+    p = selectindex(_mm_unique_tag(geo_pid(., XY)))
+    i = rows(p)
+    // handle all items together if point data
+    if (i==rows(XY)) return(_geo_clip_point(XY, mask, map))
+    // else loop over items ...
+    r = 0
     I = J(i, 1, NULL)
-    J = 0
+    M = J(i, 4, .)
+    a = rows(XY) + 1
     for (;i;i--) {
-        I[i] = &(*f)(J(1,2,.) \ XY[|A[i],1 \ B[i],2|], mask, line)
-        J = J + rows(*I[i])
+        M[i,2] = b = a - 1; M[i,1] = a = p[i]
+        I[i] = &__geo_clip(XY, a, b, mask, line)
+        M[i,4] = r + 1
+        r = r + rows(*I[i])
+        M[i,3] = r
     }
-    // collect results
-    xy = J(J, 2, .)
+    M[,(3,4)] = (r+1) :- M[,(3,4)]
+    // ... and collect results
+    xy = J(r, cols(XY), .)
     for (i=length(I);i;i--) {
-        j = rows(*I[i])
-        if (!j) continue // empty shape item
-        xy[|J-j+1,. \ J,.|] = *I[i]
-        J = J - j
+        a = M[i,3]; b = M[i,4]
+        if (a>b) continue // empty item
+        xy[|a,1 \ b,.|] = *I[i]
     }
+    if (map) map = M
     return(xy)
 }
 
-`RM' _geo_clip_point(`RM' XY, `RM' mask)
+`RM' __geo_clip(`RM' XY, `Int' a, `Int' b, `RM' mask, `Bool' line)
+{   // first row in XY assumed missing; XY assumed to have two columns
+    `Bool' flip
+    `Int'  r, i, n
+    `RM'   xy
+    `PS'   f
+    
+    r = b - a + 1
+    // point item
+    if (r<=2) {
+        xy = _geo_clip_point(XY[|a+1,1 \ b,2|], mask, 0)
+        if (rows(xy)) return(XY[a,] \ xy)
+        return(J(0,2,.))
+    }
+    // polygon item
+    xy = XY[|a,1 \ b,2|]
+    if (xy[2,]==xy[r,]) {
+        if (line) {
+            // rearrange points so that polygon does not start inside
+            if (_geo_clip_larrange(xy, mask)) return(xy) // all points inside
+            // enforce line clipping
+            f = &_geo_clip_line()
+            flip = 0
+        }
+        else {
+            f = &_geo_clip_area()
+            flip = geo_orientation(xy)==1        // is counterclockwise
+            if (flip) xy = J(1,2,.) \ xy[r::2,.] // flip orientation
+        }
+    }
+    // line item
+    else { 
+        f = &_geo_clip_line()
+        flip = 0
+    }
+    // rectangular clipping
+    if (cols(mask)==1) {
+        if (mask[1]<.) { // xmin
+            xy = (*f)(xy, mask[1])
+        }
+        if (mask[3]<.) { // ymin (-90° rotation)
+            xy = (*f)((xy[,2], -xy[,1]), mask[3])
+            xy = (-xy[,2], xy[,1])
+        }
+        if (mask[2]<.) { // xmax (-180° rotation)
+            xy = -(*f)(-xy, -mask[2])
+        }
+        if (mask[4]<.) { // ymax (-270° rotation)
+            xy = (*f)((-xy[,2], xy[,1]), -mask[4])
+            xy = (xy[,2], -xy[,1])
+        }
+    }
+    // convex clipping
+    else {
+        n = rows(mask)
+        for (i=1;i<n;i++) xy = (*f)(xy, mask[|i,1 \ i+1,2|])
+    }
+    // restore orientation
+    if (flip) {
+        r = rows(xy)
+        if (r) xy = J(1,2,.) \ xy[r::2,.] 
+    }
+    // return
+    return(xy)
+}
+
+`RM' _geo_clip_point(`RM' XY, `RM' mask, `Bool' map)
 {
-    if (cols(mask)==1) return(select(XY, __geo_rclip_point(XY, mask)))
-    return(select(XY, __geo_clip_point(XY, mask)))
+    `Int'   n
+    `BoolC' I
+    `IntC'  b1
+    
+    if (cols(mask)==1) I = __geo_rclip_point(XY, mask)
+    else               I =  __geo_clip_point(XY, mask)
+    if (map) {
+        n = rows(I)
+        b1 = runningsum(I)
+        map = J(1,2,1::n), (1 \ b1:+1)[|1\n|], b1
+    }
+    return(select(XY, I))
 }
 
 `BoolC' __geo_rclip_point(`RM' XY, `RC' mask)
@@ -1099,58 +1369,6 @@ mata set matastrict on
         in = in :& (_geo_clip_outside(XY, mask[|i,1 \ i+1,2|]):<=0)
     }
     return(in)
-}
-
-`RM' __geo_clip(`RM' XY, `RM' mask, `Bool' line)
-{
-    `Bool' polygon, flip
-    `Int'  i, n
-    `PS'   f
-
-    // line vs polygon
-    if (rows(XY)==2) polygon = 0 // single point input
-    else             polygon = (XY[2,]==XY[rows(XY),]) // closed path
-    // line clipping
-    if (line | !polygon) {
-        if (polygon) {
-            // rearrange points so that polygon does not start inside
-            if (_geo_clip_larrange(XY, mask)) return(XY) // all points inside
-        }
-        f = &_geo_clip_line()
-        flip = 0
-    }
-    else {
-        f = &_geo_clip_area()
-        flip = _geo_orientation(XY[|2,1 \ .,.|])==1 // is counterclockwise
-        if (flip) XY = J(1,2,.) \ XY[rows(XY)::2,.] // flip orientation
-    }
-    if (cols(mask)==1) { // rclip
-        if (mask[1]<.) { // xmin
-            XY = (*f)(XY, mask[1])
-        }
-        if (mask[3]<.) { // ymin (-90° rotation)
-            XY = (*f)((XY[,2], -XY[,1]), mask[3])
-            XY = (-XY[,2], XY[,1])
-        }
-        if (mask[2]<.) { // xmax (-180° rotation)
-            XY = -(*f)(-XY, -mask[2])
-        }
-        if (mask[4]<.) { // ymax (-270° rotation)
-            XY = (*f)((-XY[,2], XY[,1]), -mask[4])
-            XY = (XY[,2], -XY[,1])
-        }
-    }
-    else {
-        n = rows(mask)
-        for (i=1;i<n;i++) XY = (*f)(XY, mask[|i,1 \ i+1,2|])
-    }
-    // returns
-    if (flip) {
-        if (rows(XY)) {
-            XY = J(1,2,.) \ XY[rows(XY)::2,.] // restore orientation
-        }
-    }
-    return(XY)
 }
 
 `Bool' _geo_clip_larrange(`RM' XY, `RM' mask)
@@ -1423,8 +1641,129 @@ void _geo_clip_area_arrange(`RM' XY, `IntC' out)
 end
 
 *! {smcl}
+*! {marker geo_gtype}{bf:geo_gtype()}{asis}
+*! version 1.0.0  28dec2023  Ben Jann
+*!
+*! Determine geometry types
+*!
+*! Syntax:
+*!
+*!      result = geo_gtype(rtype, ID, PID, XY [, count])
+*!
+*!  rtype   results type: if rtype==0 the result is a r x 3 matrix with ID in
+*!          1st column, PID in 2nd column, and geometry type in 3rd column
+*!          (0 = empty, 1 = Point, 2 = LineString, 3 = Polygon), where r is the
+*!          total number of polygons; if rtype==1 the result is an n x 1 
+*!          colvector containing repeated geometry type values; if rtype==2 the
+*!          result is a 4 x 1 colvector of geometry type counts (number of
+*!          empty items, points, lines, polygons); if rtype==3, result is the
+*!          same as in rtype==1, but optional argument count will be filled in
+*!          with type counts
+*!  ID      n x 1 real colvector of unit IDs (or, possibly, scalar if single
+*!          unit); rows are assumed to be grouped by unit ID
+*!  PID     n x 1 real colvector of within-unit geometry-item IDs
+*!  XY      n x 2 or n x 4 real matrix of (X,Y) coordinates of the geometry
+*!          items; if XY is n x 4 (paired coordinates), only the first two
+*!          columns will be considered
+
+mata:
+mata set matastrict on
+
+real matrix geo_gtype(real scalar rtype, real colvector ID,
+    real colvector PID, real matrix XY, | transmorphic cnt)
+{
+    real scalar    i, n, a, b, r
+    real colvector p, GT
+    
+    // check conformability
+    if (!(anyof((2,4), cols(XY)))) {
+        errprintf("{it:XY} must have two or four columns\n")
+        exit(3200)
+    }
+    n = rows(XY)
+    i = rows(ID)
+    if (n!=i & i!=1)  exit(error(3200))
+    if (n!=rows(PID)) exit(error(3200))
+    if (n==0) { // no data
+        if (rtype==0) return(J(0,3,.))
+        if (rtype==1) return(J(0,1,.))
+        if (rtype==2) return(J(4,1,0))
+        if (rtype==3) {; cnt = J(4,1,0); return(J(0,1,.)); }
+        _geo_rtype_err(0..3)
+    }
+    // determine geometry types
+    if (i==1) p = selectindex(_mm_unique_tag(PID))
+    else      p = selectindex(_mm_uniqrows_tag((ID,PID)))
+    i = rows(p)
+    a = n + 1
+    if (rtype==0) {
+        GT = J(i,1,.)
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            GT[i] = _geo_gtype(XY, a, b)
+        }
+        if (rows(ID)==1) return(J(rows(GT),1,ID), PID[p], GT)
+        return(ID[p], PID[p], GT)
+    }
+    if (rtype==1) {
+        GT = J(n,1,.)
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            GT[|a \ b|] = J(b - a + 1, 1, _geo_gtype(XY, a, b))
+        }
+        return(GT)
+    }
+    if (rtype==2) {
+        GT = J(4,1,0)
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            r = _geo_gtype(XY, a, b) + 1
+            GT[r] = GT[r] + 1
+        }
+        return(GT)
+    }
+    if (rtype==3) {
+        cnt = J(4,1,0)
+        GT = J(n,1,.)
+        for (;i;i--) {
+            b = a - 1; a = p[i]
+            r = _geo_gtype(XY, a, b) + 1
+            cnt[r] = cnt[r] + 1
+            GT[|a \ b|] = J(b - a + 1, 1, r-1)
+        }
+        return(GT)
+    }
+    _geo_rtype_err(0..3)
+}
+
+real scalar _geo_gtype(real matrix XY, real scalar a, real scalar b)
+{
+    real scalar r
+    
+    r = b - a + 1
+    if (r==1) {
+        if (missing(XY[a,(1,2)])==2) return(0)      // empty
+        return(1)                                   // point
+    }
+    if (r==2) return(1)                             // point
+    if (r>=5) {
+        if (XY[a+1,(1,2)]==XY[b,(1,2)]) return(3)   // polygon
+        return(2)                                   // line
+    }
+    return(2)                                       // line
+}
+
+void _geo_rtype_err(real rowvector v)
+{
+    errprintf("{it:rtype} must be in {%s}\n", invtokens(strofreal(v),","))
+    exit(3300)
+}
+
+end
+
+*! {smcl}
 *! {marker geo_hull}{bf:geo_hull()}{asis}
-*! version 1.0.0  30jun2023  Ben Jann
+*! version 1.0.2  01jun2024  Ben Jann
 *!
 *! Determine convex hull around cloud of points using Graham scan; based on
 *! https://en.wikipedia.org/wiki/Graham_scan and
@@ -1435,14 +1774,24 @@ end
 *!      result = geo_hull(XY)
 *!
 *!  result  real matrix containing (X,Y) of convex hull (counterclockwise)
-*!  XY      n x 2 real matrix containing points; X in col 1, Y in col 2;
-*!             should not contain missing values
+*!  XY      n x 2 real matrix containing the points; rows containing missing
+*!          will be ignored
 *!
 
 mata
 mata set matastrict on
 
 real matrix geo_hull(real matrix XY)
+{
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    if (!hasmissing(XY)) return(_geo_hull(XY))
+    return(_geo_hull(select(XY, !rowmissing(XY))))
+}
+
+real matrix _geo_hull(real matrix XY)
 {
     real scalar    i0, i, j, n
     real colvector p, s
@@ -1473,7 +1822,7 @@ real matrix geo_hull(real matrix XY)
 }
 
 real scalar _geo_hull_refpoint(real matrix XY)
-{   // get index of point with lowest X (and lowest Y within ties)
+{   // get index of point with lowest Y (and lowest X within ties)
     real colvector i, j
     real matrix    w
     
@@ -2048,7 +2397,7 @@ end
 
 *! {smcl}
 *! {marker geo_orientation}{bf:geo_orientation()}{asis}
-*! version 1.0.1  10oct2023  Ben Jann
+*! version 1.0.2  01jun2024  Ben Jann
 *!
 *! Determine orientation of polygon
 *! see https://en.wikipedia.org/wiki/Curve_orientation
@@ -2067,23 +2416,23 @@ mata
 mata set matastrict on
 
 real scalar geo_orientation(real matrix XY)
-{   // orientation of polygon
+{
     if (cols(XY)!=2) {
-        errprintf("input must have two columns\n")
+        errprintf("{it:XY} must have two columns\n")
         exit(3200)
     }
-    if (!rows(XY)) return(0) // no data; orientation undefined
-    if (hasmissing(XY)) return(_geo_orientation(select(XY, !rowmissing(XY))))
-    return(_geo_orientation(XY))
+    if (!hasmissing(XY)) return(_geo_orientation(XY))
+    return(_geo_orientation(select(XY, !rowmissing(XY))))
 }
 
 real scalar _geo_orientation(real matrix XY)
-{   // result: -1 = clockwise, 1 = counterclockwise, 0 = undefined
+{
     real scalar    n, i, a
+    real rowvector c
     real colvector A, B, C
-  
+    
     n = rows(XY)
-    if (!n) return(0) // no data; orientation undefined
+    if (n==0) return(0) // no data; orientation undefined
     a = _geo_hull_refpoint(XY)
     A = XY[a,]
     for (i=1;i<n;i++) {
@@ -2105,22 +2454,22 @@ end
 
 *! {smcl}
 *! {marker geo_pid}{bf:geo_pid()}{asis}
-*! version 1.0.1  05oct2023  Ben Jann
+*! version 1.0.2  25dec2023  Ben Jann
 *!
-*! Generate polygon ID within unit ID
+*! Generate geometry-item ID (polygon ID) within unit ID
 *!
 *! Syntax:
 *!
 *!      PID = geo_pid(ID, XY)
 *!
-*!  PID     real colvector of within-unit polygon IDs
-*!  ID      real colvector of unit IDs
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
-*!          each polygon is assumed to start (or end) with a row of missings
-*!          polygons are assumed to be grouped by unit ID
-*!          if neither the first nor the last coordinate within an ID is
-*!          missing, point data is assumed (i.e. each row within the ID is
-*!          counted as a separate single-point polygon)
+*!  PID     n x 1 real colvector of within-unit geometry-item IDs
+*!  ID      n x 1 real colvector of unit IDs (or, possibly, scalar if single
+*!          unit); rows are assumed to be grouped by unit ID
+*!  XY      n x 2 or n x 4 real matrix of (X,Y) coordinates of the geometry
+*!          items; if XY is n x 4 (paired coordinates), each row is considered 
+*!          a separate item; else, if the first row of a unit is not missing,
+*!          each row within the unit is considered a separate item); else each
+*!          missing row within the unit starts a new item
 *!
 
 mata:
@@ -2128,37 +2477,49 @@ mata set matastrict on
 
 real colvector geo_pid(real colvector ID, real matrix XY)
 {
-    real scalar    i
-    real colvector a, b, p
+    real scalar    c, i, n, a, b
+    real colvector p, id
     
-    a = selectindex(_mm_unique_tag(ID))
-    i = rows(a)
-    if (i<=1) b = rows(XY)
-    else      b = a[|2 \. |] :- 1 \ rows(XY)
-    p = J(rows(XY),1,.)
-    for (;i;i--) p[|a[i] \ b[i]|] = _geo_pid(XY[|a[i],1 \ b[i],.|])
-    return(p)
+    // check conformability
+    c = cols(XY)
+    if (c!=2 & c!=4) {
+        errprintf("{it:XY} must have two or four columns\n")
+        exit(3200)
+    }
+    n = rows(XY)
+    i = rows(ID)
+    if (n!=i & i!=1) exit(error(3200))
+    // generate item id
+    if (n==0) return(J(0,1,.))      // no data
+    if (c==4) return(1::n)          // paired-coordinate data
+    if (i==1) return(_geo_pid(XY))  // single unit
+    p = selectindex(_mm_unique_tag(ID))
+    i = rows(p)
+    if (i==1) return(_geo_pid(XY))  // single unit
+    a = n + 1
+    id = J(n,1,.)
+    for (;i;i--) {
+        b = a - 1; a = p[i]
+        id[|a \ b|] = _geo_pid(XY, a, b)
+    }
+    return(id)
 }
 
-real colvector _geo_pid(real matrix XY)
+real colvector _geo_pid(real matrix XY, | real scalar a, real scalar b)
 {
-    real scalar    n
-    real colvector p
-    
-    n = rows(XY)
-    if (n==0) return(J(0,1,.))
-    if (n==1) return(1)
-    p = rowmissing(XY):!=0             // missing starts new polygon
-    if (!p[1]) p = p[n] \ p[|1 \ n-1|] // assume polygons end with missing
-    if (!p[1]) p = J(n,1,1)            // assume point data
-    return(runningsum(p))
+    if (args()==1) {
+        if (missing(XY[1,])!=2) return(1::rows(XY))
+        return(runningsum(rowmissing(XY):==2))
+    }
+    if (missing(XY[a,])!=2) return(1::(b-a+1))
+    return(runningsum(rowmissing(XY[|a,1 \ b,2|]):==2))
 }
 
 end
 
 *! {smcl}
 *! {marker geo_plevel}{bf:geo_plevel()}{asis}
-*! version 1.0.1  02oct2023  Ben Jann
+*! version 1.0.2  01jun2024  Ben Jann
 *!
 *! Determines plot levels of polygons: 0 = neither enclave nor exclave, 1 =
 *! enclave, 2 = exclave, 3 = enclave within exclave, 4 = exclave within
@@ -2169,12 +2530,13 @@ end
 *!      result = geo_plevel(rtype, ID, PID, XY [, nodots])
 *!
 *!  rtype   results type: if rtype!=0 the result is a real colvector of length
-*!          n containing repeated plot level values, else the result is a r x 2
-*!          matrix with ID in 1st row, PID in 2nd row, and plot level in 3rd
-*!          row, where r is the total number of polygons
+*!          n containing repeated plot level values, else the result is a r x 3
+*!          matrix with ID in 1st column, PID in 2nd column, and plot level in
+*!          3rd column, where r is the total number of polygons
 *!  ID      real colvector of unit IDs
 *!  PID     real colvector of within-unit polygon IDs
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons; missing
+*!          coordinates will be ignored
 *!  nodots  nodots!=0 suppresses progress dots 
 *!
 
@@ -2184,7 +2546,6 @@ local IntC      real colvector
 local RS        real scalar
 local RC        real colvector
 local RM        real matrix
-local SS        string scalar
 local POLYGON   _geo_POLYGON
 local Polygon   struct `POLYGON' scalar
 local pPolygon  pointer (`Polygon') scalar
@@ -2218,6 +2579,10 @@ struct `UNIT' {
     `pUnits' u
     
     if (args()<5) nodots = 0
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
     // collect units and polygons
     u = _geo_collect_units(ID, PID, XY)
     n = length(u)
@@ -2225,16 +2590,16 @@ struct `UNIT' {
     if (!nodots) i0 = _geo_progress_init("(pass 1/2: ")
     for (i=n;i;i--) {
         _geo_plevel_within(*u[i])
-        if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
+        if (!nodots) _geo_progress(i0, 1-(i-1)/n)
     }
-    if (!nodots) display(")")
+    if (!nodots) _geo_progress_end(i0, ")")
     // update plot levels based on between unit comparisons
     if (!nodots) i0 = _geo_progress_init("(pass 2/2: ")
     for (i=n;i;i--) {
         for (j=i-1; j; j--) _geo_plevel_between(*u[i], *u[j])
-        if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
+        if (!nodots) _geo_progress(i0, 1-(i-1)/n)
     }
-    if (!nodots) display(")")
+    if (!nodots) _geo_progress_end(i0, ")")
     // fill in result
     if (rtype) {
         P = J(rows(ID), 1, .)
@@ -2257,30 +2622,6 @@ struct `UNIT' {
         }
     }
     return(P)
-}
-
-`Int' _geo_progress_init(`SS' msg)
-{
-    displayas("txt")
-    printf("%s0%%", msg)
-    displayflush()
-    return(0)
-}
-
-void _geo_progressdots(`Int' p, `Int' j)
-{
-    while (1) {
-        if (p < (j+1)/40) break
-        j++
-        if (mod(j,4)) {
-            printf(".")
-            displayflush()
-        }
-        else {
-            printf("%g%%", j/4*10)
-            displayflush()
-        }
-    }
 }
 
 void _geo_plevel_within(`Unit' u)
@@ -2356,46 +2697,51 @@ void _geo_plevel_between(`Unit' ui, `Unit' uj)
 }
 
 `Bool' _geo_plevel_notinside(`RM' xy, `RM' XY)
-{   // check if at least one point of xy is outside XY
-    `Int' i
-    `RS'  px, py
+{   // treat as not inside as soon as an outside point is found
+    // treat as inside as soon as an inside point is found
+    // (assuming that there are no crossings)
+    // treat as not inside if all points are on border
+    `Int' i, r
 
     for (i=rows(xy);i;i--) {
-        px = xy[i,1]; py = xy[i,2]
-        if (!geo_pointinpolygon(px, py, XY)) return(1)
+        r = geo_pointinpolygon(xy[i,1], xy[i,2], XY)
+        if (r==0) return(1) // point is outside
+        if (r==1) return(0) // point is inside
     }
-    return(0)
+    return(0) // all points on border
 }
 
 `pUnits' _geo_collect_units(`RC' ID, `RC' PID, `RM' XY)
 {
-    `Int'    i
-    `IntC'   a, b
+    `Int'    i, a, b
+    `IntC'   p
     `pUnits' u
     
-    a = selectindex(_mm_unique_tag(ID))
-    i = rows(a)
-    if (i<=1) b = rows(ID)
-    else      b = a[|2 \. |] :- 1 \ rows(ID)
+    p = selectindex(_mm_unique_tag(ID))
+    i = rows(p)
     u = J(i,1,NULL)
-    for (;i;i--) u[i] = &_geo_collect_unit(a[i], b[i], ID, PID, XY)
+    a = rows(ID) + 1
+    for (;i;i--) {
+        b = a - 1; a = p[i]
+        u[i] = &_geo_collect_unit(a, b, ID, PID, XY)
+    }
     return(u)
 }
 
 `Unit' _geo_collect_unit(`Int' a, `Int' b, `RC' ID, `RC' PID, `RM' XY)
 {
-    `Int'  i
-    `IntC' i1, i2
+    `Int'  i, i0, i1
+    `IntC' p
     `Unit' u
     
     u.id = ID[a]
-    i1   = (a - 1) :+ selectindex(_mm_unique_tag(PID[|a \ b|]))
-    u.n  = i = rows(i1)
-    if (i<=1) i2 = b
-    else      i2  = i1[|2 \. |] :- 1 \ b
-    u.p = J(u.n, 1, NULL)
+    p    = (a - 1) :+ selectindex(_mm_unique_tag(PID[|a \ b|]))
+    u.n  = i = rows(p)
+    u.p  = J(u.n, 1, NULL)
+    i0   = b + 1
     for (;i;i--) {
-        u.p[i] = &_geo_collect_polygon(i1[i], i2[i], PID, XY)
+        i1 = i0 - 1; i0 = p[i]
+        u.p[i] = &_geo_collect_polygon(i0, i1, PID, XY)
     }
     return(u)
 }
@@ -2423,20 +2769,25 @@ end
 
 *! {smcl}
 *! {marker geo_pointinpolygon}{bf:geo_pointinpolygon()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.1.0  16may2024  Ben Jann
 *!
 *! Determines whether a point is inside or outside of a given polygon; the
-*! implementation is based on the code examples at
+*! implementation is loosely based on the examples at
 *! https://rosettacode.org/wiki/Ray-casting_algorithm
 *!
 *! Syntax:
 *!
 *!      inside = geo_pointinpolygon(x, y, XY)
 *!
-*!  inside  real scalar equal to 1 if point is inside, 0 else
+*!  inside  real scalar equal to
+*!              0 if point is outside
+*!              1 if point is inside
+*!              2 if point lies on edge
+*!              3 is point lies on vertex
 *!  x       real scalar containing X coordinate of point
 *!  y       real scalar containing Y coordinate of point
 *!  XY      n x 2 real matrix containing (X,Y) coordinates of polygon
+*!          all arguments assumed non-missing
 *!
 
 mata:
@@ -2444,137 +2795,680 @@ mata set matastrict on
 
 real scalar geo_pointinpolygon(real scalar x, real scalar y, real matrix XY)
 {
-    real scalar  i, c
-    real scalar  py, ax, ay, bx, by
+    real scalar  i, c, C, poly
+    real scalar  ax, ay, bx, by
     
-    c = 0
-    i = rows(XY)
+    /*
+    if (cols(XY)!=2) {
+         errprintf("{it:XY} must have two columns\n")
+         exit(3200)
+    }
+    */
+    // XY empty
+    if (!(i = rows(XY))) return(0)
+    // XY is point
+    if (i==1) {
+        if ((x,y)==XY) return(3)
+        return(0)
+    }
+    // XY is polygon or line
+    poly = (XY[1,]==XY[i,])
+    C = 0
     ax = XY[i,1]; ay = XY[i,2]
     i--
     for (;i;i--) {
         bx = ax; by = ay
         ax = XY[i,1]; ay = XY[i,2]
-        py = y // work on copy
-        if (ay>by) {
-            if (_geo_rayintersect(x, py, bx, by, ax, ay)) c++
-        }
-        else {
-            if (_geo_rayintersect(x, py, ax, ay, bx, by)) c++
+        if (ay>by) c = _geo_rayintersect(x, y, bx, by, ax, ay)
+        else       c = _geo_rayintersect(x, y, ax, ay, bx, by)
+        if (c) {
+            if (c<2) C++
+            else     return(c)  // point lies on vertex or on edge
         }
     }
-    return(mod(c,2))
+    if (poly) return(mod(C,2))
+    return(0) // XY is line; position inside not possible
 }
 
 real scalar _geo_rayintersect(real scalar px, real scalar py,
     real scalar ax, real scalar ay, real scalar bx, real scalar by)
 {
-    real scalar eps
-    real scalar m_red, m_blue
+    real scalar a_b, a_p
     
-    eps = 0.00001
-    if (py==ay | py==by)    py = py + eps
-    if (py>by | py<ay)      return(0)
-    if (px > max((ax, bx))) return(0)
-    if (px < min((ax, bx))) return(1)
-    if (ax!=bx) m_red  = (by - ay) / (bx - ax)
-    if (ax!=px) m_blue = (py - ay) / (px - ax)
-    return(m_blue >= m_red)
+    // A: outside of bounding box of segment
+    if (py>by) return(0)          // above
+    if (py<ay) return(0)          // below
+    if (ax>bx) {
+        if (px > ax) return(0)    // right
+        if (px < bx) {            // left
+            if (ay==by) return(0) // do not count if segment is flat
+            if (ay==py) return(0) // do not count if at bottom
+            return(1)
+        }
+    }
+    else {
+        if (px > bx) return(0)    // right
+        if (px < ax) {            // left
+            if (ay==by) return(0) // do not count if segment is flat
+            if (ay==py) return(0) // do not count if at bottom
+            return(1)
+        }
+    }
+    // B: on edge of bounding box
+    if (py==ay) {
+        if (px==ax) return(3)     // p equal to a
+        if (ay==by) {             // segment is flat
+            if (px==bx) return(3) // p equal to b
+            return(2)             // p lies on segment
+        }
+        return(0)                 // at bottom; do not count
+    }
+    if (py==by) {
+        if (px==bx) return(3)     // p equal to b
+        return(bx>ax)             // at top; count if b is right of a
+    }
+    if (px==ax) {
+        if (ax==bx) return(2)     // segment is upright; p lies on segment
+        return(bx>ax)             // count if b is right of a
+    }
+    if (px==bx) {
+        return(bx<ax)             // count if b is left of a
+    }
+    // C: inside bounding box
+    a_b = (by - ay) / (bx - ax)   // slope of a->b
+    a_p = (py - ay) / (px - ax)   // slope of a->p
+    if (a_p==a_b) return(2)       // p lies on segment
+    return(a_p>a_b)               // count if slope of a->p is larger
+}
+
+end
+
+*! {smcl}
+*! {marker geo_project}{bf:geo_project()}{asis}
+*! version 1.0.0  03jun2024  Ben Jann
+*!
+*! Apply a map projection to given (unprojected) coordinates.
+*!
+*! Syntax:
+*!
+*!      result = geo_project(XY, [ pname, rad, opts ])
+*!
+*!  result  n x 2 real matrix of projected (X,Y) coordinates
+*!  XY      n x 2 real matrix of original (X,Y) coordinates
+*!  pname   string scalar selecting the projection; abbreviation and uppercase
+*!          spelling allowed for built-in projections; default is "webmercator"
+*!  rad     rad!=0 specifies that the original coordinates are in radians, not
+*!          in degrees; this also affects the interpretation of optional
+*!          arguments (if relevant)
+*!  opts    real vector containing optional arguments
+*!
+
+mata:
+mata set matastrict on
+
+real matrix geo_project(real matrix XY, | string scalar s, real scalar rad,
+    real vector opts)
+{
+    pointer (function) scalar f
+    
+    if (args()<3) rad = 0
+    if (cols(XY)!=2) {
+         errprintf("{it:XY} must have two columns\n")
+         exit(3200)
+    }
+    (void) _geo_project_find(s, f=NULL)
+    return((*f)(XY, rad, opts))
+}
+
+string scalar _geo_project_find(string scalar s0, | pointer (function) scalar f)
+{
+    string scalar    s
+    string rowvector list
+    
+    list = "webmercator", "mercator", "emercator", "miller", "gallstereo",
+           "lambert", "behrmann", "hobodyer", "gallpeters", "peters",
+           "equirectangular",
+           "robinson", "equalearth", "naturalearth",
+           "winkeltripel", "hammer",
+           "conic", "albers", "lambertconic",
+           "orthographic"
+    (void) _mm_strexpand(s=s0, strlower(strtrim(s0)), list, "webmercator")
+    f = findexternal("geo_project_"+s+"()")
+    if (f==NULL) {
+        errprintf("projection {bf:%s} not found\n", s0)
+        exit(3499)
+    }
+    return(s) // return expanded name
+}
+
+real scalar _geo_project_opt(real vector opts, real scalar j, real scalar def)
+{   
+    return(length(opts)>=j ? opts[j] : def)
+}
+
+real matrix _geo_project_rad(real scalar rad, real matrix X)
+{
+    if (rad) return(X)
+    return(X * (pi()/180))
+}
+
+real colvector _geo_project_clip(real colvector x, string scalar lbl,
+    real scalar limit, | real scalar offset)
+{
+    real scalar    min, max, clipped
+    real rowvector minmax
+    real colvector X, p
+    
+    // setup
+    if (args()<4) offset = 0
+    if (limit>=.)  return(x) // nothing to do
+    if (offset>=.) return(x) // nothing to do
+    max = offset + abs(limit) 
+    min = offset - abs(limit)
+    // clip data
+    minmax = minmax(x)
+    clipped = 0
+    if (minmax[1]<min) {
+        p = selectindex(x:<min)
+        X = x
+        X[p] = J(length(p), 1, min)
+        clipped = 1
+    }
+    if (minmax[2]>max & minmax[2]<.) {
+        p = selectindex(x:>max :& x:<.)
+        if (clipped) X[p] = J(length(p), 1, max)
+        else {
+            X = x
+            X[p] = J(length(p), 1, max)
+            clipped = 1
+        }
+    }
+    if (clipped) {
+        printf("{txt}(using clipped values for %s coordinates" +/*
+            */ " outside [%g,%g])\n", lbl, min, max)
+        return(X)
+    }
+    return(x)
+}
+
+real matrix geo_project_webmercator(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Web Mercator projection based on
+    // https://en.wikipedia.org/wiki/Web_Mercator_projection
+    // Y clipped at +/- 85.051129
+    real scalar    r, x0, yc
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 360/pi() * atan(exp(pi())) - 90) // Y limit
+    r  = 256 * 2^_geo_project_opt(opts, 1, 0) / (2*pi()) // zoom
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    return(r * (
+        x :+ pi(),
+        ln(tan(pi()/4 :+ y/2)) :- pi()
+        ))
+}
+
+real matrix geo_project_mercator(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Mercator projection (spherical earth model) based on
+    // https://en.wikipedia.org/wiki/Mercator_projection
+    real scalar    r, x0, yc
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    return(r * ( 
+        x,
+        sign(y) :* ln(tan(pi()/4 :+ abs(y)/2))
+        )) // using abs(y) and multiply by sign to prevent missing at -90
+}
+
+real matrix geo_project_emercator(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Mercator projection (ellipsoid earth model) based on
+    // https://en.wikipedia.org/wiki/Mercator_projection
+    // inverse flattening parameter according to WGS 84 from
+    // https://en.wikipedia.org/wiki/World_Geodetic_System
+    // note:
+    // - the squared eccentricity is defined as e2 = 1 - (b/a)^2, where a is
+    //   the semi-major axis (a = 6378137) and b is the semi-minor axis of the
+    //   ellipsoid
+    // - the flattening (ellipticity) is defined as f = (a - b) / a, the
+    //   inverse flattening as m = 1/f
+    // - this implies: e2 = 2*f - f^2 = 2/m - (1/m)^2
+    //                 b = a - a*f = a - a/m
+    real scalar    r, x0, yc, m, e
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    m  = _geo_project_opt(opts, 3, 298.257223563) // inverse flattening
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    e  = sqrt(2/m - (1/m)^2)
+    return(r * ( 
+        x,
+        sign(y) :* ln(tan(pi()/4 :+ abs(y)/2) :* ((1 :- e * sin(abs(y)))
+            :/  (1 :+ e * sin(abs(y)))):^(e/2))
+        )) // using abs(y) and multiply by sign to prevent missing at -90
+}
+
+real matrix geo_project_miller(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Miller cylindrical projection using the formula given at
+    // https://en.wikipedia.org/wiki/Miller_cylindrical_projection
+    real scalar    r, x0, yc
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    return(r * (
+        x,
+        (5/4) * ln(tan(pi()/4 :+ (2/5)*y))
+        ))
+}
+
+real matrix geo_project_gallstereo(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Gall stereographic projection using the formula given at
+    // https://en.wikipedia.org/wiki/Gall_stereographic_projection
+    real scalar    r, x0, yc
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    return(r * (
+        x / sqrt(2),
+        (1 + sqrt(2)/2) * tan(y/2)
+        ))
+}
+
+real matrix geo_project_lambert(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Lambert cylindrical equal-area projection using the formula given at
+    // https://en.wikipedia.org/wiki/Cylindrical_equal-area_projection
+    real scalar r, x0, s
+    
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    s  = _geo_project_opt(opts, 3, 1) // stretch factor
+    return(_geo_project_lambert(XY, rad, r, x0, s))
+}
+
+real matrix _geo_project_lambert(real matrix XY, real scalar rad,
+     real scalar r, real scalar x0, real scalar s)
+{
+    real scalar    yc
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90) // Y limit
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    return(r * (sqrt(s) * x, sin(y) / sqrt(s)))
+}
+
+real matrix geo_project_behrmann(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Behrmann projection using the formula given at
+    // https://en.wikipedia.org/wiki/Cylindrical_equal-area_projection
+    real scalar r, x0
+    
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    return(_geo_project_lambert(XY, rad, r, x0, .75))
+}
+
+real matrix geo_project_hobodyer(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Hobo–Dyer projection using the formula given at
+    // https://en.wikipedia.org/wiki/Cylindrical_equal-area_projection
+    real scalar r, x0
+    
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    return(_geo_project_lambert(XY, rad, r, x0, cos(37.5 * pi() / 180)^2))
+}
+
+real matrix geo_project_gallpeters(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Gall–Peters projection using the formula given at
+    // https://en.wikipedia.org/wiki/Cylindrical_equal-area_projection
+    real scalar r, x0
+    
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    return(_geo_project_lambert(XY, rad, r, x0, .5))
+}
+
+real matrix geo_project_peters(real matrix XY, real scalar rad,
+     | real vector opts)
+{
+    return(geo_project_gallpeters(XY, rad, opts))
+}
+
+real matrix geo_project_equirectangular(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Equirectangular projection based on
+    // https://en.wikipedia.org/wiki/Equirectangular_projection
+    real scalar    y1, r, x0, y0
+    real colvector x, y
+    
+    y1 = _geo_project_rad(rad, _geo_project_opt(opts, 1, 0)) // std parallel
+    r  = _geo_project_opt(opts, 2, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 3, 0) // central meridian
+    y0 = _geo_project_opt(opts, 4, 0) // central parallel
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, XY[,2] :- y0)
+    return(r * (cos(y1) * x, y))
+}
+real matrix geo_project_robinson(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // robinson projection using linear interpolation; the length of the central
+    // meridian will be 1.3523/.8487/pi() = .5071880041 times the equator length;
+    // values taken from https://en.wikipedia.org/wiki/Robinson_projection; also
+    // see: Ipbuker, C. (2005). A Computational Approach to the Robinson 
+    // Projection. Survey Review 38(297): 204–217. DOI:10.1179/sre.2005.38.297.204
+    real scalar    r, x0, yc, i, j
+    real colvector X, Y, x, y, d
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    X  = r *
+         (1,.9986,.9954,.99,.9822,.973,.96,.9427,.9216,.8962,.8679,
+          .835,.7986,.7597,.7186,.6732,.6213,.5722,.5322,.5322)'
+    Y  = r * 1.3523/.8487 *
+         (0,.062,.124,.186,.248,.31,.372,.434,.4958,.5571,.6176,
+          .6769,.7346,.7903,.8435,.8936,.9394,.9761,1,1)'
+    d  = abs(y) * (180/(5*pi())) // 5 degree steps
+    i  = trunc(d)
+    d  = d - i
+    i  = editmissing(i :+ 1, 1) // (set to arbitrary index if y is missing)
+    j  = i :+ 1
+    return(((X[i] + d :* (X[j]-X[i])) :* x,
+            (Y[i] + d :* (Y[j]-Y[i])) :* sign(y)))
+}
+
+real matrix geo_project_equalearth(real matrix XY, real scalar rad,
+    | real vector opts)
+{   // equal earth projection using the formula given at
+    // https://en.wikipedia.org/wiki/Equal_Earth_projection
+    real scalar    r, x0, yc, A1, A2, A3, A4
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x = _geo_project_rad(rad, XY[,1] :- x0)
+    y = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    A1 = 1.340264; A2 = -0.081106; A3 = 0.000893; A4 = 0.003796
+    y = asin(sqrt(3)/2 * sin(y))
+    return(r * (
+        2/3*sqrt(3)*(x :* cos(y) :/ (9*A4*y:^8 + 7*A3*y:^6 + 3*A2*y:^2 :+ A1)),
+        A4*y:^9 +   A3*y:^7 +   A2*y:^3  + A1*y
+        ))
+}
+
+real matrix geo_project_naturalearth(real matrix XY, real scalar rad,
+    | real vector opts)
+{   // natural earth projection using the formula in source code at
+    // http://www.shadedrelief.com/NE_proj/natural_earth_proj.zip
+    // (formula at https://en.wikipedia.org/wiki/Natural_Earth_projection
+    // 27may2024, appears wrong)
+    real scalar    r, x0, yc, A0, A1, A2, A3, A4, B0, B1, B2, B3, B4
+    real colvector x, y, p2, p4
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    A0 =  .8707;   A1 = -.131979; A2 = -.013791; A3 = .003971; A4 = -.001529
+    B0 = 1.007226; B1 =  .015085; B2 = -.044475; B3 = .028874; B4 = -.005916
+    p2 = y:^2; p4 = p2:^2
+    return(r * (
+        x :* (A0 :+ p2 :* (A1 :+ p2 :* (A2 :+ p4 :* p2 :* (A3 :+ p2 :* A4)))),
+        y :* (B0 :+ p2 :* (B1 :+ p4 :* (B2 :+ B3 :* p2 :+ B4 :* p4)))
+        ))
+}
+
+real matrix geo_project_winkeltripel(real matrix XY, real scalar rad,
+    | real vector opts)
+{   // Winkel tripel projection using the formula given at
+    // https://en.wikipedia.org/wiki/Winkel_tripel_projection
+    real scalar    y1, r, x0, yc
+    real colvector x, y, a
+    
+    yc = _geo_project_rad(!rad, 90)     // Y limit
+    y1 = _geo_project_rad(!rad, 180/pi()) * acos(2/pi()) // default for y1
+    y1 = _geo_project_opt(opts, 1, y1)  // std parallel
+    r  = _geo_project_opt(opts, 2, 1)   // radius of earth
+    x0 = _geo_project_opt(opts, 3, 0)   // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    y1 = _geo_project_rad(rad, y1)
+    a  = acos(cos(y) :* cos(x/2)) // alpha
+    a  = editmissing(sin(a) :/ a, 1) // sinc(alpha)
+    return((r/2) * (
+        x * cos(y1) + 2 * (cos(y) :* sin(x/2) :/ a),
+        y + sin(y) :/ a
+        ))
+}
+
+real matrix geo_project_hammer(real matrix XY, real scalar rad,
+    | real vector opts)
+{   // Winkel tripel projection using the formula given at
+    // https://en.wikipedia.org/wiki/Winkel_tripel_projection
+    real scalar    r, x0, yc
+    real colvector x, y, d
+    
+    yc = _geo_project_rad(!rad, 90)   // Y limit
+    r  = _geo_project_opt(opts, 1, 1) // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0) // central meridian
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    d  = sqrt(1 :+ cos(y) :* cos(x/2))
+    return(r * (
+        (2 * sqrt(2)) * (cos(y) :* sin(x/2) :/ d),
+        sqrt(2) * (sin(y) :/ d)
+        ))
+}
+
+real matrix geo_project_conic(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Equidistant conic projection using the formula given at
+    // https://en.wikipedia.org/wiki/Equidistant_conic_projection
+    real scalar    y1, y2, r, x0, y0, yc, n, G, p
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)     // Y limit
+    y2 = _geo_project_rad(!rad, 60)     // default for y2
+    y1 = _geo_project_opt(opts, 1,  0)  // 1st standard parallel
+    y2 = _geo_project_opt(opts, 2, y2)  // 2nd standard parallel
+    r  = _geo_project_opt(opts, 3,  1)  // radius of earth
+    x0 = _geo_project_opt(opts, 4,  0)  // central meridian
+    y0 = _geo_project_opt(opts, 5,  0)  // central parallel
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    y1 = _geo_project_rad(rad, y1)
+    y2 = _geo_project_rad(rad, y2)
+    y0 = _geo_project_rad(rad, y0)
+    n  = y1==y2 ? sin(y1) : (cos(y1) - cos(y2)) / (y2 - y1)
+    G  = cos(y1)/n + y1
+    p  = G - y0 // rho0
+    y  = G :- y // rho
+    return(r * (y :* sin(n*x), p :- y :* cos(n*x)))
+}
+
+real matrix geo_project_albers(real matrix XY, real scalar rad,
+     | real vector opts)
+{   // Albers equal-area conic projection using the formula given at
+    // https://en.wikipedia.org/wiki/Albers_projection
+    real scalar    y1, y2, r, x0, y0, yc, n, C, p
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)     // Y limit
+    y2 = _geo_project_rad(!rad, 60)     // default for y2
+    y1 = _geo_project_opt(opts, 1,  0)  // 1st standard parallel
+    y2 = _geo_project_opt(opts, 2, y2)  // 2nd standard parallel
+    r  = _geo_project_opt(opts, 3,  1)  // radius of earth
+    x0 = _geo_project_opt(opts, 4,  0)  // central meridian
+    y0 = _geo_project_opt(opts, 5,  0)  // central parallel
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    y1 = _geo_project_rad(rad, y1)
+    y2 = _geo_project_rad(rad, y2)
+    y0 = _geo_project_rad(rad, y0)
+    n  = (sin(y1) + sin(y2)) / 2
+    C  = cos(y1)^2 + 2*n*sin(y1)
+    p  = r/n * sqrt(C - 2*n*sin(y0)) // rho0
+    y  = r/n * sqrt(C :- 2*n*sin(y)) // rho
+    return((y :* sin(n*x), p :- y :* cos(n*x)))
+}
+
+real matrix geo_project_lambertconic(real matrix XY, real scalar rad,
+    | real vector opts)
+{   // Lambert conformal conic projection using the formula given at
+    // https://en.wikipedia.org/wiki/Lambert_conformal_conic_projection
+    real scalar    y1, y2, r, x0, y0, yc, n, F, p
+    real colvector x, y
+    
+    yc = _geo_project_rad(!rad, 90)     // Y limit
+    y2 = _geo_project_rad(!rad, 60)     // default for y2
+    y1 = _geo_project_opt(opts, 1,  0)  // 1st standard parallel
+    y2 = _geo_project_opt(opts, 2, y2)  // 2nd standard parallel
+    r  = _geo_project_opt(opts, 3,  1)  // radius of earth
+    x0 = _geo_project_opt(opts, 4,  0)  // central meridian
+    y0 = _geo_project_opt(opts, 5,  0)  // central parallel
+    x  = _geo_project_rad(rad, XY[,1] :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc))
+    y1 = _geo_project_rad(rad, y1)
+    y2 = _geo_project_rad(rad, y2)
+    y0 = _geo_project_rad(rad, y0)
+    n  = y1==y2 ? sin(y1) :
+         ln(cos(y1)/cos(y2)) / ln(tan(pi()/4 + y2/2) / tan(pi()/4 + y1/2))
+    F  = cos(y1) * tan(pi()/4 + y1/2)^n / n
+    p  = r*F * (1 / tan(pi()/4 + y0/2)):^n  // rho0
+    y  = r*F * (1 :/ tan(pi()/4 :+ y/2)):^n // rho
+    return((y :* sin(n*x), p :- y :* cos(n*x)))
+}
+
+real matrix geo_project_orthographic(real matrix XY, real scalar rad,
+    | real vector opts)
+{   // Orthographic projection using the formula given at
+    // https://en.wikipedia.org/wiki/Orthographic_map_projection
+    real scalar    r, x0, y0, xc, yc
+    real colvector x, y
+    
+    xc = _geo_project_rad(!rad, 90)     // X limit
+    yc = _geo_project_rad(!rad, 90)     // Y limit
+    r  = _geo_project_opt(opts, 1, 1)   // radius of earth
+    x0 = _geo_project_opt(opts, 2, 0)   // central meridian
+    y0 = _geo_project_opt(opts, 3, 0)   // central parallel
+    x  = _geo_project_rad(rad, _geo_project_clip(XY[,1], "X", xc, x0) :- x0)
+    y  = _geo_project_rad(rad, _geo_project_clip(XY[,2], "Y", yc, y0))
+    y0 = _geo_project_rad(rad, y0)
+    return(r * (
+        cos(y) :* sin(x),
+        cos(y0) :* sin(y) - sin(y0)*cos(y):*cos(x)
+        ))
 }
 
 end
 
 *! {smcl}
 *! {marker geo_refine}{bf:geo_refine()}{asis}
-*! version 1.0.1  31oct2023  Ben Jann
+*! version 1.0.2  02jun2024  Ben Jann
 *!
-*! Refines polygon by adding extra points such that maximum distance between
-*! neighboring points is smaller than or equal to delta.
+*! Refines polygons and lines by adding extra points such that maximum distance
+*! between neighboring points is smaller than or equal to delta.
+*!
+*! geo_pid() is used to identify shape items; polygons and lines are assumed
+*! to start with missing
 *!
 *! Syntax:
 *!
 *!      result = geo_refine(XY, delta)
 *!
 *!  result  n x 2 real matrix containing refined shapes
-*!  XY      n x 2 real matrix containing the (X,Y) coordinates of the shapes
-*!          to be refined; separate shape items divided by missing
+*!  XY      n x 2 real matrix containing the (X,Y) coordinates of the shape
+*!          items to be refined
 *!  delta   real scalar specifying threshold for adding points (minimum
 *!          distance)
 *!
 
-local Int   real scalar
-local RS    real scalar
-local RR    real rowvector
-local RM    real matrix
+local Int real scalar
+local RS  real scalar
+local RR  real rowvector
+local RM  real matrix
+local PC  pointer colvector
 
 mata:
 mata set matastrict on
 
 `RM' geo_refine(`RM' XY, `RS' delta)
 {
-    `Int' i, n, j, r, k
-    `RS'  d
-    `RR'  xy1, xy0
-    `RM'  xy
+    `Int' i, n, r, k, a, b
+    `RR'  xy0, xy1
+    `RM'  xy, res
+    `PC'  I
     
     if (cols(XY)!=2) {
         errprintf("{it:XY} must have two columns\n")
         exit(3200)
     }
-    d = abs(delta)
-    if (d==0) return(XY) // do not refine if delta=0
+    if (delta<=0) return(XY) // do not refine if delta=0
+    if (delta>=.) return(XY) // do not refine if delta>=.
+    if (all(_mm_unique_tag(geo_pid(., XY)))) return(XY) // point data
+    // loop over coordinates ...
     n = rows(XY)
-    xy = J(r=n, 2, .)
-    j = 0
-    xy1 = (.,.)
+    r = 0
+    I = J(n, 1, NULL)
+    xy0 = (.,.)
     for (i=1;i<=n;i++) {
-        xy0 = xy1
         xy1 = XY[i,]
-        if (hasmissing(xy0)) { // first point after missing
-            _geo_refine_add1(xy, ++j, r, n, xy1)
-            continue
+        if      (hasmissing(xy1)) xy = xy1
+        else if (hasmissing(xy0)) xy = xy1
+        else {
+            k = ceil(sqrt((xy1[1]-xy0[1])^2 + (xy1[2]-xy0[2])^2) / delta)
+            if (k<2) xy = xy1 // distance not smaller than delta
+            else xy = xy0 :+ (1::k-1)/k * (xy1[1]-xy0[1], xy1[2]-xy0[2]) \ xy1
         }
-        if (hasmissing(xy1)) { // missing point
-            _geo_refine_add1(xy, ++j, r, n, xy1)
-            continue
-        }
-        k = ceil(sqrt((xy1[1]-xy0[1])^2 + (xy1[2]-xy0[2])^2) / d)
-        if (k<=1) {
-            _geo_refine_add1(xy, ++j, r, n, xy1)
-            continue
-        }
-        _geo_refine_addn(xy, j, r, n,
-            xy0 :+ (1::k-1)/k * (xy1[1] - xy0[1], xy1[2] - xy0[2]) \ xy1) 
+        r = r + rows(xy)
+        I[i] = &xy[.,.]
+        xy0 = xy1
     }
-    return(xy[|1,1 \ j,.|])
-}
-
-void _geo_refine_add1(`RM' XY, `Int' j, `Int' r, `Int' n, `RR' xy)
-{
-    if (j>r) {
-        XY = XY \ J(n, 2, .)
-        r = r + n
+    // ... and collect results
+    res = J(r, 2, .)
+    b = 0
+    for (i=1;i<=n;i++) {
+        xy = *I[i]
+        a = b + 1
+        b = b + rows(xy)
+        res[|a,1 \ b,.|] = xy
     }
-    XY[j,] = xy
-}
-
-void _geo_refine_addn(`RM' XY, `Int' j, `Int' r, `Int' n, `RM' xy)
-{
-    real scalar j0
-    
-    j0 = j + 1
-    j  = j + rows(xy)
-    while (j>r) {
-        XY = XY \ J(n, 2, .)
-        r = r + n
-    }
-    XY[|j0,1 \ j,.|] = xy
+    return(res)
 }
 
 end
 
 *! {smcl}
 *! {marker geo_rotate}{bf:geo_rotate()}{asis}
-*! version 1.0.0  27jun2023  Ben Jann
+*! version 1.0.1  01jun2024  Ben Jann
 *!
 *! Rotates coordinates around (0,0) by angle degrees (counterclockwise)
 *!
@@ -2598,6 +3492,10 @@ real matrix geo_rotate(real matrix XY, real scalar angle)
 {
     real scalar r
     
+    if (cols(XY)!=2) {
+         errprintf("{it:XY} must have two columns\n")
+         exit(3200)
+    }
     r  = angle * pi() / 180
     return((XY[,1] * cos(r) - XY[,2] * sin(r),
             XY[,1] * sin(r) + XY[,2] * cos(r)))
@@ -2613,10 +3511,13 @@ end
 
 *! {smcl}
 *! {marker geo_simplify}{bf:geo_simplify()}{asis}
-*! version 1.0.0  16oct2023  Ben Jann
+*! version 1.0.1  06jun2024  Ben Jann
 *!
-*! Simplify polygons using Visvalingam–Whyatt algorithm
+*! Simplify polygons and lines using Visvalingam–Whyatt algorithm
 *! see: https://en.wikipedia.org/wiki/Visvalingam%E2%80%93Whyatt_algorithm
+*!
+*! geo_pid() is used to identify shape items; polygons and lines are assumed
+*! to start with missing
 *!
 *! Syntax:
 *!
@@ -2624,7 +3525,7 @@ end
 *!
 *!  result  n x 1 colvector tagging points to be kept (0 drop, 1 keep)
 *!  XY      n x 2 real matrix containing the (X,Y) coordinates of the shape
-*!          items to be simplifies; separate shape items divided by missing
+*!          items to be simplified
 *!  delta   real scalar specifying threshold for dropping points (minimum
 *!          triangle area)
 *!  B       n x 1 real colvector tagging start and end points of shared
@@ -2632,6 +3533,11 @@ end
 *!          simplification will then operate by segments formed by these points,
 *!          ensuring consistent simplification of shared borders across shape
 *!          items
+*!
+*! Note that all point items will be dropped (unless delta==0). Line items that
+*! are simplified to two points will be dropped unless their length is at least
+*! 2*sqrt(2*delta). Polygon items that are simplified to two points will be
+*! dropped.
 *!
 
 local Bool  real scalar
@@ -2646,10 +3552,11 @@ local PC    pointer colvector
 
 mata:
 
-`BoolC' geo_simplify(`RM' XY, `RS' delta, | `BoolC' B)
+`BoolC' geo_simplify(`RM' XY, `RS' delta0, | `BoolC' B)
 {
-    `Bool'  mfirst, mlast
-    `Int'   a, b, n
+    `Int'   i, n, a, b
+    `RS'    delta
+    `IntC'  p
     `BoolC' I
     
     // checks
@@ -2657,143 +3564,131 @@ mata:
         errprintf("{it:XY} must have two columns\n")
         exit(3200)
     }
-    // handle missings
-    a = 1; n = b = rows(XY)
-    if (n==0) return(J(0,1,.))  // empty input
-    mfirst = hasmissing(XY[a,]) // has leading missings
-    mlast  = hasmissing(XY[b,]) // has trailing missings
-    if (mfirst) {
-        for (++a;a<=b;a++) {
-            if (!hasmissing(XY[a,])) break
-        }
-        if (a>b) return(J(b,1,0)) // input all missing; drop all
-    }
-    if (mlast) {
-        for (--b;b;b--) {
-            if (!hasmissing(XY[b,])) break
-        }
-    }
-    if (mfirst & mlast) mlast = 0 // mfirst takes precedence
-    // select points
-    if (hasmissing(XY[|a,1 \ b,2|]))
-        I = _geo_simplify_apply(XY, delta, mlast, a, b, B)
-    else if (rows(B))
-        I = _geo_simplify(XY[|a,1 \ b,2|], delta, mfirst+mlast ? mlast : .,
-            B[|a \ b|])
-    else
-        I = _geo_simplify(XY[|a,1 \ b,2|], delta, mfirst+mlast ? mlast : .)
-    // return
-    if      (mfirst) a--
-    else if (mlast)  b++
-    if (a>1) I = I[1] \ J(a-1, 1, 0) \ I[|2\.|] // drop extra missings at start
-    if (b<n) I = I \ J(n-b, 1, 0) // drop extra missings at end
-    return(I)
-}
-
-`BoolC' _geo_simplify_apply(`RM' XY, `RS' delta, `Bool' mlast, `Int' a, `Int' b,
-    `BoolC' BB)
-{
-    `BoolC' mis, I
-    `Int'   i, j, J
-    `IntC'  A, B
-    `PC'    Ij
-    
-    // collect indices of shape items
-    mis = selectindex(rowmissing(XY[|a,1 \ b,2|])) :+ (a - 1)
-    i = rows(mis) + 1
-    A = B = J(i, 1, .)
-    A[1] = a; B[i] = b
-    for (--i;i;i--) {
-        A[i+1] = mis[i] + 1
-        B[i]   = mis[i] - 1
-    }
-    // process each item 
-    i = rows(A)
-    Ij = J(i, 1, NULL)
+    n = rows(XY)
+    delta = 2 * delta0 // _geo_vwhyatt() operates on 2*(triangle area)
+    if (delta<=0) return(J(n,1,1)) // keep all
+    // loop over shape items
+    p = selectindex(_mm_unique_tag(geo_pid(., XY)))
+    i = rows(p)
+    if (i==n) return(J(n,1,0)) // point data; drop all
+    I = J(n,1,1)
+    a = n + 1
     for (;i;i--) {
-        if (rows(BB))
-            Ij[i] = &_geo_simplify(XY[|A[i],1 \ B[i],2|], delta, mlast,
-                BB[|A[i] \ B[i]|])
-        else
-            Ij[i] = &_geo_simplify(XY[|A[i],1 \ B[i],2|], delta, mlast)
-    }
-    // collect results
-    J = b - a + 2
-    I = J(J, 1, .)
-    for (i=length(Ij);i;i--) {
-        j = rows(*Ij[i])
-        I[|J-j+1 \ J|] = *Ij[i]
-        J = J - j
+        b = a - 1; a = p[i]
+        if ((b-a)<2) { // item has 2 or less rows; must be point => drop
+            I[|a\b|] = J(b-a+1,1,0)
+            continue
+        }
+        _geo_simplify(I, XY, B, a, b, delta)
     }
     return(I)
 }
 
-`BoolC' _geo_simplify(`RM' XY, `RS' delta, `Bool' mlast, | `BoolC' B)
+void _geo_simplify(`BoolC' I, `RM' XY, `BoolC' B, `Int' a, `Int' b, `RS' delta)
 {
-    `Int'   r
-    `BoolC' I
+    `Int' r
     
-    if (rows(B)) {
-        if (any(B)) I = __geo_simplify(XY, delta, B, r = rows(XY))
-                    //if (r>=3) { // check total area and drop if < delta
-                    //    if (_geo_area(select(XY,I))<delta) r = 2
-                    //}
-        else        I = _geo_vwhyatt(XY, delta, r = rows(XY))
+    r = b - a // note: first row in XY is missing
+    if (r>2 & rows(B) ? (any(B[|a+1\b|]) ? 1 : 0) : 0) {
+        // process item piece by piece if there are shared borders (and the
+        // item has at least 3 points)
+        I[|a+1\b|] = _geo_simplify_B(XY[|a+1,1\b,2|], B[|a+1\b|], delta, r)
     }
-    else I = _geo_vwhyatt(XY, delta, r = rows(XY))
-    if (r<3) { // only two points left; drop all
-        if (mlast>=.) return(J(rows(XY), 1, 0))   // no missing row
-                      return(J(rows(XY)+1, 1, 0)) // add missing row
-    }
-    if (mlast>=.) return(I)     // no missing row
-    if (mlast)    return(I \ 1) // add missing row at end
-                  return(1 \ I) // add missing row at start
-}
-
-`BoolC' __geo_simplify(`RM' XY, `RS' delta, `BoolC' B, `Int' n)
-{
-    `Int'   a, b, i, r, ri
-    `BoolC' I
-    
-    if (n<3) return(J(n,1,1))
-    // check whether need to wrap around
-    if (!B[1]) { // first not tagged
-        if (XY[1,]==XY[n,]) { // is polygon
-            for (i=1;i<=n;i++) { // find first tagged point
-                if (B[i]) break
+    else {
+        // else process entire item in one go
+        I[|a+1\b|] = _geo_vwhyatt(XY[|a+1,1\b,2|], delta, r)
+        if (r<3) {
+            if (_geo_simplify_dist(XY[a+1,], XY[b,])<2*sqrt(delta)) {
+                I[a+1] = 0; I[b] = 0; r = 0
             }
-            r = n
-            I = __geo_simplify(XY[|i,1\n,2|] \ XY[|2,1\i,2|], delta,
-                B[|i\n|] \ B[|2\i|], n)
-            return(I[|r-i+1\.|] \ I[|2\r-i+1|])
         }
     }
-    // process segments, except last
-    I = J(n, 1, .)
-    r = 0
-    b = 1
-    for (i=2;i<n;i++) {
-        if (!B[i]) continue
-        a = b; b = i
-        I[|a\b|] = _geo_vwhyatt(XY[|a,1 \ b,2|], delta, ri = b - a + 1)
-        r = r + ri - 1
+    if (!r) I[a] = 0 // untag first row if entire item dropped
+}
+
+`BoolC' _geo_simplify_B(`RM' XY, `BoolC' B, `RS' delta, `Int' n)
+{   // simplify piece by piece; B assumed fleeting; n will be updated
+    `Int'   a, b, i, r, c
+    `IntC'  p
+    `BoolC' I
+    
+    I = J(n, 1, 1)
+    c = 1
+    // item is polygon and first row untagged: last segment wraps around
+    if (XY[1,]==XY[n,] & !B[1]) {
+        // get start points of segments
+        p = selectindex(B)
+        i = rows(p)
+        // process last segment
+        a = p[i]
+        b = p[1]
+        r = n + b - a // length of segment
+        I[a::n \ 2::b] = _geo_vwhyatt(XY[a::n \ 2::b,], delta, r)
+        I[1] = I[n] // update first row
+        if (r>2) c = 0 // (more than 2 remaining points)
+        n = r
+        i--
     }
-    // process last segment and return
-    a = b; b = n
-    I[|a\b|] = _geo_vwhyatt(XY[|a,1 \ b,2|], delta, ri = b-a+1)
-    n = r + ri
+    // not a polygon or first row tagged; no wrapping needed
+    else {
+        B[1] = 1; B[n] = 1 // tag first and last row in any case
+        p = selectindex(B) // get start points of segments
+        i = rows(p) - 1    // last element of p is end point, so ignore
+        a = n
+        n = 0
+    }
+    // process (remaining) segments
+    for (;i;i--) {
+        b = a; a = p[i]
+        r = b - a + 1
+        I[|a\b|] = _geo_vwhyatt(XY[|a,1 \ b,2|], delta, r)
+        if (r>2) c = 0 // (more than 2 remaining points)
+        n = n + r
+    }
+    // if no piece has more than 2 points: check whether further simplification
+    // removes the item
+    if (c) {
+        if (_geo_simplify_empty(selectindex(I), XY, delta)) {
+            n = 0
+            I = J(rows(I), 1, 0)
+        }
+    }
     return(I)
 }
 
-`BoolC' _geo_vwhyatt(`RM' XY, `RS' delta, `Int' r) // r will be modified
-{   // tags points to be dropped
+`Bool' _geo_simplify_empty(`IntC' p, `RM' XY, `RS' delta)
+{
+    `Int' r
+    
+    r = rows(p)
+    (void) _geo_vwhyatt(XY[p,], delta, r)
+    if (r<3) {
+        if (_geo_simplify_dist(XY[p[1],], XY[p[rows(p)],])<2*sqrt(delta)) {
+            return(1)
+        }
+    }
+    return(0)
+}
+
+`RC' _geo_simplify_dist(`RM' A, `RM' B) // distance between A and B
+{
+    return(sqrt((A[1]-B[1])^2 + (A[2]-B[2])^2))
+}
+
+`BoolC' _geo_vwhyatt(`RM' XY, `RS' delta, `Int' r) // r will be updated
+{   // tags points to be kept; delta is assumed to be equal to twice the minimum
+    // triangle area
     `Int'  i, i0, i1, n
     `IntC' I
     `RC'   A
     
     n = r
-    if (n<3)      return(J(n,1,1))
-    if (delta>=.) return(1 \ J(n-2,1,0) \ 1) // delta = infinity; drop all
+    if (n<3) return(J(n,1,1)) // only two points; nothing to drop
+    if (delta>=.) {
+        // delta is infinity; drop all points except first and last
+        r = 2
+        return(1 \ J(n-2,1,0) \ 1) 
+    }
     A = . \ _geo_vwhyatt_A(XY) \ .
     I = J(n, 1, 1)
     i = _geo_vwhyatt_imin(A)
@@ -2866,7 +3761,7 @@ mata:
     return(_geo_vwhyatt_a(XY[|xy|], XY[|lo|], XY[|up|]))
 }
 
-`RC' _geo_vwhyatt_a(`RM' xy, `RM' lo, `RM' up)
+`RC' _geo_vwhyatt_a(`RM' xy, `RM' lo, `RM' up) // returns double triangle area
 {
     return(abs((up[,1]-xy[,1]) :* (lo[,2]-xy[,2])
              - (lo[,1]-xy[,1]) :* (up[,2]-xy[,2])))
@@ -2888,7 +3783,8 @@ end
 *!  xy      r x 2 matrix containing points to be matched
 *!  ID      n x 1 real colvector of unit IDs
 *!  PID     n x 1 real colvector of within-unit polygon IDs
-*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons
+*!  XY      n x 2 real matrix of (X,Y) coordinates of the polygons; missing
+*!          coordinates will be ignored
 *!  PL      optional n x 1 real colvector containing plot level indicator 
 *!  nodots  nodots!=0 suppresses progress dots
 *!
@@ -2914,48 +3810,60 @@ mata set matastrict on
 {
     `Int'    i, n
     `IntC'   p, P
-    `RC'     id, L
+    `RC'     L
+    `RM'     id
     pointer  pl
     
     if (args()<6) nodots = 0
-    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, nodots, "("))
+    if (cols(xy)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    if (!rows(PL)) return(_geo_spjoin(xy, ID, PID, XY, 0, nodots, "(")[,1])
     if (hasmissing(PL)) pl = &editmissing(PL, 0) // treat missing as 0
     else                pl = &PL
     L  = mm_unique(select(*pl, _mm_uniqrows_tag((ID, PID))))
-    if (length(L)) L = select(L, !mod(L,2)) // skip enclaves
-    id = J(rows(xy), 1, .)
+    id = J(rows(xy), 2, .) // second column will be used to tag matched points
     p  = . // use all points in first round
     n = length(L)
     for (i=n;i;i--) {
-        P     = selectindex(*pl:==L[i])
-        id[p] = _geo_spjoin(xy[p,], ID[P], PID[P], XY[P,], nodots,
+        P      = selectindex(*pl:==L[i])
+        id[p,] = _geo_spjoin(xy[p,], ID[P], PID[P], XY[P,], mod(L[i],2), nodots,
             sprintf("(pass %g/%g: ", n-i+1, n))
-        if (i>1) p = selectindex(id:>=.) // remaining unmatched points
+        if (i>1) p = selectindex(!id[,2]) // remaining unmatched points
     }
-    return(id)
+    return(id[,1])
 }
 
-`RC' _geo_spjoin(`RM' xy, `RC' ID, `RC' PID, `RM' XY, `Bool' nodots, `SS' msg)
+`RM' _geo_spjoin(`RM' xy, `RC' ID, `RC' PID, `RM' XY, `Bool' enclave,
+    `Bool' nodots, `SS' msg)
 {
-    `Int'    i, i0, n
-    `RC'     id
+    `Int'    i, i0, n, ii
+    `IntC'   p
+    `RM'     id
     `pUnits' u
     
     if (!nodots) i0 = _geo_progress_init(msg)
     u = _geo_collect_units(ID, PID, XY)
     n = rows(xy)
-    id = J(n,1,.)
+    id = J(n, 1, (.,0)) // second column: set 1 if matched
+    p = unorder(n) // (evaluate points in random order for even progress)
     for (i=n;i;i--) {
-        id[i] = __geo_spjoin(xy[i,1], xy[i,2], u)
-        if (!nodots) _geo_progressdots(1-(i-1)/n, i0)
+        ii = p[i]
+        id[ii,] = __geo_spjoin(xy[ii,1], xy[ii,2], enclave, u)
+        if (!nodots) _geo_progress(i0, 1-(i-1)/n)
     }
-    if (!nodots) display(")")
+    if (!nodots) _geo_progress_end(i0, ")")
     return(id)
 }
 
-`RS' __geo_spjoin(`RS' px, `RS' py, `pUnits' u)
+`RM' __geo_spjoin(`RS' px, `RS' py, `Bool' enclave, `pUnits' u)
 {
-    `Int'      i, j
+    `Int'      i, j, m
     `pPolygon' p
     
     for (i=length(u);i;i--) {
@@ -2965,10 +3873,17 @@ mata set matastrict on
             if (px > p->xmax) continue
             if (py < p->ymin) continue
             if (py > p->ymax) continue
-            if (geo_pointinpolygon(px, py, p->XY)) return(u[i]->id)
+            if (m=geo_pointinpolygon(px, py, p->XY)) {
+                // if not enclave: return id of matching unit
+                if (!enclave) return((u[i]->id,1))
+                // if enclave and inside: tag as matched, but do not return ID
+                if (m==1)     return((.,1))
+                // if enclave and on edge: do not tag, but exit search
+                              return((.,0))
+            }
         }
     }
-    return(.)
+    return((.,0))
 }
 
 end
@@ -3164,6 +4079,53 @@ real matrix _geo_symbol_pin2(| real scalar n0, string scalar arg)
 end
 
 *! {smcl}
+*! {marker geo_tissot}{bf:geo_tissot()}{asis}
+*! version 1.0.0  26may2024  Ben Jann
+*!
+*! Compute (unprojected) Tissot's indicatrix at a given point and radius
+*! (see https://en.wikipedia.org/wiki/Tissot%27s_indicatrix); based on code
+*! from -geo2xy- (from SSC) by Robert Picard (program -geo2xy_tissot- in
+*! geo2xy.ado)
+*!
+*! Syntax:
+*!
+*!      XY = geo_tissot(x, y, r, n)
+*!
+*!  XY         (n+1) x 2 real matrix containing coordinates of Tissot polygon
+*!  x          real scalar specifying X coordinate of point (in degrees)
+*!  y          real scalar specifying Y coordinate of point (in degrees)
+*!  r          real scalar specifying radius (in degrees);
+*!             y +/- r must within +/- 90 for valid results
+*!  n          real scalar setting number of edges of polygon
+*!
+*!  Function _geo_tissot() is like geo_tissot(), but with input and output in
+*!  radians rather than degrees.
+
+mata:
+mata set matastrict on
+
+real matrix geo_tissot(real scalar x, real scalar y, real scalar r,
+    real scalar n)
+{
+    return(_geo_tissot(x*pi()/180, y*pi()/180, r*pi()/180, n)*(180/pi()))
+}
+
+real matrix _geo_tissot(real scalar x, real scalar y, real scalar r,
+    real scalar n)
+{
+    real colvector b, Y
+    
+    b = rangen(0, 2*pi(), n+1)
+    b[n+1] = 0 // for sake of precision (last point = first point)
+    Y = asin(sin(y) * cos(r) :+ cos(y) * sin(r) :* cos(b))
+    return((
+        x :+ atan2(cos(r) :- sin(y) * sin(Y), sin(b) :* sin(r) * cos(y)),
+        Y))
+}
+
+end
+
+*! {smcl}
 *! {marker geo_welzl}{bf:geo_welzl()}{asis}
 *! version 1.0.0  27jun2023  Ben Jann
 *!
@@ -3175,11 +4137,11 @@ end
 *!
 *! Syntax:
 *!
-*!      circle = geo_welzl(points [, recursive])
+*!      circle = geo_welzl(XY [, recursive])
 *!
 *!  circle     real rowvector containing mid and radius (X,Y,R)
-*!  points     n x 2 real matrix containing points; X in col 1, Y in col 2;
-*!             should not contain missing values
+*!  XY         n x 2 real matrix containing points; rows containing missing
+*!             will be ignored
 *!  recursive  recursive!=0 requests the recursive algorithm
 *!
 
@@ -3201,19 +4163,21 @@ mata set matastrict on
 
 // main function
 
-`Circle' geo_welzl(`Points' P0, | `Bool' recursive)
+`Circle' geo_welzl(`Points' XY, | `Bool' recursive)
 {
-    `Points' P
+    pointer (`Points') scalar xy
     
     if (args()<2) recursive = 0
-    if (isfleeting(P0)) {
-        P0 = jumble(select(P0, mm_uniqrows_tag(P0)))
-        if (recursive) return(_geo_welzl_recursive(P0, J(0,2,.), rows(P0)))
-        return(_geo_welzl_iterative(P0))
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
     }
-    P = jumble(select(P0, mm_uniqrows_tag(P0)))
-    if (recursive) return(_geo_welzl_recursive(P, J(0,2,.), rows(P)))
-    return(_geo_welzl_iterative(P))
+    if (isfleeting(XY)) xy = &XY
+    else                xy = &J(1,1,XY)
+    if (hasmissing(*xy)) *xy = select(*xy, !rowmissing(*xy))
+    *xy = jumble(select(*xy, mm_uniqrows_tag(*xy)))
+    if (recursive) return(_geo_welzl_recursive(*xy, J(0,2,.), rows(*xy)))
+    return(_geo_welzl_iterative(*xy))
 }
 
 // iterative variant of Welzl algorithm
@@ -3618,3 +4582,62 @@ void _geo_wkt2xy_pstrip(`Bool' rc, `T' t, `SS' s)
 
 end
 
+*! {smcl}
+*! {marker _geo_progress}{bf:_geo_progress()}{asis}
+*! version 1.0.1  23jun2024  Ben Jann
+*!
+*! Helper function to display progress dots.
+*!
+*! Syntax:
+*!
+*!      j = _geo_progress_init(prefix)
+*!      ...
+*!      _geo_progress(j, p)
+*!      ...
+*!      _geo_progress_end(j, suffix)
+*!
+*!  j       real scalar containing progress counter
+*!  p       real scalar specifying proportion of progress
+*!  prefix  string scalar specifying prefix to be printed
+*!  suffix  string scalar specifying suffix to be printed
+*!
+
+local Int       real scalar
+local SS        string scalar
+
+mata:
+mata set matastrict on
+
+`Int' _geo_progress_init(`SS' msg)
+{
+    displayas("txt")
+    printf("%s0%%", msg)
+    displayflush()
+    return(0)
+}
+
+void _geo_progress(`Int' j, `Int' p)
+{
+    while (1) {
+        if (j>=40) break
+        if (p < (j+1)/40) break
+        j++
+        if (mod(j,4)) {
+            printf(".")
+            displayflush()
+        }
+        else {
+            printf("%g%%", j/4*10)
+            displayflush()
+        }
+    }
+}
+
+void _geo_progress_end(`Int' j, `SS' msg)
+{
+    _geo_progress(j, 1) // complete to 100% if necessary
+    printf("%s\n", msg)
+    displayflush()
+}
+
+end

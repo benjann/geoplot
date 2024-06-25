@@ -1,4 +1,4 @@
-*! version 1.1.2  24dec2023  Ben Jann
+*! version 1.1.3  31may2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -155,13 +155,15 @@ program __geoplot_symbol
     gettoken frame 0 : 0, pars(", ")
     frame `frame' {
         // syntax
-        syntax [varlist(default=none max=1 fv)] [if] [in] [iw/] [,/*
+        syntax [anything] [if] [in] [iw/] [,/*
             */ SIze(str) MLabel(varname) MLABVposition(varname numeric)/*
-            */ COLORVar(varname fv) LEVels(str)/*
+            */ COLORVar(str) LEVels(str)/*
             */ COORdinates(varlist numeric min=2 max=2)/*
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ _frameonly(str)/* undocumented; used by geoframe symbol
             */ * ]
+        _parse_zvar 0 varlist `anything'
+        _parse_zvar 1 colorvar `colorvar'
         // mode (plot vs. data only) and name for tempframe
         local PLOT = `"`_frameonly'"'==""
         if `PLOT' tempname frame1
@@ -265,6 +267,41 @@ program __geoplot_symbol
     if !`PLOT' exit
     c_local plot `plot'
     c_local p `p'
+end
+
+program _parse_zvar // removes "i." from "i.zvar" if zvar is string
+    gettoken opt 0 : 0
+    gettoken lnm 0 : 0
+    // nothing to do if empty
+    local l: list sizeof 0
+    if `l'==0 {
+        c_local `lnm'
+        exit
+    }
+    // must be single token
+    if `l'>1 {
+        if `opt' di as err "`lnm'(): " _c
+        di as err "too many variables specified"
+        exit 103
+    }
+    gettoken 0 : 0 // strip leading space
+    // strip "i." if string
+    if substr(`"`0'"',1,2)=="i." {
+        local 00: copy local 0
+        local 0 = substr(`"`0'"',3,.)
+        capt syntax varname(str)
+        if _rc==1 exit 1
+        if _rc local 0: copy local 00
+    }
+    // parse varlist
+    if `opt' {
+        local 0 `", `lnm'(`0')"'
+        syntax, `lnm'(varname fv)
+        c_local `lnm' ``lnm''
+        exit
+    }
+    syntax varname(fv)
+    c_local `lnm' `varlist'
 end
 
 program _parse_levels

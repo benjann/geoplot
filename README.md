@@ -37,7 +37,7 @@ Load data using `geoframe`.
 
     local url http://fmwww.bc.edu/repec/bocode/i/
     geoframe create regions  `url'Italy-RegionsData.dta, id(id) coord(xcoord ycoord) ///
-        shpfile(Italy-RegionsCoordinates.dta)
+        shp(Italy-RegionsCoordinates.dta)
     geoframe create country  `url'Italy-OutlineCoordinates.dta
     geoframe create capitals `url'Italy-Capitals.dta, coord(xcoord ycoord)
     geoframe create lakes    `url'Italy-Lakes.dta, feature(water)
@@ -136,6 +136,111 @@ Zoom.
 ---
 
 Main changes:
+
+    25jun2024
+    geoplot:
+    - syntax -geoplot <layer> || [<layer> || ...] [, options]- is now allowed
+      (global options must be separated by || in this case)
+    - global options -project()-, -background()-, -grid()-, and -tissot()- added
+    - global option -rotate()- added as an alias for -angle()-
+    - global option -axes- added to turn Stata's coordinate system (plotregion and
+      axes) on
+    - default categorical color scale now -st-, no longer -Set1-
+    - some changes related to latest update of -colorpalette- and -colrspace-;
+      option -color()- may now behave somewhat differently in some situations
+    - i.zvar now allowed if zvar is string
+    - -ifshp()- in layer types -point- and -label- now takes account of linked
+      shape frames (if there is any) even if option -shp- is not specified
+    geoframe:
+    - -geoframe create- has been rewritten and expanded:
+      o it can now import data directly from ESRI or GeoJSON
+      o options -noshapeframe- and -shapeframe()- renamed to -noshp- and -shp()-
+      o it now also looks for a shapeframe when applied to the current frame
+      o -type(unit)- has been renamed to -type(attribute)-; -type(unit)- is no
+        longer supported
+      o a consistent strategy is now used to determine the data type and decide
+        on whether to load shape data if -type()- and -shp()- are not specified
+      o existing geoframe characteristics are no longer overwritten unless
+        a corresponding option is explicitly specified
+      o when opening a file, old linkage settings/variables will now be cleared
+        before proceeding
+      o -geoframe load- (alias for -geoframe create-) is now undocumented
+    - new -geoframe save- and -geoframe use- commands
+    - -geoframe rename- now also renames the linked shape frame; specify option
+      -noshp- for old behavior
+    - most commands are now implemented in such a way that the original data
+      is restored if the user hits Break
+    - types of geometry items are now handled more consistently across subcommands
+    - -geoframe query n- now only counts units that have a match in the shape frame
+      and ignores duplicate units
+    - -geoframe query items- added as a synonym for -geoframe query gtype-
+    - several projections added to -geoframe project-; user command -geo2xy- is no
+      longer used
+    - new -geoframe rescale- command
+    - new -geoframe tissot- command
+    - -geoframe grid- now extends the lines to the range of the data (including
+      padding) by default; specify option -noextend- for previous behavior; option
+      -mesh- now only removes outer lines if there are 3 or more lines; furthermore,
+      range and spacing of the grid is now determined in a such way that each grid
+      line is placed at a nice (rounded) value (unless custom values are provided);
+      specify option -tight- for old behavior
+    - syntax and functionality of -geoframe bshare- changed
+    - -geoframe simplify- now automatically applies -geoframe refine- after
+      simplifying the shapes; type -norefine- for old behavior
+    - -geoframe spjoin-: points that are exactly on the edge of a polygon are now
+      always treated as inside the polygon; if a point is on the edge of
+      several polygons, it is assigned to the first polygon against which it
+    - -geoframe translate- now has option -toframe- to write data to frames rather
+      than files; new command -geoframe import- added (wrapper for
+      -geoframe translate- with option -toframe-) 
+    - -geoframe translate esri- no longer uses command -spshape2dta-; it now
+      directly employs -import_shp- and -import_dbase-; option -user- is
+      discontinued
+    - option -gtype()- in -geoframe translate json/wkt- now generates a labeled
+      numeric variable, no longer a string variable
+    - -geoframe copy- now has option -unique-: abort with error in case 3 or case 4
+    - -geoframe copy- now supports -if- and -in-
+    - -geoframe copy- now aborts with error if a variable to be copied already
+      exists; specify option -relax- to skip such variables instead of aborting
+      (option -relax- also added -geoframe collapse- and -geoframe contract-, but
+      not documented)
+    - -geoframe copy- now returns the (target) names of the copied variables in
+      r(varlist)
+    - -geoframe copy- failed in the both-frames-not-unique case if -target()- was
+      specified; this is fixed
+    - -geoframe copy- could fail if data was not sorted by matching ID; this is
+      fixed
+    - -geoframe collapse/contract- now check for syntax errors and varname
+      conflicts before running the spatial join
+    - -geoframe link- no longer aborts with error, if creating a physical linkage
+      variable fails; geoframe commands now generally also work if the attribute
+      frame contains duplicates (i.e. units with the same ID)
+    - -geoframe link-: when searching for a name for the linkage variable,
+      an existing linkage variable is now only protected if it still a valid
+      geoframe linkage
+    - -geoframe link- is no longer allowed if frame type is "shape" or "pc";
+      -geoframe get shpframe- and -geoframe get linkname- now return nothing if
+      frame type is "shape" or "pc"; conceptually, frame type "pc" is now treated
+      as a shape frame
+    - when reading from a zipfile, -geoframe translate- now extracts into a folder
+      obtained by -tempfile-
+    Mata library:
+    - in general, consistent classification of geometry types is now used across
+      functions
+    - function geo_project() added
+    - function geo_tissot() added
+    - geo_bshare() rewritten and improved
+    - geo_spjoin() did not handle points in "true" enclaves correctly (i.e. in
+      enclaves without matching exclave in another unit); this is fixed
+    - geo_spjoin() now evaluates points in random order so that progress is more
+      even
+    - geo_pointinpolygon() is now more informative (0 outside, 1 inside, 2 on edge,
+      3 on vertex) and also (somewhat) faster in most situations
+    - geo_simplify() revised; geo_pid() is now used to identify shape items;
+      "triangle area*2 < delta" was erroneously used as evaluation criterion
+      instead "triangle area < delta", this is fixed; lines with only 2 remaining
+      points are no longer dropped if they have a length of at least
+      2*sqrt(2*delta)
 
     24dec2023
     **note that -geoframe create- no longer makes the new frame the current

@@ -1,4 +1,4 @@
-*! version 1.1.5  24dec2023  Ben Jann
+*! version 1.1.6  24jun2024  Ben Jann
 
 /*
     Syntax:
@@ -48,7 +48,7 @@ program __geoplot_layer
     local PLVopts
     local WGT
     local MLABopts
-    local Zopts COLORVar(varname fv)/*
+    local Zopts COLORVar(str)/*
         */ LEVels(str) cuts(numlist) DISCRete MISsing(str asis) /*
         */ COLor(passthru) LWidth(passthru) LPattern(passthru)
     local Zel color lwidth lpattern
@@ -71,11 +71,12 @@ program __geoplot_layer
     else {
         if substr(`"`plottype'"',1,2)=="pc" { // paired coordinate plot
             local TYPE pc
+            local hasSHP 1
             local OPTS `OPTS' COORdinates(namelist min=4 max=4)
             local YX  Y  X Y2 X2 // variable names used in plot data
         }
         else {  // scatter assumed
-            local TYPE unit
+            local TYPE attribute
             local OPTS `OPTS' COORdinates(namelist min=2 max=2)/*
                 */ wmax WMAX2(numlist max=1 >0)/*
                 */ shp lock IFshp(str asis) id(name)/*
@@ -94,9 +95,11 @@ program __geoplot_layer
     // collect info from syntax, frame and possible shpframe
     frame `frame' {
         // syntax
-        qui syntax [varlist(default=none max=1 fv)] [if] [in] `WGT'/*
+        qui syntax [anything] [if] [in] `WGT'/*
             */ [, `OPTS' `Zopts' `PLVopts' `MLABopts' * ]
         // check zvar
+        _parse_zvar 0 varlist `anything'
+        _parse_zvar 1 colorvar `colorvar'
         if `"`colorvar'"'!="" local zvar `colorvar'
         else                  local zvar `varlist'
         if substr("`zvar'",1,2)=="i." {    // i.zvar
@@ -137,10 +140,13 @@ program __geoplot_layer
         }
         if `hasSHP' {
             geoframe get type, local(type)
-            if `"`type'"'=="" local type unit
+            if `"`type'"'=="" local type attribute
             frame `shpframe' {
-                geoframe get type, local(typeSHP)
-                if `"`typeSHP'"'=="" local typeSHP shape
+                if "`TYPE'"=="pc" local type pc // enforce pc
+                else {
+                    geoframe get type, local(typeSHP)
+                    if `"`typeSHP'"'=="" local typeSHP shape
+                }
             }
             local org `touse'
             local tgt `touse'
@@ -156,18 +162,19 @@ program __geoplot_layer
         }
         // handle ifshp()
         if strtrim(`"`ifshp'"')!="" {
-            if `hasSHP' {
-                frame `shpframe' {
-                    // tag units with nonzero selection
+            if `hasSHP' local SHPFRAME `shpframe'
+            else        geoframe get shpframe, local(SHPFRAME)
+            if `"`SHPFRAME'"'!="" {
+                frame `SHPFRAME' { // tag units with nonzero selection
                     tempvar merge
-                    qui geoframe copy `frame' `touse', target(`merge')
-                    qui replace `merge' = 0 if `merge'>=.
-                    qui replace `merge' = 0 if `merge' & !(`ifshp')
-                    geoframe get id, local(shpid) strict
-                    mata: _set_one_if_any("`shpid'" , "`merge'")
+                    qui gen byte `merge' = 1
+                    qui replace  `merge' = 0 if !(`ifshp')
+                    geoframe get id, local(SHPID) strict
+                    mata: _set_one_if_any("`SHPID'" , "`merge'")
                 }
-                drop `touse'
-                qui geoframe copy `shpframe' `merge', target(`touse')
+                qui geoframe copy `SHPFRAME' `merge'
+                qui replace `touse' = 0 if `touse' & `merge'!=1
+                drop `merge'
             }
             else {
                 qui replace `touse' = 0 if `touse' & !(`ifshp')
@@ -207,9 +214,11 @@ program __geoplot_layer
         else local wgt
         // handle Z
         if `hasZ' {
-            // tag first obs per ID if type is shape and id is available or if
-            // id() has been specified
-            if "`type'"=="shape" & "`id'"=="" geoframe get id, local(id)
+            // tag first obs per ID if type is shape or pc and id is available
+            // or if id() has been specified
+            if inlist(`"`type'"',"shape","pc") & "`id'"=="" {
+                geoframe get id, local(id)
+            }
             if "`id'"!="" {
                 tempname ztouse
                 qui gen byte `ztouse' = `touse'
@@ -379,7 +388,11 @@ program __geoplot_layer
     // copy relevant variables from unit frame into shpframe
     if `hasSHP' {
         frame `shpframe' {
-            qui geoframe copy `frame' `org', target(`tgt')
+            capt geoframe copy `frame' `org', target(`tgt') unique
+            if _rc==1 exit 1
+            if _rc { // try again with estimation sample only
+                qui geoframe copy `frame' `org' if `touse', target(`tgt') unique
+            }
             qui replace `touse' = 0 if `touse'>=.
             if strtrim(`"`ifshp'"')!="" {
                 qui replace `touse' = 0 if `touse' & !(`ifshp')
@@ -686,6 +699,41 @@ program __geoplot_layer
     c_local p `p'
 end
 
+program _parse_zvar // parse [i.]zvar; remove "i." if zvar is string
+    gettoken opt 0 : 0
+    gettoken lnm 0 : 0
+    // nothing to do if empty
+    local l: list sizeof 0
+    if `l'==0 {
+        c_local `lnm'
+        exit
+    }
+    // must be single token
+    if `l'>1 {
+        if `opt' di as err "`lnm'(): " _c
+        di as err "too many variables specified"
+        exit 103
+    }
+    gettoken 0 : 0 // strip leading space
+    // strip "i." if string
+    if substr(`"`0'"',1,2)=="i." {
+        local 00: copy local 0
+        local 0 = substr(`"`0'"',3,.)
+        capt syntax varname(str)
+        if _rc==1 exit 1
+        if _rc local 0: copy local 00
+    }
+    // parse varlist
+    if `opt' {
+        local 0 `", `lnm'(`0')"'
+        syntax, `lnm'(varname fv)
+        c_local `lnm' ``lnm''
+        exit
+    }
+    syntax varname(fv)
+    c_local `lnm' `varlist'
+end
+
 program _parse_feature
     syntax [, feature(str) ]
     c_local feature `"`feature'"'
@@ -792,39 +840,16 @@ program _z_colors
     local 0 `", `0'"'
     syntax [, `nm'(str asis) ]
     mata: _z_color_parselastcomma("`nm'") // returns color and 0
-    syntax [, NOEXPAND n(passthru) IPolate(passthru)/*
-        */ OPacity(passthru) INtensity(passthru) * ]
+    syntax [, class(passthru) n(passthru) IPolate(passthru) * ]
     if "`noexpand'"=="" local noexpand noexpand
     if `"`n'`ipolate'"'=="" local n n(`k')
-    if `"`color'"'!="" {
-        mata: _parse_colorspec("color") // check for kw, *#, %#
-        if "`color_is_kw'"!="" {
-            c_local `nm' `"`color'"'
-            c_local sizeofel 1
-            exit
-        }
-        if "`color_is_op'"!="" {
-            if `"`opacity'"'=="" {
-                local opacity opacity(`color_is_op')
-                local color
-            }
-        }
-        if "`color_is_in'"!="" {
-            if `"`intensity'"'=="" {
-                local intensity intensity(`color_is_in')
-                local color
-            }
-        }
-    }
     if `"`color'"'=="" {
-        if `discrete' local color Set1
+        if `discrete' local color st
         else          local color viridis
     }
-    colorpalette `color', nograph `noexpand' `n' `ipolate'/*
-        */ `opacity' `intensity' `options'
+    if `"`class'"'=="" & `discrete' local class class(categorical)
+    colorpalette `color', nograph `class' `n' `ipolate' `options'
     local color `"`r(p)'"'
-    local pclass `"`r(pclass)'"'
-    if `"`pclass'"'=="" & `discrete' local pclass "categorical"
     local l: list sizeof color
     if `l'==0 {
         c_local `nm'
@@ -836,9 +861,8 @@ program _z_colors
         c_local sizeofel 1
         exit
     }
-    if `l'!=`k' {
-        // recycle or interpolate colors if wrong number of colors
-        colorpalette `color', nograph n(`k') class(`pclass')
+    if `l'!=`k' { // recycle colors if wrong number of colors
+        colorpalette `color', nograph class(categorical) n(`k')
         local color `"`r(p)'"'
     }
     c_local `nm' `"`color'"'
@@ -1001,19 +1025,21 @@ program _box
     gettoken n0     args : args
     gettoken n1     args : args
     gettoken TYPE   args : args
-    syntax [, ROTate CIRcle hull PADding(passthru) n(passthru) line/*
-        */ box BOX2(passthru) SIze(passthru) COLORVar(passthru) * ]
+    syntax [, PADding(passthru) ROTate hull CIRcle n(passthru) ANGle(passthru)/*
+        */ noADJust line box BOX2(passthru) SIze(passthru) COLORVar(passthru)/*
+        */ * ]
     if `"`box'`box2'`size'`colorvar'"'!="" {
         di as err "box(): invalid syntax"
         exit 198
     }
+    local boxopts `padding' `rotate' `hull' `circle' `n' `angle' `adjust'
     // copy relevant data into new frame
     tempname XY
     frame create `XY'
     mata: _box_copy_XY("`XY'", `n0', `n1', "`TYPE'"=="pc")
     // generate frame containing box
     tempname BOX
-    frame `XY': qui geoframe bbox `BOX', `rotate' `circle' `hull' `padding' `n'
+    frame `XY': qui geoframe bbox `BOX', `boxopts'
     // compile plot
     if "`line'"!="" local plottype line
     else            local plottype area
@@ -1029,21 +1055,18 @@ mata set matastrict on
 
 void _set_one_if_any(string scalar id, string scalar touse)
 {
-    real scalar    i, n
-    real colvector a, b 
+    real scalar    i, n, a, b
+    real colvector p
     real matrix    ID, TOUSE
     
     st_view(ID=., ., id)
     st_view(TOUSE=., ., touse)
-    n = rows(ID)
-    a = selectindex(_mm_uniqrows_tag(ID))
-    i = rows(a)
-    if (i<=1) b = n
-    else      b = a[|2 \. |] :- 1 \ n
+    p = selectindex(_mm_unique_tag(ID))
+    i = rows(p)
+    a = rows(ID) + 1
     for (;i;i--) {
-        if (anyof(TOUSE[|a[i] \ b[i]|],1)) {
-            TOUSE[|a[i] \ b[i]|] = J(b[i] - a[i] + 1, 1, 1)
-        }
+        b = a - 1; a = p[i]
+        if (anyof(TOUSE[|a \ b|],1)) TOUSE[|a \ b|] = J(b - a + 1, 1, 1)
     }
 }
 
@@ -1321,26 +1344,13 @@ void _get_colors(string scalar lname, | string scalar lname2)
 {   /* function assumes that global ColrSpace object "_GEOPLOT_ColrSpace_S"
        exists; maintaining a global is less work than initializing ColrSpace
        in each call */
-    real scalar      i
-    string scalar    c
-    string rowvector C, kw1, kw2
     pointer (class ColrSpace scalar) scalar S
     
     if (args()<2) lname2 = lname
-    kw1 = ("none", ".", "bg", "fg", "background", "foreground")
-    kw2 = ("*", "%")
     S = findexternal("_GEOPLOT_ColrSpace_S")
     //if ((S = findexternal("_GEOPLOT_ColrSpace_S"))==NULL) S = &(ColrSpace())
-    C = tokens(st_local(lname2))
-    i = length(C)
-    for (;i;i--) {
-        c = C[i]
-        if (anyof(kw1, c)) continue
-        if (anyof(kw2, substr(c,1,1))) continue
-        S->colors("`"+`"""' + C[i] + `"""'+"'")
-        C[i] = S->colors()
-    }
-    st_local(lname, invtokens(C))
+    S->colors(st_local(lname2))
+    st_local(lname, S->colors())
 }
 
 void _parse_colorspec(string scalar lname)
