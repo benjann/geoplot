@@ -1880,6 +1880,17 @@ or
     inset on top.
 
 {phang2}
+    {opt ti:tle(tinfo)} adds a title to the inset, where {it:tinfo} is
+
+                {cmd:"}{it:text}{cmd:"} [{cmd:,} {it:suboptions} ]
+
+{pmore2}
+    {it:suboptions} are {opt bot:tom} to place the title at the bottom rather
+    than at the top, as well as rendering options {cmd:size()}, {cmd:color()},
+    {cmd:angle()}, {cmd:tstyle()}, {cmd:gap()}, and {cmd:position()} as described
+    for layertype {helpb geoplot##labels:label}.
+
+{phang2}
     {opt box(suboptions)} affects the rendering of frame around the inset,
     where {it:suboptions} are {opt pad:ding(#)} to set the size of the inner
     margin and {it:{help area_options}} to affect the look of the 

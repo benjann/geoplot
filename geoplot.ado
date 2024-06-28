@@ -782,7 +782,7 @@ program _inset
     gettoken PROJECT  0 : 0
     gettoken PROJOPTS 0 : 0
     gettoken ANGLE    0 : 0
-    gettoken i        0 : 0
+    gettoken inum     0 : 0
     gettoken p        0 : 0
     gettoken cframe   0 : 0, parse(" ,")
     syntax [, inset(str) ]
@@ -799,30 +799,31 @@ program _inset
     }
     local 0 , `lg_op'
     // options
-    syntax [, below nobox BOX2(str)/*
+    syntax [, below nobox BOX2(str) TItle(str asis)/*
         */ BACKground BACKground2(str) grid GRID2(str)/*
         */ NOPROJect PROJect PROJect2(str)/*
         */ ANGle(numlist max=1) rotate(numlist max=1)/*
         */ POSition(str) SIze(numlist max=1 >=0 missingok) REFdim(str)/*
         */ XMargin(numlist max=1 >=0 <=50) YMargin(numlist max=1 >=0 <=50) ]
+    // exit if first try and not below
+    if `BELOW' & "`below'"=="" {
+        c_local ins_`inum' 0 // process inset later
+        exit
+    }
+    // parse further options
+    _inset_parse_title `title'
     if "`size'"=="" local size 50
     _parse_refdim `refdim'
     if `"`position'"'=="" local position 0 // center
     else                  _parse_position `position'
     if "`xmargin'"==""    local xmargin 0
-    if "`ymargin'"==""    local ymargin 0
-    c_local ins_`i'_s   `size'
-    c_local ins_`i'_ref `refdim'
-    c_local ins_`i'_pos `position'
-    c_local ins_`i'_xm  `xmargin'
-    c_local ins_`i'_ym  `ymargin'
-    // exit if first try and not below
-    if `BELOW' & "`below'"=="" {
-        c_local ins_`i' 0 // process inset later
-        exit
+    if "`ymargin'"=="" {
+        local ymargin 0
+        if `"`title'"'!="" & !inlist(`position',0,3,4) {
+            if    ( `ti_bot' &  `position'>3 & `position'<9) | /*
+               */ (!`ti_bot' & (`position'>9 | `position'<3)) local ymargin 4
+        }
     }
-    c_local ins_`i' 1
-    // parse further options
     if "`angle'"=="" local angle `rotate'
     if "`angle'"=="" local angle `ANGLE'
     if "`noproject'"=="" {
@@ -880,14 +881,53 @@ program _inset
             }
         }
     }
-    local `N2'
     // project and rotate
     qui _project `"`project2'"' `"`project_opts'"' "in `N1'/l"
     _rotate `angle' "in `N1'/l"
-    // fill in box and return
+    // fill in box
     if "`box'"=="" _inset_box_fillin `N0' `box_pad'
+    // add title
+    if `"`title'"'!="" {
+        _inset_title `p' `N0' `"`title'"' `ti_bot' `"`ti_opts'"'
+        local plots `plots' `plot'
+    }
+    // returns
+    c_local ins_`inum' 1
+    c_local ins_`inum'_s   `size'
+    c_local ins_`inum'_ref `refdim'
+    c_local ins_`inum'_pos `position'
+    c_local ins_`inum'_xm  `xmargin'
+    c_local ins_`inum'_ym  `ymargin'
     c_local plot `plots'
     c_local p `p'
+end
+
+program _inset_parse_title
+    _parse comma ti 0 : 0
+    syntax [, BOTtom POSition(numlist max=1 int >=0 <=12) TSTYle(passthru) * ]
+    local bottom = "`bottom'"!=""
+    if "`position'"=="" {
+        if `bottom' local position 6
+        else        local position 12
+    }
+    if `"`tstyle'"'=="" local tstyle tstyle(small_label)
+    c_local title `"`ti'"'
+    c_local ti_bot `bottom'
+    c_local ti_pos `position'
+    c_local ti_opts position(`position') `tstyle' `options'
+end
+
+program _inset_title
+    args p n0 ti bot opts
+    su X in `n0'/l, meanonly
+    local x = (r(min)+r(max))/2
+    su Y in `n0'/l, meanonly
+    if `bot' local y = r(min)
+    else     local y = r(max)
+    _geoplot_labeli . `p' `x' `y' `"`ti'"', `opts'
+    local plots `plots' `plot'
+    c_local p `p'
+    c_local plot `plots'
 end
 
 program _inset_box
