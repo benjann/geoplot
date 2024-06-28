@@ -1,4 +1,4 @@
-*! version 1.1.7  24jun2024  Ben Jann
+*! version 1.1.8  28jun2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -81,6 +81,8 @@ program _geoplot, rclass
     else                      local margin 0 0 0 0
     _parse_refdim `refdim'
     _parse_frame `frame' // returns frame, replace, nocurrent
+    _collect_repeated zoom  `"`macval(options)'"'  // zoom_n, zoom_1, ...
+    _collect_repeated inset `"`macval(options)'"'  // inset_n, inset_1, ...
     
     // prepare frame
     local cframe = c(frame)
@@ -114,11 +116,38 @@ program _geoplot, rclass
         local p0 0
         local plots
         if "`background'"!="" {
-            _background `p' `background_n' `"`background_feat'"'/*
-                */ `"`background2'"' // => plot, p
+            _background `p' `bg_n' `"`bg_feat'"' `"`background2'"' // plot, p
             local p0 `p'
             local plots `plots' `plot'
         }
+    
+    // process insets with option below
+    local N0 = _N
+    forv i = 1/`inset_n' {
+        local n0 = _N
+        capt n _inset 1 `"`project2'"' `"`project_opts'"' `angle'/*
+            */ `i' `p' "`cframe'", `inset_`i'' /* plot, p,
+            ins_i, ins_i_s, ins_i_ref, ins_i_pos, ins_i_xm, ins_i_ym */
+        if _rc==1 exit 1
+        if _rc {
+            di as err "error in inset()"
+            exit _rc
+        }
+        if `ins_`i'' {
+            local ins_`i'_n0 = `n0' + 1
+            local ins_`i'_n1 = _N
+            local p0 `p'
+            local plots `plots' `plot'
+        }
+    }
+    local N1 = _N
+    if `N1'>`N0' {
+        tempname insframe
+        frame copy `main' `insframe'
+        // replace inset data by missing
+        qui keep in 1/`N0'
+        qui set obs `N1'
+    }
     
     // process layers
         forv i = 1/`layer_n' {
@@ -132,28 +161,9 @@ program _geoplot, rclass
                 char LAYER[NOBS] `TMP'
             }
             // parse plottype and frame
-            gettoken plottype layer : layer_`i', parse(" ,")
-            _parse_plottype `plottype' // returns plottype, isimmediate
-            if `isimmediate' local lframe
-            else {
-                gettoken lframe : layer, parse(" ,[")
-                if `"`lframe'"'=="" {
-                    // frame may have been specified as ""
-                    gettoken lframe layer : layer, parse(" ,[")
-                    local lframe `"`cframe'"'
-                }
-                else if inlist(`"`lframe'"', ",", "if", "in", "[") {
-                    // leave layer as is
-                    local lframe `"`cframe'"'
-                }
-                else {
-                    // remove frame from layer
-                    gettoken lframe layer : layer, parse(" ,[")
-                    if `"`lframe'"'=="." local lframe `"`cframe'"'
-                }
-            }
+            _parse_layer "`cframe'" `layer_`i'' // plottype, lframe, layer
             // generate plot
-            capt n _geoplot_`plottype' `i' `p' `lframe' `layer' // => plot, p
+            capt n _geoplot_`plottype' `i' `p' `lframe' `layer' // plot, p
             if _rc==1 exit 1
             if _rc {
                 di as err "error in layer `i': `plottype' ..."
@@ -166,37 +176,34 @@ program _geoplot, rclass
         if `p'<=`p0' {
             return scalar layers = 0
             char LAYER[layers]
-            di as txt "(nothing to plot)"
+            di as txt "(no layers created; nothing to plot)"
             exit
         }
         
     // background: fill in coordinates
         local N1 = _N
         if "`background'"!="" {
-            _background_fillin `N1' `background_n' `background_pad'/*
-                */ `background_limits'
+            _background_fillin `N1' 4 `bg_n' `bg_pad' `bg_limits'
         }
     
     // grid lines and Tissot's indicatrices
         local N1 = _N
         if "`grid'"!="" {
-            _grid `p' `"`grid2'"' `"`grid_opts'"' "`grid_lbls'"/*
-                */ `"`grid_lbls2'"' // => plot, p
+            _grid `p' `"`grid2'"' `"`grid_opts'"' "`grid_lbls'" `"`grid_lbls2'"'
             local plots `plots' `plot'
             local N2 = _N
         }
         if "`tissot'"!="" {
-            _tissot `N1' `p' `"`tissot2'"' `"`tissot_opts'"'/*
-                */ `"`tissot_mark'"' // => plot, p
+            _tissot `N1' `p' `"`tissot2'"' `"`tissot_opts'"' `"`tissot_mark'"'
             local plots `plots' `plot'
         }
         if "`grid'"!="" & "`background'"!="" {
             // update background to cover grid (unless all limits are custom
             // or padding is negative
-            if `background_pad'>=0 {
-                foreach l of local background_limits {
+            if `bg_pad'>=0 {
+                foreach l of local bg_limits {
                     if `l'<. continue
-                    _background_fillin `N2' `background_n' 0 `background_limits'
+                    _background_fillin `N2' 4 `bg_n' 0 `bg_limits'
                     continue, break
                 }
             }
@@ -210,21 +217,55 @@ program _geoplot, rclass
         capt drop cY cX
         
     // zoom
-        _zoom `p' `layer_n' `options' // updates options
-        local plots `plots' `plot'
+        forv i = 1/`zoom_n' {
+            capt n _zoom `p' `layer_n', `zoom_`i'' // plot, p
+            if _rc==1 exit 1
+            if _rc {
+                di as err "error in zoom()"
+                exit _rc
+            }
+            local plots `plots' `plot'
+        }
     
     // axes option
         _parse_axes, `axes' `options'
         
     // graph dimensions
         _grdim, margin(`margin') refdim(`refdim') aratio(`ar') `options'
-            // => refsize Ymin Ymax Xmin Xmax ar ar_units yxratio options
+            // refsize Ymin Ymax Xmin Xmax ar ar_units yxratio options
         local ar_opts `ar_units' `ar_opts'
         if `"`ar_opts'"'!="" local ar_opts `", `ar_opts'"'
         local aspectratio aspectratio(`ar'`ar_opts')
-        if "`tight'"!="" {
-            // update ysize and ysize
+        if "`tight'"!="" { // update ysize and ysize
             _grdim_tight, aratio(`yxratio') `scheme' `ysize' `xsize'
+        }
+        
+    // insets
+        forv i = 1/`inset_n' {
+            // collect data from insets with option below
+            if `ins_`i'' {
+                mata: _inset_get("`insframe'", `ins_`i'_n0', `ins_`i'_n1')
+            }
+            // process remaining insets
+            else {
+                local n0 = _N
+                capt n _inset 0 `"`project2'"' `"`project_opts'"' `angle'/*
+                    */ `i' `p' "`cframe'", `inset_`i'' /* plot, p,
+                    ins_i, ins_i_s, ins_i_ref, ins_i_pos, ins_i_xm, ins_i_ym */
+                if _rc==1 exit 1
+                if _rc {
+                    di as err "error in inset()"
+                    exit _rc
+                }
+                local ins_`i'_n0 = `n0' + 1
+                local ins_`i'_n1 = _N
+                local p0 `p'
+                local plots `plots' `plot'
+            }
+            // set size and position of inset
+            mata: _inset(`ins_`i'_n0', `ins_`i'_n1', `ins_`i'_s',/*
+                */ `ins_`i'_pos', `ins_`i'_ym', `ins_`i'_xm',"`ins_`i'_ref'",/*
+                */ `Ymin', `Ymax', `Xmin', `Xmax')
         }
         
     // scale bar
@@ -299,7 +340,7 @@ program _geoplot, rclass
     return local legend `legend'
     return local graph `graph'
     if "`frame'"!="" {
-        local cframe `"`c(frame)'"'
+        local cframe = c(frame)
         capt confirm new frame `frame'
         if _rc==1 exit 1
         if _rc {
@@ -318,6 +359,33 @@ program _geoplot, rclass
             }
         }
     }
+end
+
+program _parse_layer
+    gettoken cframe layer : 0
+    gettoken plottype layer : layer, parse(" ,")
+    _parse_plottype `plottype' // returns plottype, isimmediate
+    if `isimmediate' local lframe
+    else {
+        gettoken lframe : layer, parse(" ,[")
+        if `"`lframe'"'=="" {
+            // frame may have been specified as ""
+            gettoken lframe layer : layer, parse(" ,[")
+            local lframe `"`cframe'"'
+        }
+        else if inlist(`"`lframe'"', ",", "if", "in", "[") {
+            // leave layer as is
+            local lframe `"`cframe'"'
+        }
+        else {
+            // remove frame from layer
+            gettoken lframe layer : layer, parse(" ,[")
+            if `"`lframe'"'=="." local lframe `"`cframe'"'
+        }
+    }
+    c_local plottype `"`plottype'"'
+    c_local lframe   `"`lframe'"'
+    c_local layer    `"`layer'"'
 end
 
 program _parse_plottype
@@ -343,6 +411,20 @@ program _parse_plottype
     }
     c_local plottype `"`0'"'
     c_local isimmediate `isimmediate'
+end
+
+program _collect_repeated
+    args opt options
+    local i 0
+    while (1) {
+        local 0 , `macval(options)'
+        syntax [, `opt'(passthru) * ]
+        if `"``opt''"'=="" continue, break
+        local ++i
+        c_local `opt'_`i' ``opt''
+    }
+    c_local `opt'_n `i'
+    c_local options: copy local options
 end
 
 program _parse_aspectratio
@@ -434,10 +516,10 @@ program _parse_background
     while (`: list sizeof limits'<4) {
         local limits `limits' .
     }
-    c_local background_limits `limits'
-    c_local background_pad `padding'
-    c_local background_n `n'
-    c_local background_feat `water'
+    c_local bg_limits `limits'
+    c_local bg_pad `padding'
+    c_local bg_n `n'
+    c_local bg_feat `water'
     c_local background2 `options'
 end
 
@@ -458,7 +540,7 @@ program _background
 end
 
 program _background_fillin
-    args N n pad Xmin Xmax Ymin Ymax
+    args N a n pad Xmin Xmax Ymin Ymax
     foreach x in X Y {
         if ``x'min'>=. | ``x'max'>=. {
             su `x' in 1/`N', meanonly
@@ -466,7 +548,6 @@ program _background_fillin
             if ``x'max'>=. local `x'max = r(max) + (r(max)-r(min))*(`pad'/100)
         }
     }
-    local a 4
     local b = `a' + `n'
     mata: st_store((`a',`b'), "X", rangen(`Xmin',`Xmax',`n'+1))
     mata: st_store((`a',`b'), "Y", J(`n'+1,1,`Ymin'))
@@ -620,7 +701,7 @@ program _parse_project
 end
 
 program _project
-    args project opts
+    args project opts in
     if strtrim(`"`project'"')=="" exit
     local XY X Y
     capt confirm variable Y2, exact
@@ -631,38 +712,39 @@ program _project
     if _rc==0 { // lock non-rotating shapes
         local XY `XY' cX cY
         tempvar dY dX rescale
-        qui gen double `dY' = Y - cY if cY<.
-        qui gen double `dX' = X - cX if cX<.
-        qui replace Y = cY if cY<.
-        qui replace X = cX if cX<.
-        su X, meanonly
+        qui gen double `dY' = Y - cY if cY<. `in'
+        qui gen double `dX' = X - cX if cX<. `in'
+        qui replace Y = cY if cY<. `in'
+        qui replace X = cX if cX<. `in'
+        su X `in', meanonly
         scalar `rescale' = r(max) - r(min)
     }
-    geoframe project `project', `opts' xy(`XY') fast
+    geoframe set type shape
+    geoframe project `project' `in', `opts' xy(`XY') fast
+    geoframe set type
     if "`dY'"!="" { // rescale and restore non-rotating shapes
-        su X, meanonly
+        su X `in', meanonly
         scalar `rescale' = (r(max) - r(min)) / `rescale'
-        if `rescale'>=. {
-            scalar `rescale' = 1
-        }
-        qui replace Y = Y + `dY'*`rescale' if cY<.
-        qui replace X = X + `dX'*`rescale' if cX<.
+        if `rescale'>=. scalar `rescale' = 1
+        qui replace Y = Y + `dY'*`rescale' if cY<. `in'
+        qui replace X = X + `dX'*`rescale' if cX<. `in'
     }
 end
 
 program _rotate
-    if `0'==0 exit
-    local r = `0' * _pi / 180
+    args r in
+    if `r'==0 exit
+    local r = `r' * _pi / 180
     capt confirm variable Y2, exact
     if _rc==1 exit 1
     local hasXY2 = _rc==0
     tempname min max
     foreach v in Y X {
-        su `v', mean
+        su `v' `in', mean
         scalar `min' = r(min)
         scalar `max' = r(max)
         if `hasXY2' {
-            su `v'2, mean
+            su `v'2 `in' `in', mean
             scalar `min' = min(`min', r(min))
             scalar `max' = max(`max', r(max))
         }
@@ -673,63 +755,193 @@ program _rotate
     if _rc==1 exit 1
     if _rc==0 { // lock non-rotating shapes
         tempvar dY dX
-        qui gen double `dY' = Y - cY if cY<.
-        qui gen double `dX' = X - cX if cX<.
-        qui replace Y = cY if cY<.
-        qui replace X = cX if cX<.
+        qui gen double `dY' = Y - cY if cY<. `in'
+        qui gen double `dX' = X - cX if cX<. `in'
+        qui replace Y = cY if cY<. `in'
+        qui replace X = cX if cX<. `in'
     }
     tempvar y x
-    qui gen double `y' = Y - `Ymid'
-    qui gen double `x' = X - `Xmid'
-    qui replace Y = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid'
-    qui replace X = (`x' * cos(`r') - `y' * sin(`r')) + `Xmid'
+    qui gen double `y' = Y - `Ymid' `in'
+    qui gen double `x' = X - `Xmid' `in'
+    qui replace Y = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid' `in'
+    qui replace X = (`x' * cos(`r') - `y' * sin(`r')) + `Xmid' `in'
     if `hasXY2' {
-        qui replace `y' = Y2 - `Ymid'
-        qui replace `x' = X2 - `Xmid'
-        qui replace Y2 = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid'
-        qui replace X2 = (`x' * cos(`r') - `y' * sin(`r')) + `Xmid'
+        qui replace `y' = Y2 - `Ymid' `in'
+        qui replace `x' = X2 - `Xmid' `in'
+        qui replace Y2 = (`x' * sin(`r') + `y' * cos(`r')) + `Ymid' `in'
+        qui replace X2 = (`x' * cos(`r') - `y' * sin(`r')) + `Xmid' `in'
     }
     if "`dY'"!="" { // restore non-rotating shapes
-        qui replace Y = Y + `dY' if cY<.
-        qui replace X = X + `dX' if cX<.
+        qui replace Y = Y + `dY' if cY<. `in'
+        qui replace X = X + `dX' if cX<. `in'
     }
 end
 
-program _zoom
-    gettoken p 0 : 0
-    gettoken n options : 0
-    numlist "1/`n'"
-    local layers `r(numlist)'
-    while (1) {
-        capt n __zoom `p' `layers', `options' // p plot done options layers
-        if _rc==1 exit 1
-        if _rc {
-            di as err "error in zoom()"
-            exit _rc
+program _inset
+    gettoken BELOW    0 : 0
+    gettoken PROJECT  0 : 0
+    gettoken PROJOPTS 0 : 0
+    gettoken ANGLE    0 : 0
+    gettoken i        0 : 0
+    gettoken p        0 : 0
+    gettoken cframe   0 : 0, parse(" ,")
+    syntax [, inset(str) ]
+    local 0 `"`inset'"'
+    // parse layers
+    _parse expand layer lg : 0
+    if `"`lg_if'"'!="" {
+        di as err "global {bf:if} not allowed in inset()"
+        exit 198
+    }
+    if `"`lg_in'"'!="" {
+        di as err "global {bf:in} not allowed in inset()"
+        exit 198
+    }
+    local 0 , `lg_op'
+    // options
+    syntax [, below nobox BOX2(str)/*
+        */ BACKground BACKground2(str) grid GRID2(str)/*
+        */ NOPROJect PROJect PROJect2(str)/*
+        */ ANGle(numlist max=1) rotate(numlist max=1)/*
+        */ POSition(str) SIze(numlist max=1 >=0 missingok) REFdim(str)/*
+        */ XMargin(numlist max=1 >=0 <=50) YMargin(numlist max=1 >=0 <=50) ]
+    if "`size'"=="" local size 50
+    _parse_refdim `refdim'
+    if `"`position'"'=="" local position 0 // center
+    else                  _parse_position `position'
+    if "`xmargin'"==""    local xmargin 0
+    if "`ymargin'"==""    local ymargin 0
+    c_local ins_`i'_s   `size'
+    c_local ins_`i'_ref `refdim'
+    c_local ins_`i'_pos `position'
+    c_local ins_`i'_xm  `xmargin'
+    c_local ins_`i'_ym  `ymargin'
+    // exit if first try and not below
+    if `BELOW' & "`below'"=="" {
+        c_local ins_`i' 0 // process inset later
+        exit
+    }
+    c_local ins_`i' 1
+    // parse further options
+    if "`angle'"=="" local angle `rotate'
+    if "`angle'"=="" local angle `ANGLE'
+    if "`noproject'"=="" {
+        if `"`project2'"'!="" _parse_project `project2'
+        else if `"`PROJECT'"'!="" {
+            local project2 `"`PROJECT'"'
+            local project_opts `"`PROJOPTS'"'
         }
-        if `done' continue, break
+        else if "`project'"!="" _parse_project
+        if `"`project2'"'!="" local project project
+    }
+    else local project2
+    if `"`background2'"'!="" local background background
+    if "`background'"!=""    _parse_background `project', `background2'
+    if `"`grid2'"'!=""       local grid grid
+    if "`grid'"!=""          _parse_grid, `grid2'
+    // prepare box
+    local N0 = _N + 1
+    local plots
+    if "`box'"=="" {
+        _inset_box `p', `box2' // plot, p, box_pad
         local plots `plots' `plot'
     }
-    c_local options `options'
+    // prepare background
+    local N1 = _N + 1
+    if "`background'"!="" {
+        _background `p' `bg_n' `"`bg_feat'"' `"`background2'"'
+        local plots `plots' `plot'
+    }
+    // process layers
+    local N2 = _N + 1
+    forv i = 1/`layer_n' {
+        _parse_layer "`cframe'" `layer_`i'' // plottype, lframe, layer
+        _geoplot_`plottype' . `p' `lframe' `layer' // plot, p
+        local plots `plots' `plot'
+    }
+    if _N<`N2' { // empty inset
+        c_local plot
+        exit
+    }
+    // background and grid
+    if "`background'"!="" {
+        _background_fillin l `=`N1'+1' `bg_n' `bg_pad' `bg_limits'
+    }
+    if "`grid'"!="" {
+        _grid `p' `"`grid2'"' `"`grid_opts'"' "`grid_lbls'" `"`grid_lbls2'"'
+        local plots `plots' `plot'
+        if "`background'"!="" {
+            if `bg_pad'>=0 {
+                foreach l of local bg_limits {
+                    if `l'<. continue
+                    _background_fillin l `=`N1'+1' `bg_n' 0 `bg_limits'
+                    continue, break
+                }
+            }
+        }
+    }
+    local `N2'
+    // project and rotate
+    qui _project `"`project2'"' `"`project_opts'"' "in `N1'/l"
+    _rotate `angle' "in `N1'/l"
+    // fill in box and return
+    if "`box'"=="" _inset_box_fillin `N0' `box_pad'
     c_local plot `plots'
     c_local p `p'
 end
 
-program __zoom
-    // look for zoom() option
+program _inset_box
+    gettoken p 0 : 0, parse(" ,")
+    syntax [, PADding(real 5) * ]
+    c_local box_pad `padding'
+    tempname BOX
+    frame create `BOX'
+    frame `BOX' {
+        qui set obs 6
+        qui gen _X = .
+        qui gen _Y = .
+    }
+    __geoplot_layer area . `p' `BOX', `options'
+    c_local p `p'
+    c_local plot `plot'
+end
+
+program _inset_box_fillin
+    args n0 pad
+    su X in `n0'/l, meanonly
+    local Xmin = r(min)
+    local Xmax = r(max)
+    local Xpad = (r(max)-r(min)) * (`pad'/200)
+    su Y in `n0'/l, meanonly
+    local Ymin = r(min)
+    local Ymax = r(max)
+    local Ypad = (r(max)-r(min)) * (`pad'/200)
+    local ++n0
+    qui replace X = `Xmax' + `Xpad' in `n0'
+    qui replace Y = `Ymin' - `Ypad' in `n0'
+    local ++n0
+    qui replace X = `Xmax' + `Xpad' in `n0'
+    qui replace Y = `Ymax' + `Ypad' in `n0'
+    local ++n0
+    qui replace X = `Xmin' - `Xpad' in `n0'
+    qui replace Y = `Ymax' + `Ypad' in `n0'
+    local ++n0
+    qui replace X = `Xmin' - `Xpad' in `n0'
+    qui replace Y = `Ymin' - `Ypad' in `n0'
+    local ++n0
+    qui replace X = `Xmax' + `Xpad' in `n0'
+    qui replace Y = `Ymin' - `Ypad' in `n0'
+end
+
+program _zoom
     gettoken p 0 : 0
     _parse comma LAYERS 0 : 0
-    syntax [, zoom(passthru) * ]
-    c_local options `options'
-    if `"`zoom'"'=="" {
-        c_local done 1
-        exit                // no (more) zoom() option
-    }
-    c_local done 0
-    syntax [, zoom(str) * ]
+    syntax [, zoom(str) ]
     if `"`zoom'"'=="" exit // zoom() specified, but empty
     // syntax: <layers>: scale [offset angle] [, options]
     // - parse <layers>
+    numlist "1/`LAYERS'"
+    local LAYERS `r(numlist)'
     _on_colon_parse `zoom'
     local args `"`s(after)'"'
     numlist `"`s(before)'"', int range(>0)
@@ -1666,8 +1878,8 @@ program _scalebar
         */ Units(str) NOLABels LABels(str) TItle(str)/*
         */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
         */ Height(numlist max=1 >=0 <=100) POSition(str)/*
-        */ XMargin(numlist max=1 >=0 <=100)/*
-        */ YMargin(numlist max=1 >=0 <=100) * ]
+        */ XMargin(numlist max=1 >=0 <=50)/*
+        */ YMargin(numlist max=1 >=0 <=50) * ]
     gettoken refsize anything : anything
     gettoken Ymin    anything : anything // (includes margin)
     gettoken Ymax    anything : anything // (includes margin)
@@ -1840,8 +2052,8 @@ program _compass
         */ NOLABels LABels LABels2(str asis)/*
         */ noCIRcle noMSPikes /*
         */ POSition(str)/*
-        */ XMargin(numlist max=1 >=0 <=100)/*
-        */ YMargin(numlist max=1 >=0 <=100) * ]
+        */ XMargin(numlist max=1 >=0 <=50)/*
+        */ YMargin(numlist max=1 >=0 <=50) * ]
     gettoken refsize anything : anything
     gettoken Ymin    anything : anything // (includes margin)
     gettoken Ymax    anything : anything // (includes margin)
@@ -2330,6 +2542,103 @@ real matrix __zoom_boxconnect(real scalar all, real scalar i, real matrix yx,
         X = Xmin
     }
     return((y,x) \ (Y,X))
+}
+
+void _inset_get(string scalar frame, real scalar a, real scalar b)
+{
+    real scalar   i
+    string scalar x, cframe
+    transmorphic  X
+    
+    if (a>b) return // no data
+    cframe = st_framecurrent()
+    i = st_nvar()
+    for (;i;i--) {
+        st_framecurrent(frame)
+        x = st_varname(i)
+        if (st_isstrvar(x)) {
+            X = st_sdata((a,b), x)
+            st_framecurrent(cframe)
+            st_sstore((a,b), x, X)
+        }
+        else {
+            X = st_data((a,b), x)
+            st_framecurrent(cframe)
+            st_store((a,b), x, X)
+        }
+    }
+}
+
+void _inset(real scalar a, real scalar b, real scalar s, real scalar pos,
+    real scalar ym, real scalar xm, string scalar ref, real scalar Ymin,
+    real scalar Ymax, real scalar Xmin, real scalar Xmax)
+{   // arguments assumed fleeting
+    real scalar    wd, ywd, ymid, xwd, xmid, Ywd, Ymid, Xwd, Xmid 
+    real rowvector yminmax, xminmax
+    real matrix    Y, X
+    // get data
+    if (_st_varindex("Y2")<.) st_view(Y=., (a,b), "Y Y2")
+    else                      st_view(Y=., (a,b), "Y")
+    if (_st_varindex("X2")<.) st_view(X=., (a,b), "X X2")
+    else                      st_view(X=., (a,b), "X")
+    yminmax = minmax(Y); ywd = yminmax[2]-yminmax[1]; ymid = sum(yminmax)/2
+    xminmax = minmax(X); xwd = xminmax[2]-xminmax[1]; xmid = sum(xminmax)/2
+    // determine margins and scaling
+    Ywd = Ymax - Ymin; Ymid = (Ymin + Ymax) / 2
+    Xwd = Xmax - Xmin; Xmid = (Xmin + Xmax) / 2
+    if (ref=="") ref = Ywd<Xwd ? "y" : "x"
+    if (ref=="y") {
+        s = s<. ? (Ymax - Ymin) / ywd * (s/100) : 1
+        wd = Ywd
+    }
+    else {
+        s = s<. ? (Xmax - Xmin) / xwd * (s/100) : 1
+        wd = Xwd
+    }
+    ym = wd * (ym/100)
+    xm = wd * (xm/100)
+    if      (pos==6 | pos==12) {; Ywd = Ywd - ym; }
+    else if (pos==3 | pos==9)  {; Xwd = Xwd - xm; }
+    else if (pos!=0)           {; Ywd = Ywd - ym; Xwd = Xwd - xm; }
+    if ((ywd * s)>Ywd) s = Ywd/ywd // restrict to max Y size
+    if ((xwd * s)>Xwd) s = Xwd/xwd // restrict to max X size
+    // resize and shift
+    if (pos==0) {
+        Y[.,.] = (Y :- ymid)*s :+ Ymid
+        X[.,.] = (X :- xmid)*s :+ Xmid
+    }
+    else if (pos<=2) {
+        Y[.,.] = Y*s :+ (Ymax - ym - yminmax[2]*s)
+        X[.,.] = X*s :+ (Xmax - xm - xminmax[2]*s)
+    }
+    else if (pos==3) {
+        Y[.,.] = (Y :- ymid)*s :+ Ymid
+        X[.,.] = X*s :+ (Xmax - xm - xminmax[2]*s)
+    }
+    else if (pos<=5) {
+        Y[.,.] = Y*s :+ (Ymin + ym - yminmax[1]*s)
+        X[.,.] = X*s :+ (Xmax - xm - xminmax[2]*s)
+    }
+    else if (pos==6) {
+        Y[.,.] = Y*s :+ (Ymin + ym - yminmax[1]*s)
+        X[.,.] = (X :- xmid)*s :+ Xmid
+    }
+    else if (pos<=8) {
+        Y[.,.] = Y*s :+ (Ymin + ym - yminmax[1]*s)
+        X[.,.] = X*s :+ (Xmin + xm - xminmax[1]*s)
+    }
+    else if (pos==9) {
+        Y[.,.] = (Y :- ymid)*s :+ Ymid
+        X[.,.] = X*s :+ (Xmin + xm - xminmax[1]*s)
+    }
+    else if (pos<=11) {
+        Y[.,.] = Y*s :+ (Ymax - ym - yminmax[2]*s)
+        X[.,.] = X*s :+ (Xmin + xm - xminmax[1]*s)
+    }
+    else if (pos==12) {
+        Y[.,.] = Y*s :+ (Ymax - ym - yminmax[2]*s)
+        X[.,.] = (X :- xmid)*s :+ Xmid
+    }
 }
 
 void _compass_store(real colvector X, real colvector Y, real colvector A)

@@ -121,6 +121,13 @@ Map with bar charts.
 
 ![example 11](/images/11.png)
 
+Map with bar charts (unstacked).
+
+    geoplot (area regions) (bar regions relig?, nostack size(*2)), ///
+        legend(position(s) horizontal outside)
+
+![example 12](/images/12.png)
+
 Zoom.
 
     geoplot (area regions)                                           /// 1
@@ -131,11 +138,18 @@ Zoom.
         (pie regions relig1 relig2 relig3 if id==1, lab(, reverse))  /// 5
         , legend(pos(se) rowgap(1)) zoom(4/5: 6 90 210)
 
-![example 12](/images/12.png)
+![example 13](/images/13.png)
 
 ---
 
 Main changes:
+
+    28jun2024
+    geoplot:
+    - global option inset() added (repeatable)
+    - suboption -refine- added in layer option box()
+    - options -reverse- and -nostack- added in layertype bar
+    - option -align()- added in layertype symbol
 
     25jun2024
     geoplot:

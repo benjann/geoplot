@@ -1,5 +1,5 @@
 {smcl}
-{* 24jun2024}{...}
+{* 28jun2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -74,7 +74,7 @@ or
 
 {p2coldent:* {helpb geoplot##pie:pie}}pie charts
     {p_end}
-{p2coldent:* {helpb geoplot##bar:bar}}stacked bar charts
+{p2coldent:* {helpb geoplot##bar:bar}}stacked (or unstacked) bar charts
     {p_end}
 
 {p2coldent:* {helpb geoplot##pointi:pointi}}{cmd:point} with immediate arguments
@@ -189,9 +189,12 @@ or
     compass
     {p_end}
 
-{syntab :Zoom}
-{synopt :{helpb geoplot##zoom:zoom({it:spec})}}zoom in on specific layers;
-    can be repeated
+{syntab :Zoom / Inset}
+{synopt :{helpb geoplot##zoom:zoom({it:spec})}}zoom in on specific layers
+    (can be repeated)
+    {p_end}
+{synopt :{helpb geoplot##inset:inset({it:spec})}}create inset from additional map
+    (can be repeated)
     {p_end}
 
 {syntab :Overall appearance}
@@ -340,6 +343,11 @@ or
 {phang2}
     {cmd:padding()}, {cmd:rotate}, {cmd:hull}, {cmd:circle}, {cmd:n()}, {cmd:angle()},
     and {cmd:noadjust} as described in help {helpb geoframe##bbox:geoframe bbox}.
+
+{phang2}
+    {cmdab:ref:ine} adds extra points to the edges of the box. Specify this
+    suboption to avoid undesired artifacts when applying global option
+    {helpb geoplot##project:project()}.
 
 {phang2}
     {opt line} plots the bounding box using plot type {helpb geoplot##line:line}. The
@@ -674,6 +682,17 @@ or
     is {it:n} = max(4, ceil({it:headsize} * 100)).
 
 {phang}
+    {opt align(align)} changes the zero point of the selected symbol shape.
+    {it:align} can contain {cmdab:l:eft} or {cmdab:r:ight} and {cmdab:b:ottom}
+    or {cmdab:t:op}. For example, type {cmd:align(bottom)} to move the zero
+    point to the bottom, or type {cmd:align(top left)} to move it to the top
+    left corner. The default is to leave the zero point unchanged (typically in
+    the center). The zero point determines how the shape is aligned to the
+    coordinate of its position. {cmd:align()} is applied to the raw symbol shape,
+    before applying options such as {cmd:ratio()},
+    {cmd:size()}, {cmd:angle()}, or {cmd:offset()}.
+
+{phang}
     {opt ratio(#)} adjusts the ratio between the height and the width of the symbols. The default
     is {cmd:ratio(1)}. For example, type {cmd:ratio(2)} to double the height.
 
@@ -792,7 +811,7 @@ or
     map) for the radius of the pie. Alternatively, specify {cmd:size(*}{it:exp}{cmd:)}
     to multiply the default radius by {it:exp}. The default radius is set to 3% of the minimum
     of the horizontal and vertical size of the underlying map (as it exists at the point when the
-    symbols are added, including the positions of the pies; the smallest possible
+    pies are added, including the positions of the pies; the smallest possible
     default radius is 1).
 
 {phang}
@@ -839,7 +858,7 @@ or
     will be ignored.
 
 {marker bar}{...}
-{dlgtab:stacked bar charts}
+{dlgtab:bar charts}
 
 {p 8 15 2}
     {cmd:bar} {it:frame} {varlist} {ifin} {weight}
@@ -856,6 +875,10 @@ or
     are as follows.
 
 {phang}
+    {opt nostack} unstacks the bars. The default is to display stacked bar
+    charts. Specify {cmd:nostack} if you want to display regular (unstacked) bar charts.
+
+{phang}
     {opt asis} omits normalization of the values provided by {it:varlist}. By
     default, the values will be normalized such they sum to 100 across {it:varlist}
     in each row of the data. Option {cmd:asis} may be useful if the provided
@@ -863,18 +886,21 @@ or
     if the percentages do not sum up to 100.
 
 {phang}
+    {opt rev:erse} arranges the bars in reverse order.
+
+{phang}
     {opt ang:le(angle)} rotates the bar charts by {it:angle} degrees
     (counterclockwise). The default is to display upright bar charts. For
     example, Type {cmd:angle(-90)} for horizontal bar charts (west to east). Global
-    option {helpb geoplot##angle:angle()} has no effect on the orientation of the symbols.
+    option {helpb geoplot##angle:angle()} has no effect on the orientation of the bars.
 
 {phang}
     {cmdab:si:ze(}[{cmd:*}]{it:exp}{cmd:)} sets or adjusts the size of the
     bar charts. Type {opt size(exp)} to specify an absolute size (i.e. in units of
-    the underlying map) for the width of the bars. Alternatively, specify {cmd:size(*}{it:exp}{cmd:)} to
+    the underlying map) for the width of the charts. Alternatively, specify {cmd:size(*}{it:exp}{cmd:)} to
     multiply the default width by {it:exp}. The default width is set to 3% of the minimum
     of the horizontal and vertical size of the underlying map (as it exists at the
-    point when the symbols are added, including the positions of the bar charts;
+    point when the bar charts are added, including the positions of the bar charts;
     the smallest possible default width is 1).
 
 {phang}
@@ -1491,10 +1517,8 @@ or
 
 {marker angle}{...}
 {phang}
-    {opt angle(angle)} rotates the map by {it:angle} degrees (counterclockwise).
-
-{phang}
-    {opt rotate(angle)} is a synonym for {cmd:angle()}.
+    {opt angle(angle)} rotates the map by {it:angle} degrees
+    (counterclockwise). {cmd:rotate()} is a synonym for {cmd:angle()}.
 
 {marker legend}{...}
 {phang}
@@ -1833,6 +1857,86 @@ or
     generate a frame containing the coordinates of the box or MEC and then
     add it to the graph as regular layer using {it:layertype}
     {helpb geoplot##area:area}.
+
+{marker inset}
+{phang}
+    {opt inset(spec)} creates an inset containing an additional
+    map. Option {cmd:inset()} can be repeated to create multiple insets. The
+    syntax of {it:spec} is
+
+            {cmd:(}{it:layer}{cmd:)} [{cmd:(}{it:layer}{cmd:)} ...] [{cmd:,} {it:options} ]
+
+{pmore}
+or
+
+            {it:layer} {cmd:||} [ {it:layer} {cmd:||} ...] [{cmd:,} {it:options} ]
+
+{pmore}
+    where {help geoplot##syntax:{it:layer}} is as described above and options
+    are as follows.
+
+{phang2}
+    {opt below} prints the inset behind the main map. The default is to print the
+    inset on top.
+
+{phang2}
+    {opt box(suboptions)} affects the rendering of frame around the inset,
+    where {it:suboptions} are {opt pad:ding(#)} to set the size of the inner
+    margin and {it:{help area_options}} to affect the look of the 
+    frame. Default is {cmd:padding(5)} (5% margin); color options in
+    {it:area_options} support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}. Type {cmd:nobox} to omit the
+    frame around the inset.
+
+{phang2}
+    {opth pos:ition(compassdirstyle)} determines the location of the inset in
+    the plotregion of the graph. Default is {cmd:position(0)} (in the
+    center). For example, type {cmd:position(ne)} to place the inset in the
+    upper right corner.
+
+{phang2}
+    {opt si:ze(#)} sets the size of the inset (including the frame) in percent
+    of the reference dimension as determined by suboption
+    {cmd:refdim()}. Default is {cmd:size(50)} which means that, the width (or
+    height) of the inset will be 50% of the width (or height) of the
+    plotregion. You may also type {cmd:size(.)} to omit rescaling and print the
+    inset in its original size. In any case, however, the size of the inset will
+    be restricted in such a way that it fits into the plotregion of the main map.
+
+{phang2}
+    {opt xm:argin(#)} and {opt ym:argin(#)} specify how much the
+    inset will be moved away from the edge of the plotregion, in percent of the
+    reference dimension as determined by suboption {cmd:refdim()}. Defaults are
+    {cmd:xmargin(0)} and {cmd:ymargin(0)}.
+
+{phang2}
+    {cmdab:ref:dim(}{it:spec}{cmd:)} selects the reference dimension for size
+    calculations by {cmd:size()}, {cmd:xmargin()}, and {cmd:ymargin()}. {it:spec}
+    may be {cmd:y} or {cmdab:v:ertical} for the vertical dimension, or {cmd:x}
+    or {cmdab:h:orizontal} for the horizontal dimension. If {cmd:refdim()} is omitted, the
+    minimum of the horizontal and vertical size of the plotregion is used as the
+    reference size.
+
+{phang2}
+    {cmdab:back:ground}[{cmd:(}{it:options}{cmd:)}] adds a background to the
+    inset map; see global option {helpb geoplot##background:background()}.
+
+{phang2}
+    {cmd:grid}[{cmd:(}{it:options}{cmd:)}] adds gridlines to the inset map;
+    see global option {helpb geoplot##grid:grid()}.
+
+{phang2}
+    {cmdab:proj:ect}[{cmd:(}{it:spec}{cmd:)}] applies the specified projection
+    to the inset map; see global option {helpb geoplot##project:project()}. The
+    default is to apply the same projection as for the main map. Type
+    {cmdab:noproj:ect} to omit projection for the inset map.
+
+{phang2}
+    {opt ang:le(angle)} rotates the inset map by {it:angle}
+    degrees (counterclockwise). {cmd:rotate()} is a synonym for
+    {cmd:angle()}. The default is to apply rotation as set by
+    global option {helpb geoplot##angle:angle()}; type {cmd:angle(0)} to omit
+    rotation for the inset map.
 
 {marker tight}{...}
 {phang}

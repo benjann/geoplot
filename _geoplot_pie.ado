@@ -1,4 +1,4 @@
-*! version 1.1.2  24dec2023  Ben Jann
+*! version 1.1.3  26jun2024  Ben Jann
 
 program _geoplot_pie
     version 16.1
@@ -208,7 +208,7 @@ void _compute_pies(string scalar frame, string scalar touse, real scalar polar,
 {
     real scalar    i, r, s
     real rowvector v, e
-    real colvector w
+    real colvector w, S
     real matrix    YX, Z
 
     // get data

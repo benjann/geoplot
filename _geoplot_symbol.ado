@@ -1,4 +1,4 @@
-*! version 1.1.3  31may2024  Ben Jann
+*! version 1.1.4  26jun2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -329,7 +329,7 @@ program ___geoplot_symbol
     local mlopts = strlower("`mlopts'")
     syntax  [iw/] [, size(str) _frameonly(str)/*
         */ SHape(passthru) n(passthru) OFFset(numlist max=2)/*
-        */ ANGle(real 0) ratio(real 1)/*
+        */ ANGle(real 0) ratio(real 1) align(str)/*
         */ line `MLOPTS' * ]
     // size(), _frameonly()
     gettoken size relsize : size
@@ -337,12 +337,13 @@ program ___geoplot_symbol
     local PLOT = `"`_frameonly'"'==""
     if `PLOT' tempname frame1
     else      local frame1 `_frameonly'
-    // parse symbol options: size(), shape(), n(), offset()
+    // parse symbol options: size(), shape(), n(), offset(), align()
     _parse_shape, `n' `shape' // returns shape, arg, n
     gettoken offset oangle : offset
     gettoken oangle: oangle
     if "`offset'"=="" local offset 0
     if "`oangle'"=="" local oangle 0
+    _parse_align, `align'
     // plottype
     if "`line'"!="" local plottype line
     else            local plottype area
@@ -359,7 +360,7 @@ program ___geoplot_symbol
     frame `frame' {
         mata: _compute_symbols("`frame1'", "`shape'", st_local("arg"),/* 
             */ `n', `angle', `ratio', "`size'", "`relsize'", `refsize',/*
-            */ `offset', `oangle')
+            */ `offset', `oangle', "`align_lr'", "`align_bt'")
     }
     if !`PLOT' exit
     ***
@@ -445,6 +446,22 @@ program _parse_shape
     c_local n     `n'
 end
 
+program _parse_align
+    syntax [, Left Right Bottom Top ]
+    local lr `left' `right'
+    if `: list sizeof lr'>1 {
+        di as err "only one of {bf:left} and {bf:right} allowed in {bf:align()}"
+        exit 198
+    }
+    local bt `bottom' `top'
+    if `: list sizeof bt'>1 {
+        di as err "only one of {bf:bottom} and {bf:top} allowed in {bf:align()}"
+        exit 198
+    }
+    c_local align_lr `lr'
+    c_local align_bt `bt'
+end
+
 version 16.1
 mata:
 mata set matastrict on
@@ -453,7 +470,8 @@ void _compute_symbols(string scalar frame,
     string scalar shape, string scalar arg, real scalar n,
     real scalar angle, real scalar ratio,
     string scalar SIZE, string scalar RELSIZE, real scalar refsize,
-    real scalar off, real scalar oang)
+    real scalar off, real scalar oang, string scalar align_lr,
+    string scalar align_bt)
 {
     real scalar      i, a, b, s, haspl
     real matrix      XY, xy, V
@@ -493,6 +511,11 @@ void _compute_symbols(string scalar frame,
         }
     }
     n = rows(xy)
+    // align
+    if      (align_lr=="left")   xy[,1] = xy[,1] :- min(xy[,1])
+    else if (align_lr=="right")  xy[,1] = xy[,1] :- max(xy[,1])
+    if      (align_bt=="bottom") xy[,2] = xy[,2] :- min(xy[,2])
+    else if (align_bt=="top")    xy[,2] = xy[,2] :- max(xy[,2])
     // determine size
     s = max((min(mm_coldiff(colminmax(XY))), refsize))
     s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map

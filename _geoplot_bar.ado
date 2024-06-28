@@ -1,4 +1,4 @@
-*! version 1.1.2  24dec2023  Ben Jann
+*! version 1.1.3  26jun2024  Ben Jann
 
 program _geoplot_bar
     version 16.1
@@ -9,7 +9,7 @@ program _geoplot_bar
     frame `frame' {
         // syntax
         qui syntax varlist(numeric) [if] [in] [iw/] [,/*
-            */ asis ANGle(real 0)/*
+            */ asis ANGle(real 0) REVerse nostack /*
             */ SIze(str) ratio(real 2) OFFset(numlist max=2)/*
             */ noLABel OUTline OUTline2(str) wmax WMAX2(passthru)/*
             */ COLORVar(str) LEVels(str) cuts(str) DISCRete/* (will be ignored)
@@ -79,8 +79,9 @@ program _geoplot_bar
         // compute slices of bars and post coordinates into temporary frame
         tempname frame1
         frame create `frame1'
-        mata: _compute_bars("`frame1'", "`touse'", `scale',/*
-            */ `angle', `ratio', `offset', `oangle', "`asis'"!="")
+        mata: _compute_bars("`frame1'", "`touse'", "`reverse'"!="", `scale',/*
+            */ `angle', `ratio', `offset', `oangle', "`asis'"!="",/*
+            */ "`stack'"!="")
             // => makes frame1 the current frame
         // add labels
         lab def Z `lbls'
@@ -110,7 +111,12 @@ program _geoplot_bar
                 local sym_angle angle(`angle')
             }
         }
-        if `ratio' {
+        if "`stack'"!="" {
+            if `"`sym_align'"'=="" {
+                local sym_align align(bottom)
+            }
+        }
+        if `ratio'!=1 {
             if `"`sym_ratio'"'=="" {
                 local sym_ratio ratio(`ratio')
             }
@@ -127,8 +133,8 @@ program _geoplot_bar
         // generate plot
         local n0 = _N + 1
         _geoplot_symbol . `p' `frame' `if' `in' `sym_wgt', `sym_coord'/*
-            */ shape(square) `sym_offset' `sym_angle' `sym_ratio' `sym_size'/*
-            */ `sym_lcolor' `sym_wmax' `sym_opts'
+            */ shape(square) `sym_offset' `sym_angle' `sym_align' `sym_ratio'/*
+            */ `sym_size' `sym_lcolor' `sym_wmax' `sym_opts'
         qui replace LAYER = `layer' in `n0'/l
         if `sym'==1 {
             local --p
@@ -145,7 +151,7 @@ end
 
 program _parse_sym
     syntax [, below noWeight SIze(str) ratio(passthru) OFFset(passthru)/*
-        */ ANGle(passthru) wmax WMAX2(passthru)/*
+        */ ANGle(passthru) align(passthru) wmax WMAX2(passthru)/*
         */ COLor(passthru) LColor(passthru)/*
         */ COLORVar(passthru)/* will be ignored
         */ * ]
@@ -156,6 +162,7 @@ program _parse_sym
     c_local sym_ratio  `ratio'
     c_local sym_offset `offset'
     c_local sym_angle  `angle'
+    c_local sym_align  `align'
     c_local sym_wmax   `wmax' `wmax2'
     c_local sym_hascol = `"`color'`lcolor'"'!=""
     c_local sym_opts   `color' `lcolor' `options'
@@ -165,13 +172,13 @@ version 16.1
 mata:
 mata set matastrict on
 
-void _compute_bars(string scalar frame, string scalar touse, 
+void _compute_bars(string scalar frame, string scalar touse, real scalar rev, 
     real scalar scale, real scalar angle, real scalar ratio,
-    real scalar off, real scalar oang, real scalar asis)
+    real scalar off, real scalar oang, real scalar asis, real scalar nostack)
 {
     real scalar    i, r, s, a
     real rowvector v
-    real colvector w
+    real colvector w, S
     real matrix    YX, Z
 
     // get data
@@ -194,38 +201,65 @@ void _compute_bars(string scalar frame, string scalar touse,
     // prepare frame
     st_framecurrent(frame)
     v = st_addvar("double", ("_Y","_X","_CY","_CX", "Z", "W"))
-    // generate coordinates of pies
+    // generate coordinates of bars
     a = angle * pi() / 180
-    for (i=1;i<=r;i++)
-        _compute_bar(S[i], a, ratio, asis, v, Z[i,], YX[i,], w[i])
+    if (nostack) {
+        for (i=1;i<=r;i++)
+            _compute_bar(S[i], a, ratio, asis, v, Z[i,], YX[i,], w[i], rev)
+    }
+    else {
+        for (i=1;i<=r;i++)
+            _compute_sbar(S[i], a, ratio, asis, v, Z[i,], YX[i,], w[i], rev)
+    }
 } 
 
 void _compute_bar(real scalar s, real scalar a,
     real scalar ratio, real scalar asis, real rowvector v, real rowvector z,
-    real rowvector yx, real scalar w)
+    real rowvector yx, real scalar w, real scalar rev)
 {
     real scalar j, c
-    real scalar z0
+    real scalar x0, x1
     
     if (asis) z = z / 50
     else      z = z / (sum(z)/2)
-    z0 = -1
     c = cols(z)
-    for (j=1;j<=c;j++)
-        __compute_bar(s, a, ratio, v, j, z[j], yx, w, z0)
+    x0 = rev ? 1 : -1
+    for (j=1;j<=c;j++) {
+        x1 = rev ? x0 - 2/c : x0 + 2/c
+        __compute_bar(s, a, ratio, v, j, 0, z[j], x0, x1, yx, w)
+        x0 = x1
+    }
+}
+
+void _compute_sbar(real scalar s, real scalar a,
+    real scalar ratio, real scalar asis, real rowvector v, real rowvector z,
+    real rowvector yx, real scalar w, real scalar rev)
+{
+    real scalar j, c
+    real scalar y0, y1, x0, x1
+    
+    if (asis) z = z / 50
+    else      z = z / (sum(z)/2)
+    c = cols(z)
+    y0 = rev ? 1 : -1 // or use sum(z)-1 if rev to place possible gap at bottom
+    x0 = -1; x1 = 1
+    for (j=1;j<=c;j++) {
+        y1 = rev ? y0 - z[j] : y0 + z[j]
+        __compute_bar(s, a, ratio, v, j, y0, y1, x0, x1, yx, w)
+        y0 = y1
+    }
 }
 
 void __compute_bar(real scalar s, real scalar r, real scalar ratio,
-    real rowvector v, real scalar j, real scalar z,
-    real rowvector yx, real scalar w, real scalar z0) // z0 will be updated
+    real rowvector v, real scalar j, real scalar y0, real scalar y1,
+    real scalar x0, real scalar x1, real rowvector yx, real scalar w)
 {
-    real scalar    a, z1
-    real matrix    YX
+    real scalar a
+    real matrix YX
     
-    z1 = z0 + z
     YX = (sin(.25 * pi()) * s) * (
-         (z0, z0, z1, z1, z0)' * ratio, // y
-         (-1,  1,  1, -1, -1)')         // x
+         (y0, y0, y1, y1, y0)' * ratio, // y
+         (x0, x1, x1, x0, x0)')         // x
     if (r!=1) {
         YX = (YX[,2] * sin(r) + YX[,1] * cos(r)), // y
              (YX[,2] * cos(r) - YX[,1] * sin(r))  // x
@@ -234,7 +268,6 @@ void __compute_bar(real scalar s, real scalar r, real scalar ratio,
     a = st_nobs() + 1
     st_addobs(6)
     st_store((a,a+5), v, YX)
-    z0 = z1
 }
 
 end

@@ -1,4 +1,4 @@
-*! version 1.1.6  24jun2024  Ben Jann
+*! version 1.1.7  28jun2024  Ben Jann
 
 /*
     Syntax:
@@ -1027,7 +1027,7 @@ program _box
     gettoken TYPE   args : args
     syntax [, PADding(passthru) ROTate hull CIRcle n(passthru) ANGle(passthru)/*
         */ noADJust line box BOX2(passthru) SIze(passthru) COLORVar(passthru)/*
-        */ * ]
+        */ REFine * ]
     if `"`box'`box2'`size'`colorvar'"'!="" {
         di as err "box(): invalid syntax"
         exit 198
@@ -1038,8 +1038,11 @@ program _box
     frame create `XY'
     mata: _box_copy_XY("`XY'", `n0', `n1', "`TYPE'"=="pc")
     // generate frame containing box
-    tempname BOX
-    frame `XY': qui geoframe bbox `BOX', `boxopts'
+    tempname BOX BOXSHP
+    frame `XY': qui geoframe bbox `BOX' `BOXSHP', `boxopts'
+    if "`refine'"!="" {
+        frame `BOX': qui geoframe refine, fast
+    }
     // compile plot
     if "`line'"!="" local plottype line
     else            local plottype area
@@ -1055,7 +1058,7 @@ mata set matastrict on
 
 void _set_one_if_any(string scalar id, string scalar touse)
 {
-    real scalar    i, n, a, b
+    real scalar    i, a, b
     real colvector p
     real matrix    ID, TOUSE
     
