@@ -1,5 +1,5 @@
 {smcl}
-{* 25jun2024}{...}
+{* 02jul2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -1316,11 +1316,18 @@
     that tightly fits the data.
 
 {phang}
-    {opt pad:ding(#)} adds padding to the range of the grid. This is only relevant for
-    positions that are determined automatically, not for custom
-    positions. Argument {it:#} is in percent of the size in each dimension. For
-    example, type {cmd:padding(5)} to increase the range by 5%; type
-    {cmd:padding(-5)} decrease the range by 5%. {cmd:padding()} implies {cmd:tight}.
+    {opt pad:ding(marginexp)} adds padding to the range of the grid. This is
+    only relevant for positions that are determined automatically, not for
+    custom positions. The values in {it:marginexp} are in percent of the size
+    of the map in each direction. For example, type {cmd:padding(5)} to
+    increase the range of the grid by 5% on each side; type {cmd:padding(-5)}
+    decrease by 5%. Provide multiple values in {it:marginexp} to use different
+    padding on the left, right, bottom, and top (in this order; values will be
+    recycled). Alternatively, specify one or more elements of the form
+    {{cmd:l}|{cmd:r}|{cmd:b}|{cmd:t}} [{cmd:=}] {it:#}, such as
+    {cmd:padding(l=5)} (add 5% padding on the left; no padding on other sides)
+    or {cmd:padding(r=5 t=10)} (add 5% padding on the right and 10% padding at
+    the top; no padding on other sides). {cmd:padding()} implies {cmd:tight}.
 
 {phang}
     {opt rad:ian} indicates that coordinates are in radians. This is only
@@ -1331,8 +1338,9 @@
 
 {phang}
     {cmdab:noex:tend} omits extending the length of lines to cover the data
-    range (including padding). If {cmd:noextend} is specified, the lines will
-    only be drawn within the limite of the requested grid.
+    range (including padding; negative padding will reduce the length of the
+    lines). If {cmd:noextend} is specified, the lines will
+    only be drawn within the limits of the requested grid.
 
 {phang}
     {opt mesh} omits the first and last line on each axis (if there are 3 or more
@@ -1411,7 +1419,7 @@
 
 {phang}
     {opt pad:ding(#)} adds padding to the bounding box. Argument {it:#}
-    is in percent of the size in each dimension. For example,
+    is in percent of the halfwidth in each direction. For example,
     type {cmd:padding(5)} to add 5% padding. Default is {cmd:padding(0)}.
 
 {phang}

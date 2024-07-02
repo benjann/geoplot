@@ -1,4 +1,4 @@
-*! version 1.2.2  25jun2024  Ben Jann
+*! version 1.2.3  30jun2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -1909,12 +1909,12 @@ program _grid
     if `tissot' local opts r(numlist max=1 >0)
     else        local opts noEXtend mesh
     syntax namelist(id="newname" name=newnames max=2) [if] [in] [,/*
-        */ x(str) y(str) `opts' tight PADding(numlist max=1)/*
+        */ x(str) y(str) `opts' tight PADding(str)/*
         */ RADian n(numlist int max=1 >0)/*
         */ noShp replace CURrent ]
     if "`n'"=="" local n 100
-    if "`padding'"!="" local tight tight
-    else               local padding 0
+    if `"`padding'"'!="" local tight tight
+    mata: _geo_parse_marginexp("padding", `"`padding'"')
     gettoken newname newnames : newnames
     gettoken newshpname : newnames
     if "`newshpname'"=="" local newshpname "`newname'_shp"
@@ -1980,8 +1980,10 @@ program _grid
             foreach x in X Y {
                 tempname `x'min `x'max
                 su ``x'' if `touse', meanonly
-                scalar ``x'min' = r(min) - (r(max)-r(min))*(`padding'/100)
-                scalar ``x'max' = r(max) + (r(max)-r(min))*(`padding'/100)
+                gettoken pad padding : padding
+                scalar ``x'min' = r(min) - (r(max)-r(min))*(`pad'/100)
+                gettoken pad padding : padding
+                scalar ``x'max' = r(max) + (r(max)-r(min))*(`pad'/100)
             }
             if `tissot' { // restrict Y
                 if "`radian'"!="" {

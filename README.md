@@ -90,7 +90,8 @@ Map with composite legend.
         (area regions fortell) ///
         (point capitals i.size [w=pop98], color(Set1, reverse opacity(50)) ///
             mlcolor(white)) ///
-        , legend(layout(- "FORTELL" 1 | - "CITY SIZE" 2) position(sw))
+        (symbol capitals if city=="Roma", shape(pin2) color(red) label(Rome)) ///
+        , glegend(layout(- "FORTELL" 1 | - "CITY SIZE" 2 3) position(sw))
 
 ![example 7](/images/7.png)
 
@@ -140,9 +141,39 @@ Zoom.
 
 ![example 13](/images/13.png)
 
+Inset.
+
+    geoplot ///
+        (area regions         if id==1, fc(Coral) lc(gray))           ///
+        (label regions region if id==1, color(black) position(6))     ///
+        (bar regions relig1 relig2 relig3 if id==1, nostack size(*5)) ///
+        , glegend(pos(se) rowgap(1) reverse textwidth(30))            ///
+          inset((area regions)                                        ///
+                (area regions if id==1, fc(Coral*.5) lc(gray))        ///
+                , position(nw) title(Italy))
+
+![example 14](/images/14.png)
+
 ---
 
 Main changes:
+
+
+    02jul2024:
+    geoplot:
+    - global option glegend() added (repeatable)
+    - layertype -areai- and -linei- added
+    - inset():
+        o suboption margin() added; by default, a 1% inner margin is added
+        o padding() in suboption box() discontinued
+        o suboption refdim() discontinued; now using global refdim() setting
+        o some changes in defaults
+    - suboption padding() in background() now supports marginexp
+    - suboption padding() in grid() and tissot() now supports marginexp
+    - layertype symbol now sets the default legend label to the name of the frame;
+      option align(center) can now be used to center symbols
+    geoframe:
+    - option padding() in geoframe grid and geoframe tissot now supports marginexp
 
     28jun2024
     geoplot:

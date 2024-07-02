@@ -1,4 +1,4 @@
-*! version 1.1.7  28jun2024  Ben Jann
+*! version 1.1.8  02jul2024  Ben Jann
 
 /*
     Syntax:
@@ -72,7 +72,7 @@ program __geoplot_layer
         if substr(`"`plottype'"',1,2)=="pc" { // paired coordinate plot
             local TYPE pc
             local hasSHP 1
-            local OPTS `OPTS' COORdinates(namelist min=4 max=4)
+            local OPTS `OPTS' COORdinates(namelist min=4 max=4) noshp
             local YX  Y  X Y2 X2 // variable names used in plot data
         }
         else {  // scatter assumed
@@ -133,7 +133,8 @@ program __geoplot_layer
             }
         }
         // check shpframe and determine data type(s)
-        if "`shp'"!="" local hasSHP 1 // scatter with option shp
+        if      "`shp'"=="shp"   local hasSHP 1 // scatter with option shp
+        else if "`shp'"=="noshp" local hasSHP 0 // pc with option noshp
         if `hasSHP' {
             geoframe get shpframe, local(shpframe)
             local hasSHP = `"`shpframe'"'!=""
@@ -142,7 +143,7 @@ program __geoplot_layer
             geoframe get type, local(type)
             if `"`type'"'=="" local type attribute
             frame `shpframe' {
-                if "`TYPE'"=="pc" local type pc // enforce pc
+                if "`TYPE'"=="pc" local typeSHP pc // enforce pc
                 else {
                     geoframe get type, local(typeSHP)
                     if `"`typeSHP'"'=="" local typeSHP shape
@@ -484,8 +485,9 @@ program __geoplot_layer
     }
     else local zindex 0
     // Set default options
+    local opts0
     if `"`plottype'"'=="area" {
-        local opts cmissing(n) nodropbase lalign(center) `opts'
+        local opts0 cmissing(n) nodropbase lalign(center)
         if "`COLOR'"=="" {
             if `"`lcolor'"'=="" local opts lcolor(gray) `opts'
             if `"`fcolor'"'=="" local opts fcolor(none) `opts'
@@ -500,23 +502,24 @@ program __geoplot_layer
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
     else if "`plottype'"'=="line" {
-        local opts `opts' cmissing(n)
+        local opts0 cmissing(n)
         if "`COLOR'"=="" & `"`lcolor'"'=="" local opts lcolor(gray) `opts'
         if "`LWIDTH'"==""   local opts lwidth(.15) `opts'
         if "`LPATTERN'"=="" local opts lpattern(solid) `opts'
     }
     if `hasMLAB' {
-        local opts `opts' mlabel(MLAB)
-        if "`mlabvposition'"!="" local opts `opts' mlabvposition(MLABPOS)
+        local opts0 `opts0' mlabel(MLAB)
+        if "`mlabvposition'"!="" local opts0 `opts0' mlabvposition(MLABPOS)
     }
     // add box (below)
     if "`box'"!="" {
-        _box `p' `n0' `n1' `"`TYPE'"', `box2'
+        _box `p' `n0' `n1' `"`TYPE'"', `box2' // p, plot
         qui replace LAYER = `layer' in `n1'/l
     }
     else local plot
     // compile plot
     if `hasWGT' local in inrange(_n,`n0',`n1')) | (_n<3)
+    local PLOTOPTS
     local p0 = `p' + 1
     gettoken pl0 : plevels
     foreach pl of local plevels {
@@ -571,10 +574,16 @@ program __geoplot_layer
                     local OPTS `OPTS' `missing'
                 }
             }
-            if `"`OPTS'"'!="" {
-                local IFF `IFF', `OPTS'
+            if `layer'<. {
+                if `pl'==`pl0' {
+                    local PLOTOPTS `PLOTOPTS' (`OPTS')
+                }
             }
-            local plot `plot' (`plottype' `YX' `IFF')
+            local OPTS `opts0' `OPTS'
+            if `"`OPTS'"'!="" {
+                local OPTS , `OPTS'
+            }
+            local plot `plot' (`plottype' `YX' `IFF'`OPTS')
             local ++p
         }
         if `pl'==`pl0' local p1 `p'
@@ -634,7 +643,10 @@ program __geoplot_layer
         }
     }
     else {
-        if `"`label'"'=="" local label `"`frame'"'
+        if `"`label'"'=="" {
+            frame `frame': local label: char _dta[GEOPLOT_sourcename]
+            if `"`label'"'=="" local label `"`frame'"'
+        }
         _add_quotes label `label'
         if `:list sizeof label'>1 local label `"`"`label'"'"'
         local labels `"`label'"'
@@ -661,6 +673,8 @@ program __geoplot_layer
     // returns
     if `layer'<. {
         char LAYER[keys_`layer'] `keys'
+        char LAYER[plottype_`layer'] `plottype'
+        char LAYER[plotopts_`layer'] `PLOTOPTS'
         char LAYER[labels_`layer'] `"`labels'"'
         char LAYER[nolegend_`layer'] `nolegend'
         char LAYER[hasz_`layer'] `hasZ'

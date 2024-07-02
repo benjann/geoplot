@@ -1,4 +1,4 @@
-*! version 1.1.4  26jun2024  Ben Jann
+*! version 1.1.5  02jul2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -26,7 +26,10 @@ program __geoplot_symboli
     tempname SIZE RELSIZE
     if `PLOT' local mlab POS str1 LAB
     frame create `frame' byte _ID _CX _CY `SIZE' `RELSIZE' `mlab'
-    frame `frame': _symboli `"`size'"' `SIZE' `RELSIZE' `PLOT' `values'
+    frame `frame' {
+        _symboli `"`size'"' `SIZE' `RELSIZE' `PLOT' `values'
+        char _dta[GEOPLOT_sourcename] symbol
+    }
     if `haslab' {
         local mlabel mlabel(LAB)
         if `haspos' local mlabvpos mlabvpos(POS)
@@ -154,6 +157,8 @@ program __geoplot_symbol
     gettoken p 0 : 0
     gettoken frame 0 : 0, pars(", ")
     frame `frame' {
+        local sourcename: char _dta[GEOPLOT_sourcename]
+        if `"`sourcename'"'=="" local sourcename `frame'
         // syntax
         syntax [anything] [if] [in] [iw/] [,/*
             */ SIze(str) MLabel(varname) MLABVposition(varname numeric)/*
@@ -259,6 +264,7 @@ program __geoplot_symbol
             qui replace _ID = _n
             order _ID
         }
+        char _dta[GEOPLOT_sourcename] `sourcename'
     }
     // create shape frame an plot command
     ___geoplot_symbol `layer' `p' `frame1' "`FV'`ZVAR'" "`wgt'",/*
@@ -363,6 +369,12 @@ program ___geoplot_symbol
             */ `offset', `oangle', "`align_lr'", "`align_bt'")
     }
     if !`PLOT' exit
+    if `layer'<. {
+        local SHAPE shape(`shape' `arg')
+        if `n'<. local SHAPE `SHAPE' n(`n')
+        char LAYER[symbol_`layer'] `SHAPE' angle(`angle') ratio(`ratio')
+        char LAYER[layertype_`layer'] symbol
+    }
     ***
     frame `frame': qui geoframe link `frame1'
     __geoplot_layer `plottype' `layer' `p' `frame' `zvar' `wgt',/*
@@ -447,17 +459,19 @@ program _parse_shape
 end
 
 program _parse_align
-    syntax [, Left Right Bottom Top ]
+    syntax [, Left Right Bottom Top Center ]
     local lr `left' `right'
     if `: list sizeof lr'>1 {
         di as err "only one of {bf:left} and {bf:right} allowed in {bf:align()}"
         exit 198
     }
+    if "`lr'"=="" local lr `center'
     local bt `bottom' `top'
     if `: list sizeof bt'>1 {
         di as err "only one of {bf:bottom} and {bf:top} allowed in {bf:align()}"
         exit 198
     }
+    if "`bt'"=="" local bt `center'
     c_local align_lr `lr'
     c_local align_bt `bt'
 end
@@ -514,8 +528,10 @@ void _compute_symbols(string scalar frame,
     // align
     if      (align_lr=="left")   xy[,1] = xy[,1] :- min(xy[,1])
     else if (align_lr=="right")  xy[,1] = xy[,1] :- max(xy[,1])
+    else if (align_lr=="center") xy[,1] = xy[,1] :- sum(minmax(xy[,1]))/2
     if      (align_bt=="bottom") xy[,2] = xy[,2] :- min(xy[,2])
     else if (align_bt=="top")    xy[,2] = xy[,2] :- max(xy[,2])
+    else if (align_bt=="center") xy[,2] = xy[,2] :- sum(minmax(xy[,2]))/2
     // determine size
     s = max((min(mm_coldiff(colminmax(XY))), refsize))
     s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map

@@ -23,6 +23,7 @@
 *!     {helpb lgeoplot_source##geo_welzl:geo_welzl()}
 *!     {helpb lgeoplot_source##geo_wkt2xy:geo_wkt2xy()}
 *!     {helpb lgeoplot_source##_geo_progress:_geo_progress()}
+*!     {help  lgeoplot_source##varia:Further functions}
 *! {asis}
 
 version 16.1
@@ -4638,6 +4639,70 @@ void _geo_progress_end(`Int' j, `SS' msg)
     _geo_progress(j, 1) // complete to 100% if necessary
     printf("%s\n", msg)
     displayflush()
+}
+
+end
+
+*! {smcl}
+*! {marker varia}Further functions{asis}
+*! version 1.0.0  30jun2024  Ben Jann
+*!
+
+mata:
+mata set matastrict on
+
+void _geo_parse_marginexp(string scalar nm, string scalar s,
+    | real scalar lb, real scalar def)
+{
+    real scalar    i, n
+    real rowvector R
+    string scalar  tok
+    transmorphic   t
+    
+    if (args()<4) def = 0
+    R = strtoreal(tokens(s))
+    n = length(R)
+    if (!n) { // empty
+        st_local(nm, invtokens(strofreal(J(1,4,def))))
+        return
+    }
+    if (!hasmissing(R)) { // all numeric
+        if (n<4) {
+            R = R, J(1,4-n,.)
+            for (i=4;i>=n;i--) R[i] = R[mod(i-1,n)+1] // recycle
+        }
+        else if (n>4) R = R[|1\4|]
+    }
+    else {
+        R = J(1,4,def)
+        t = tokeninit(" ", "=")
+        tokenset(t, s)
+        while ((tok = tokenget(t))!="") {
+            i = 0
+            if      (tok=="l") i = 1
+            else if (tok=="r") i = 2
+            else if (tok=="b") i = 3
+            else if (tok=="t") i = 4
+            if (i) {
+                if (tokenpeek(t)=="=") (void) tokenget(t) // remove "="
+                R[i] = strtoreal(tokenget(t))
+                continue
+            }
+            errprintf("invalid {bf:%s()}\n", nm)
+            exit(198)
+        }
+    }
+    if (hasmissing(R)) {
+        errprintf("invalid {bf:%s()}; missing not allowed\n", nm)
+        exit(198)
+    }
+    if (lb<.) {
+        if (any(R:<lb)) {
+            errprintf("invalid {bf:%s()}; has values out of range\n", nm)
+            exit(198)
+        }
+    }
+    st_local(nm, invtokens(strofreal(R)))
 }
 
 end
