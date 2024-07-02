@@ -1,4 +1,4 @@
-*! version 1.1.9  02jul2024  Ben Jann
+*! version 1.2.0  02jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -1877,8 +1877,9 @@ program _glegend
     syntax [, Layout(str asis) LAYErs(str asis)/*
         */ BOTtom /*HORizontal*/ REVerse/*
         */ SYMScale(real .8) SYMYsize(real 3) SYMXsize(real 3) /* 
-        */ ROWGap(real 0) KEYGap(real 1) TEXTWidth(real 15) LINESKip(real 2)/*
-        */ HEADSKip(numlist max=2)/*
+        */ ROWGap(real 0) KEYGap(real 1) COLGap(real 3) /*
+        */ TPOSition(str) TAlign(str) TEXTWidth(real 12) LINESKip(real 2)/*
+        */ HEADSKip(numlist max=2) nospan HAlign(str)/*
         */ box BOX2(passthru) TItle(passthru) Margin(passthru) POSition(str)/*
         */ XMargin(passthru) YMargin(passthru) ]
     if !`:list sizeof layout' local layout: copy local layers
@@ -1908,24 +1909,30 @@ program _glegend
     gettoken headskip0           : headskip1
     if "`headskip0'"=="" local headskip0  1
     if "`headskip1'"=="" local headskip1 .5
-    foreach s in symysize symxsize rowgap headskip0 headskip1 keygap lineskip {
+    foreach s in symysize symxsize rowgap colgap headskip0 headskip1 keygap/*
+        */ lineskip {
         local `s' = `refsize' * (``s''/100)
     }
     local ht `symysize'
     local wd `symxsize'
+    local lskip `lineskip'
     if `"`position'"'==""  local position position(2)
     else                   local position position(`position')
     if `"`box'`box2'"'=="" local box nobox
     else                   local box
+    _glegend_parse_tpos, `tposition' // tleft
+    _glegend_parse_talign `tleft', `talign'  // talign
+    _glegend_parse_halign `talign', `halign' // halign
+    local span = "`span'"==""
     // prepare frames
     tempname LBL
-    frame create `LBL' byte C double(_X _Y) str2045 L
+    frame create `LBL' byte C double(_X _Y) byte P str2045 L 
     tempname SHP
     frame create `SHP' byte C double(_X _Y)
     tempname PC
     frame create `PC'  byte C double(_X1 _Y1 _X2 _Y2)
     // generate legend
-    _glegend_post_lbl `LBL' 1 0 -`wd'/2 `ht'/2 "" // mark upper left corner
+    _glegend_post_lbl `LBL' 1 0 0 `ht'/2 0 "" // mark upper left corner
     local plots
     local y 0
     local x 0
@@ -1938,13 +1945,11 @@ program _glegend
         if strtrim(`"`l'"')=="" continue
         // case 1: move to next column
         if `"`l'"'=="|" { 
-            if `x'!=0 | `y'!=0 {
-                if `y'!=0 {
-                    local y = `y' + `ht'/2 + `rowgap'
-                    _glegend_post_lbl `LBL' `c' 0 `x' `y' "" // mark bottom
-                }
+            if `y'!=0 {
+                local y = `y' + `ht'/2 + `rowgap'
+                _glegend_post_lbl `LBL' `c' 0 `x' `y' 0 "" // mark bottom
                 local y 0
-                local x = `x' + `wd' + `keygap' + `textwd'
+                local x = `x' + `wd' + `keygap' + `textwd' + `colgap'
                 if "`TEXTWD'"=="" local TEXTWD: copy local textwidth
                 gettoken textwd TEXTWD : TEXTWD
                 local textwd = `refsize' * (`textwd'/100)
@@ -1961,8 +1966,17 @@ program _glegend
         if `"`l'"'=="-" {
             if `y'!=0 local y = `y' - `headskip0'
             _glegend_collect_label `layout' // lbl, layout
-            local x0 = `x' - `wd'/2
-            _glegend_post_lbl `LBL' `c' `lineskip' `x0' `y' `"`lbl'"'
+            local x0 `x'
+            if `span' {
+                if      `halign'==9 local x0 = `x0' + `textwd' + `wd' + `keygap'
+                else if `halign'==0 local x0 = `x0' + (`textwd'+`wd'+`keygap')/2
+            }
+            else {
+                if !`tleft' local x0 = `x0' + `wd' + `keygap'
+                if      `halign'==9 local x0 = `x0' + `textwd'
+                else if `halign'==0 local x0 = `x0' + `textwd'/2
+            }
+            _glegend_post_lbl `LBL' `c' `lskip' `x0' `y' `halign' `"`lbl'"'
             local y = `y' - `ht' - `rowgap' - `headskip1'
             continue
         }
@@ -2020,33 +2034,38 @@ program _glegend
                 }
                 // handle label
                 gettoken lbl LBLS : LBLS
-                local x0 = `x' + `wd'/2 + `keygap'
+                if `tleft' local x0 = `x'
+                else       local x0 = `x' + `wd' + `keygap'
+                if      `talign'==9 local x0 = `x0' + `textwd'
+                else if `talign'==0 local x0 = `x0' + `textwd'/2
                 local y0 `y' // backup start position
-                _glegend_post_lbl `LBL' `c' `lineskip' `x0' `y' `"`lbl'"'
+                _glegend_post_lbl `LBL' `c' `lskip' `x0' `y' `talign' `"`lbl'"'
                 // handle key
                 local y0 = (`y' + `y0') / 2
+                local x0 = `x' + `wd'/2
+                if `tleft' local x0 = `x0' + `keygap' + `textwd'
                 gettoken opt OPTS : OPTS, match(paren)
                 local psty = mod(`key'-1,`pcycle') + 1
                 local opt pstyle(p`psty') `opt'
                 if `"`ltype'"'=="symbol" {
                     if `"`ptype'"'=="line" local opt line `opt'
-                    _glegend_post_symbol `SHP' `c' `x' `y0', align(center)/*
+                    _glegend_post_symbol `SHP' `c' `x0' `y0', align(center)/*
                         */ size(`=`symscale'*`ht'/2') `symbl' `opt'
                 }
                 else if `"`ltype'"'=="label" {
-                    _glegend_post_label `SHP' `c' `x' `y0', `opt'
+                    _glegend_post_label `SHP' `c' `x0' `y0', `opt'
                 }
                 else if `"`ptype'"'=="area" {
-                    _glegend_post_area `SHP' `c' `wd' `ht' `x' `y0', `opt'
+                    _glegend_post_area `SHP' `c' `wd' `ht' `x0' `y0', `opt'
                 }
                 else if `"`ptype'"'=="line" {
-                    _glegend_post_line `SHP' `c' `wd' `x' `y0', `opt'
+                    _glegend_post_line `SHP' `c' `wd' `x0' `y0', `opt'
                 }
                 else if `"`ptype'"'=="scatter" {
-                    _glegend_post_point `SHP' `c' `x' `y0', `opt'
+                    _glegend_post_point `SHP' `c' `x0' `y0', `opt'
                 }
                 else {
-                    _glegend_post_pc `"`ptype'"' `PC' `c' `wd' `x' `y0', `opt'
+                    _glegend_post_pc `"`ptype'"' `PC' `c' `wd' `x0' `y0', `opt'
                 }
                 local plots `plots' `plot'
                 // update position
@@ -2054,13 +2073,13 @@ program _glegend
             }
         }
     }
-    local x = `x' + `wd'/2 + `keygap' + `textwd'
+    local x = `x' + `wd' + `keygap' + `textwd'
     local y = `y' + `ht'/2 + `rowgap'
-    _glegend_post_lbl `LBL' `c' 0 `x' `y' "" // mark lower right corner
+    _glegend_post_lbl `LBL' `c' 0 `x' `y' 0 "" // mark lower right corner
     frame `LBL': qui compress L
     if "`bottom'"!="" _glegend_bottom `c' `LBL' `SHP' `PC'
-    local plots `plots'/*
-        */ (label `LBL' L, msize(0) pos(3) gap(0) size(vsmall) color(black))
+    local plots `plots'(label `LBL' L, msize(0) vpos(P) gap(0) size(vsmall)/*
+        */ color(black))
     // call _inset to plot the legend
     local n0 = _N + 1
     _inset 0 "" "" 0 1 0 "", inset(`plots', size(.) `box'`box2' `title'/*
@@ -2070,6 +2089,52 @@ program _glegend
     mata: _inset(`n0', `n1', `ins_1_ti', `ins_1_s', `ins_1_pos',/*
         */ strtoreal(tokens("`ins_1_mrg'")), `ins_1_ym', `ins_1_xm',/*
         */ "`refdim'", `refsize', `Ymin', `Ymax', `Xmin', `Xmax')
+end
+
+program _glegend_parse_tpos
+    syntax [, Left Right ]
+    local pos `left' `right'
+    if `:list sizeof pos'>1 {
+        di as err "invalid tposition(); only one of left and right allowed"
+        exit 198
+    }
+    if "`pos'"=="left" c_local tleft 1
+    else               c_local tleft 0
+end
+
+program  _glegend_parse_talign
+    gettoken tleft 0 : 0, parse(" ,")
+    syntax [, Left Right Center ]
+    local align `left' `right' `center'
+    if `:list sizeof align'>1 {
+        di as err "invalid talign(); "/*
+            */ "only one of left, right, and center allowed"
+        exit 198
+    }
+    if "`align'"=="" {
+        if `tleft' local align 9
+        else       local align 3
+    }
+    else if "`align'"=="left"  local align 3
+    else if "`align'"=="right" local align 9
+    else                       local align 0
+    c_local talign `align'
+end
+
+program  _glegend_parse_halign
+    gettoken talign 0 : 0, parse(" ,")
+    syntax [, Left Right Center ]
+    local align `left' `right' `center'
+    if `:list sizeof align'>1 {
+        di as err "invalid halign(); "/*
+            */ "only one of left, right, and center allowed"
+        exit 198
+    }
+    if      "`align'"==""      local align `talign'
+    else if "`align'"=="left"  local align 3
+    else if "`align'"=="right" local align 9
+    else                       local align 0
+    c_local halign `align'
 end
 
 program _glegend_collect_label
@@ -2087,10 +2152,10 @@ program _glegend_collect_label
 end
 
 program _glegend_post_lbl
-    args LBL c lskip x y lbl
+    args LBL c lskip x y pos lbl
     gettoken tmp : lbl, qed(hasquote)
     if !`hasquote' {
-        frame post `LBL' (`c') (`x') (`y') (`"`lbl'"')
+        frame post `LBL' (`c') (`x') (`y') (`pos') (`"`lbl'"')
         exit
     }
     local plot
@@ -2098,7 +2163,7 @@ program _glegend_post_lbl
     foreach l of local lbl {
         local y `y1'
         local y1 = `y' - `lskip'
-        frame post `LBL' (`c') (`x') (`y') (`"`l'"')
+        frame post `LBL' (`c') (`x') (`y') (`pos') (`"`l'"')
     }
     c_local y `y'
 end

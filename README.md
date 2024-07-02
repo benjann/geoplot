@@ -159,6 +159,11 @@ Inset.
 Main changes:
 
 
+    02jul2024
+    geoplot:
+    - options colgap(), tposition(), talign(), halign() and nospan added to
+      glegend(); new default for textwidth() is 12
+
     02jul2024:
     geoplot:
     - global option glegend() added (repeatable)

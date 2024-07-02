@@ -1704,6 +1704,11 @@ or
     {cmd:rowgap(0)}.
 
 {phang2}
+    {opt colg:ap(#)} specifies the horizontal gap between legend columns, in percent
+    of the map's {help geoplot##refdim:reference size}. Default is
+    {cmd:colgap(3)}.
+
+{phang2}
     {opt keyg:ap(#)} specifies the horizontal gap between the symbol
     and the label of a key, in percent
     of the map's {help geoplot##refdim:reference size}. Default is
@@ -1712,11 +1717,22 @@ or
 {phang2}
     {opth textw:idth(numlist)} specifies the width of the space used for the keys' labels,
     in percent of the map's {help geoplot##refdim:reference size}. Default is
-    {cmd:textwidth(15)}. Unlike the standard {helpb geoplot##legend:legend()}
+    {cmd:textwidth(12)}. Unlike the standard {helpb geoplot##legend:legend()}
     option, {cmd:glegend()} uses a fixed width and does not adjust the size
     to the content of the labels; use option {cmd:textwidth()} to adjust the
     space if it is too wide or too narrow. Specify multiple values to use
     different widths across columns (values will be recycled).
+
+{phang2}
+    {opt tpos:ition(pos)} specifies the position of the labels in relation to
+    the symbols, where {it:pos} can be {opt l:eft} or {opt r:ight}. Default is
+    {cmd:tposition(right)}.
+
+{phang2}
+    {opt ta:lign(align)} specifies the alignment of the labels, where
+    {it:align} can be {opt l:eft}, {opt c:enter}, or {opt r:ight}. Default is
+    {cmd:talign(left)} for {cmd:tposition(right)} and {cmd:talign(right)}
+    for {cmd:tposition(left)}.
 
 {phang2}
     {opt linesk:ip(#)} specifies the size of the lineskip in multiline
@@ -1726,6 +1742,15 @@ or
 {phang2}
     {opt headsk:ip(before after)} specifies extra vertical gaps to be added
     before and after subtitles. Default is {cmd:headskip(1 0.5)}.
+
+{phang2}
+    {opt ha:lign(align)} specifies the alignment of subtitles, where
+    {it:align} can be {opt l:eft}, {opt c:enter}, or {opt r:ight}. Default is
+    is to use the same alignment as for the labels.
+
+{phang2}
+    {opt nospan} restricts the space of subtitles to the space used for labels. By default,
+    the subtitles span the combined space of symbols and labels.
 
 {phang2}
     {cmd:title()}, {cmd:margin()}, {cmd:xmargin()}, and {cmd:ymargin()} as
