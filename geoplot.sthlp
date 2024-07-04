@@ -1831,6 +1831,13 @@ or
     {cmd:rowgap()} is {cmd:1}; {cmd:headskip()} only has a single argument
     specifying the extra gap after the subtitle.
 
+{phang2}
+    {cmd:line} and {it:{help area_options}} or {it:{help line_options}} affect
+    the rendering of the symbols as described for layertype
+    {helpb geoplot##symbol:symbol}. By default, {cmd:slegend()} displays
+    raw symbols without applying rendering options. For
+    example, use option {cmd:color()} to add color.
+
 {marker clegend}{...}
 {phang}
     {cmd:clegend}[{cmd:(}{it:options}{cmd:)}] prints a {help clegend_option:contour} plot legend
