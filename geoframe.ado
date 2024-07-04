@@ -1,4 +1,4 @@
-*! version 1.2.3  30jun2024  Ben Jann
+*! version 1.2.4  04jul2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
