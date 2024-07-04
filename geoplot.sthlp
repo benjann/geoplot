@@ -1,5 +1,5 @@
 {smcl}
-{* 02jul2024}{...}
+{* 04jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -186,6 +186,9 @@ or
     {p_end}
 {synopt :{helpb geoplot##glegend:{ul:gleg}end{sf:[}({it:options}){sf:]}}}add
     geoplot legend (can be repeated)
+    {p_end}
+{synopt :{helpb geoplot##slegend:{ul:sleg}end({it:spec})}}add
+    size legend (can be repeated)
     {p_end}
 {synopt :{helpb geoplot##clegend:{ul:cleg}end{sf:[}({it:options}){sf:]}}}add
     {helpb contour} plot legend (requires Stata 18)
@@ -1581,7 +1584,7 @@ or
 {marker legend}{...}
 {phang}
     {cmd:legend}[{cmd:(}{it:options}{cmd:)}] prints a legend for one or several
-    layers, employing official Stata's legend option. {it:suboptions} are as follows:
+    layers, employing official Stata's legend option. {it:options} are as follows:
 
 {phang2}
     {opt l:ayout(layout)} selects and arranges the layers to be included in the
@@ -1593,9 +1596,10 @@ or
     where {it:el} is one of
 
 {p2colset 17 26 28 2}{...}
-{p2col: {it:#}}include the legend keys of layer {it:#}
+{p2col: {it:#}}include the legend keys of layer {it:#}; can specify
+    {it:{help numlist}} to select multiple layers
     {p_end}
-{p2col: {cmd:.}}add a gap between layers
+{p2col: {cmd:.}}add a gap
     {p_end}
 {p2col: {cmd:|}}start a new column (or a new row)
     {p_end}
@@ -1644,7 +1648,7 @@ or
     official Stata's legend option. Unlike the standard {helpb geoplot##legend:legend()} option,
     {cmd:glegend()} supports the inclusion of symbols created by layertype
     {helpb geoplot##symbol:symbol}. Furthermore, {cmd:glegend()} can be repeated to
-    create multiple legends. {it:suboptions} are as follows:
+    create multiple legends. {it:options} are as follows:
 
 {phang2}
     {opt l:ayout(layout)} selects and arranges the layers to be included in the
@@ -1656,7 +1660,8 @@ or
     where {it:el} is one of
 
 {p2colset 17 26 28 2}{...}
-{p2col: {it:#}}include the legend keys of layer {it:#}
+{p2col: {it:#}}include the legend keys of layer {it:#}; can specify
+    {it:{help numlist}} to select multiple layers
     {p_end}
 {p2col: {cmd:.}}add a gap between layers
     {p_end}
@@ -1678,9 +1683,9 @@ or
 
 {phang2}
     {opth pos:ition(compassdirstyle)} overrides the default location of the legend,
-    which is in the upper right corner. The legend will always be placed inside
-    the plot region; use global option {helpb geoplot##margin:margin()}
-    to make space for the legend if needed.
+    which is in the upper right corner. Default is {cmd:position(ne)}. The
+    legend will always be placed inside the plot region; use global option
+    {helpb geoplot##margin:margin()} to make space for the legend if needed.
 
 {phang2}
     {cmd:box}[{cmd:(}{it:{help area_options}}{cmd:)}] prints a frame around the
@@ -1715,6 +1720,10 @@ or
     {cmd:keygap(1)}.
 
 {phang2}
+    {opt textf:irst} places labels before symbols. The default
+    is to place symbols before labels.
+
+{phang2}
     {opth textw:idth(numlist)} specifies the width of the space used for the keys' labels,
     in percent of the map's {help geoplot##refdim:reference size}. Default is
     {cmd:textwidth(12)}. Unlike the standard {helpb geoplot##legend:legend()}
@@ -1724,15 +1733,16 @@ or
     different widths across columns (values will be recycled).
 
 {phang2}
-    {opt tpos:ition(pos)} specifies the position of the labels in relation to
-    the symbols, where {it:pos} can be {opt l:eft} or {opt r:ight}. Default is
-    {cmd:tposition(right)}.
-
-{phang2}
     {opt ta:lign(align)} specifies the alignment of the labels, where
     {it:align} can be {opt l:eft}, {opt c:enter}, or {opt r:ight}. Default is
-    {cmd:talign(left)} for {cmd:tposition(right)} and {cmd:talign(right)}
-    for {cmd:tposition(left)}.
+    {cmd:talign(left)} or, if {cmd:textfirst} is specified,
+    {cmd:talign(right)}.
+
+{phang2}
+    {opth tsi:ze(textsizestyle)},
+    {cmdab:tcol:or(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)},
+    and {opth tang:le(anglestyle)} specify the size, color, and angle of the
+    labels. Defaults are {cmd:tsize(vsmall)} and {cmd:tcolor(black)}.
 
 {phang2}
     {opt linesk:ip(#)} specifies the size of the lineskip in multiline
@@ -1746,7 +1756,13 @@ or
 {phang2}
     {opt ha:lign(align)} specifies the alignment of subtitles, where
     {it:align} can be {opt l:eft}, {opt c:enter}, or {opt r:ight}. Default is
-    is to use the same alignment as for the labels.
+    {cmd:halign(left)}.
+
+{phang2}
+    {opth hsi:ze(textsizestyle)},
+    {cmdab:hcol:or(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)},
+    and {opth hang:le(anglestyle)} specify the size, color, and angle of the
+    subtitles. Default is the same setting as for labels.
 
 {phang2}
     {opt nospan} restricts the space of subtitles to the space used for labels. By default,
@@ -1755,6 +1771,65 @@ or
 {phang2}
     {cmd:title()}, {cmd:margin()}, {cmd:xmargin()}, and {cmd:ymargin()} as
     described for the {helpb geoplot##inset:inset()} option.
+
+{marker slegend}{...}
+{phang}
+    {cmd:slegend(}{it:values} [{cmd:,} {it:options}]{cmd:)} prints a legend
+    for symbol sizes created by applying weights in layertype
+    {helpb geoplot##symbol:symbol}. {cmd:slegend()} can be repeated to
+    create multiple legends. Argument {it:values} specifies the sizes
+    (values of the weighting variable) to be included in the legend. The syntax
+    of {it:values} is
+
+            {it:{help numlist}} [{cmd:"}{it:label}{cmd:"} [{it:numlist} [{cmd:"}{it:label}{cmd:"}] ... ]]
+
+{pmore}
+    where {it:label} specifies a custom label for the preceding value. The
+    default is to use numeric values as labels. {it:options} are as follows:
+
+{phang2}
+    {opt l:ayer(#)} selects the layer for which the legend be created. The default
+    is to use the first {helpb geoplot##symbol:symbol} layer to which weights have
+    been applied. No legend will be created if there is no such layer.
+
+{phang2}
+    {opt over:lay}[{cmd:(}{it:offset}{cmd:)}] creates a legend with overlayed
+    symbols. Use optional argument {it:offset} to stagger the positions of the symbols,
+    where {it:offset} specifies the proportion
+    of width by which each symbol will be shifted.
+
+{phang2}
+    {opt tfl:oat} causes the horizontal positions of labels to be adaptive to the
+    sizes of the symbols. The default is to align the labels at a fixed position.
+
+{phang2}
+    {opt sa:lign(align)} specifies the alignment of the symbols, where
+    {it:align} can be {opt l:eft}, {opt c:enter}, or {opt r:ight}. Default is
+    {cmd:salign(center)}.
+
+{phang2}
+    {cmdab:head:ing(}{cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} ...]{cmd:)}
+    specifies a heading (subtitle) for the legend.  Multiple lines are
+    created if multiple {cmd:"}{it:text}{cmd:"} elements are specified. Use
+    options such as {cmd:halign()}, {cmd:hsize()}, and {cmd:hcolor()} to format
+    the heading (see below).
+
+{phang2}
+    {opth f:ormat(fmt)} selects the display format to be applied to numeric
+    labels.
+
+{phang2}
+    {cmd:reverse}, {cmd:position()}, {cmd:box()}, {cmd:symysize()},
+    {cmd:symxsize()}, {cmd:rowgap()}, {cmd:keygap()}, {cmd:textfirst},
+    {cmd:textwidth()}, {cmd:talign()}, {cmd:tsize()}, {cmd:tcolor()},
+    {cmd:tangle()}, {cmd:lineskip()}, {cmd:headskip()}, {cmd:halign()},
+    {cmd:hsize()}, {cmd:hcolor()}, {cmd:hangle()}, {cmd:nospan},
+    {cmd:title()}, {cmd:margin()}, {cmd:xmargin()}, and {cmd:ymargin()} as
+    described for option {helpb geoplot##glegend:glegend()}, with the following
+    differences: default for {cmd:position()} is {cmd:sw}; default for
+    {cmd:symysize()} and {cmd:symxsize()} is {cmd:2}; default for
+    {cmd:rowgap()} is {cmd:1}; {cmd:headskip()} only has a single argument
+    specifying the extra gap after the subtitle.
 
 {marker clegend}{...}
 {phang}

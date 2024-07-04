@@ -78,7 +78,7 @@ Map with provincial capitals.
 
     geoplot ///
         (area regions) ///
-        (point capitals i.size [w=pop98], color(Set1, opacity(50)) mlcolor(%0)) ///
+        (point capitals i.size [w=pop98], color(Set1%50) mlcolor(%0)) ///
         (label capitals city if pop98>250000, color(black)) ///
         , legend compass sbar(length(300) units(km))
 
@@ -88,12 +88,23 @@ Map with composite legend.
 
     geoplot ///
         (area regions fortell) ///
-        (point capitals i.size [w=pop98], color(Set1, reverse opacity(50)) ///
-            mlcolor(white)) ///
+        (point capitals i.size [w=pop98], color(Set1%50, reverse) mlcolor(white)) ///
         (symbol capitals if city=="Roma", shape(pin2) color(red) label(Rome)) ///
         , glegend(layout(- "FORTELL" 1 | - "CITY SIZE" 2 3) position(sw))
 
 ![example 7](/images/7.png)
+
+Map with size legend.
+
+    geoplot ///
+        (area regions fortell) ///
+        (symbol capitals [w=pop98], color(stc2%50) lcolor(white) size(*3)) ///
+        (label capitals city if pop98>250000, color(gs14) size(vsmall)) ///
+        , glegend(layout(- "FORTELL" 1) position(sw)) ///
+          slegend(100000 "100 K" 5e5 "500 K" 1e6 "1 M" 2e6 "2 M", position(ne) ///
+            overlay lcolor(stc2) heading("City size") hsize(small))
+
+![example 7b](/images/7b.png)
 
 Map with pie charts.
 
@@ -158,6 +169,18 @@ Inset.
 
 Main changes:
 
+    04jul2024
+    geoplot
+    - global option slegend() added
+    - global option glegend() now has suboptions tsize(), tcolor(), and tangle()
+      (as well as undocumented tgap()) to affect the rendering of the labels
+    - global option glegend() now has suboption textfirst; suboption tposition()
+      is discontinued
+    - option textwidth() in glegend() did not allow multiple values; this is
+      fixed
+    geoframe
+    - -geoframe set type- now checks whether the current coordinates setting is
+      compatible with the specified type and clears the setting if not
 
     02jul2024
     geoplot:

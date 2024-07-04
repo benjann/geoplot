@@ -1,4 +1,4 @@
-*! version 1.1.8  02jul2024  Ben Jann
+*! version 1.1.9  03jul2024  Ben Jann
 
 /*
     Syntax:
@@ -678,6 +678,7 @@ program __geoplot_layer
         char LAYER[labels_`layer'] `"`labels'"'
         char LAYER[nolegend_`layer'] `nolegend'
         char LAYER[hasz_`layer'] `hasZ'
+        char LAYER[wmax_`layer'] `wmax2'
         if `hasZ' {
             local hasmis = `NMIS' > 0
             char LAYER[z_hasmis_`layer'] `hasmis'

@@ -1,4 +1,4 @@
-*! version 1.1.5  02jul2024  Ben Jann
+*! version 1.1.6  04jul2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -364,6 +364,7 @@ program ___geoplot_symbol
     // write shapes to shape frame
     frame create `frame1'
     frame `frame' {
+        tempname SIZE
         mata: _compute_symbols("`frame1'", "`shape'", st_local("arg"),/* 
             */ `n', `angle', `ratio', "`size'", "`relsize'", `refsize',/*
             */ `offset', `oangle', "`align_lr'", "`align_bt'")
@@ -373,6 +374,7 @@ program ___geoplot_symbol
         local SHAPE shape(`shape' `arg')
         if `n'<. local SHAPE `SHAPE' n(`n')
         char LAYER[symbol_`layer'] `SHAPE' angle(`angle') ratio(`ratio')
+        char LAYER[symsize_`layer'] `=`SIZE''
         char LAYER[layertype_`layer'] symbol
     }
     ***
@@ -536,6 +538,7 @@ void _compute_symbols(string scalar frame,
     s = max((min(mm_coldiff(colminmax(XY))), refsize))
     s = max((1, s * 0.03)) // 3% of min(yrange, xrange) of map
     S = st_data(., SIZE) :* editmissing(st_data(., RELSIZE)*s, 1)
+    st_numscalar(st_local("SIZE"), mean(S))
     // apply ratio to shape
     if (ratio!=1) xy = xy[,1], xy[,2]*ratio
     // apply angle to shape

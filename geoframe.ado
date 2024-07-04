@@ -305,6 +305,7 @@ program __create
         }
     }
     // process current frame
+    if `"`coordinates'"'!="" geoframe_set coordinates // clear setting
     geoframe_set type `type'
     if `"`feature'"'!=""     geoframe_set feature `feature'
     if `"`id'"'!=""          geoframe_set id `id'
@@ -396,6 +397,7 @@ program __create_shp
     _create_parse_coordinates "`type'" "`coordinates'" // may update type
     if "`type'"=="" local type "shape" // enforce shape if type empty
     // apply settings
+    if `"`coordinates'"'!="" geoframe_set coordinates // clear setting
     geoframe_set type `type'
     if `"`feature'"'!=""     geoframe_set feature `feature'
     if `"`id'"'!=""          geoframe_set id `id'
@@ -556,6 +558,18 @@ program _set_type
     if !inlist(`"`0'"',"","attribute","pc","shape") {
         di as err "type must be {bf:attribute}, {bf:pc}, or {bf:shape}"
         exit 198
+    }
+    if "`0'"!="" {
+        local XY: char _dta[GEOFRAME_coordinates]
+        local n: list sizeof XY
+        if `n' {
+            if (inlist("`0'","attribute","shape") & `n'!=2)/*
+                */ | ("`0'"=="pc" & `n'!=4) {
+                di as txt "(current coordinates setting incompatible"/*
+                    */ " with type {bf:`0'}; reset to default)"
+                char _dta[GEOFRAME_coordinates]
+            }
+        }
     }
     char _dta[GEOFRAME_type] `0'
 end
