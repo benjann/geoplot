@@ -1,4 +1,4 @@
-*! version 1.2.1  04jul2024  Ben Jann
+*! version 1.2.2  06jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -1966,9 +1966,9 @@ program _Legend
             */ `halign' `"`topts'"' `"`hopts'"' `pcycle'
     }
     else {
-        tempname SYM
+        tempname SYM SYMBOL
         frame create `SYM' double(_X _Y W)
-        _slegend `LBL' `SYM' `refsize'/*
+        _slegend `LBL' `SYM' `SYMBOL' `refsize'/*
             */ `"`anything'"' `"`layer'"' "`overlay'" "`overlay2'"/*
             */ `"`salign'"' "`tfloat'" `"`format'"' `"`heading'"'/*
             */ `reverse' `symysize' `symxsize' `keygap' `rowgap' `colgap'/*
@@ -2319,7 +2319,7 @@ program _glegend_bottom
 end
 
 program _slegend
-    args LBL SYM refsize/*
+    args LBL SYM SYMBOL refsize/*
         */ levels layer overlay overlay2/*
         */ salign tfloat format heading/*
         */ reverse ht wd keygap rowgap colgap/* (colgap not used)
@@ -2368,7 +2368,8 @@ program _slegend
         local `s' = `refsize' * (``s''/100)
     }
     // obtain symbol dimensions
-    _slegend_symsize size(`symsize') `symbl' // xsize ysize
+    _slegend_symbol `SYMBOL' `overlay' `tfirst' size(`symsize') `symbl' /* fills
+        in matrix SYMBOL, returns xsize ysize tfpos */
     local lmin .
     local lmax 0
     local xmin .
@@ -2414,15 +2415,16 @@ program _slegend
             local y  = `y' + `lysize' + `rowgap'
         }
         if `tfloat' {
+            local tf = `tfpos' * sqrt(`lev'/`wmax')
             if `tfirst' {
                 if      `salign'==3 local xl = `x' - `xl0'
-                else if `salign'==9 local xl = `x' - `lxsize' - `xl0'
-                else                local xl = `x' - `lxsize'/2 - `xl0'
+                else if `salign'==9 local xl = `x' - `lxsize'/2 - `tf' - `xl0'
+                else                local xl = `x' - `tf' - `xl0'
             }
             else {
-                if      `salign'==3 local xl = `x' + `lxsize' + `xl0'
+                if      `salign'==3 local xl = `x' + `lxsize'/2 + `tf' + `xl0'
                 else if `salign'==9 local xl = `x' + `xl0'
-                else                local xl = `x' + `lxsize'/2 + `xl0'
+                else                local xl = `x' + `tf' + `xl0'
             }
         }
         else {
@@ -2435,7 +2437,7 @@ program _slegend
         frame post `SYM' (`x0') (`y0') (`lev')
         gettoken lbl labels : labels
         _glegend_post_lbl `LBL' 1 0 `lskip' `xl' `yl' `talign' `"`lbl'"'
-        if `overlay' local x = `x' + `offset' * `lxsize'
+        if `overlay' local x = `x' + `offset' * max(`lxsize', `wd')
     }
     // determine min and max
     if `tfirst' {
@@ -2499,8 +2501,8 @@ program _slegend
     }
     else local align align(center)
     c_local plot/*
-        */ (symbol `SYM' [iw=W], wmax(`wmax') size(`symsize') `align'/*
-        */ `symbl' `options')/*
+        */ (symbol `SYM' [iw=W], wmax(`wmax') size(1) shape(`SYMBOL')/*
+        */ `options')/*
         */ (label `LBL' L if !H, msize(0) vpos(P) `topts')/*
         */ (label `LBL' L if H,  msize(0) vpos(P) `hopts')
 end
@@ -2537,14 +2539,30 @@ program _slegend_parse_levels
     c_local labels `"`labels'"'
 end
 
-program _slegend_symsize
+program _slegend_symbol
+    gettoken SYMBOL  0 : 0
+    gettoken overlay 0 : 0
+    gettoken tfirst  0 : 0
     tempname SYM SHP
     qui geoframe symboli `SYM' `SHP' 0 0, `0'
     frame `SHP' {
+        // handle X
         su _X, meanonly
         c_local xsize = r(max) - r(min)
+        local tfpos = (r(max) - r(min))/2
+        if `overlay' mata: _slegend_symbol_update_tfpos(`tfirst', `tfpos')
+        c_local tfpos `tfpos'
+        qui replace _X = _X - (r(min) + r(max))/2 // center align
+        // handle Y
         su _Y, meanonly
         c_local ysize = r(max) - r(min)
+        if `overlay' qui replace _Y = _Y - r(min) // bottom align
+        else         qui replace _Y = _Y - (r(min) + r(max))/2 // center align
+        // fill in matrix
+        capt confirm variable _PLEVEL
+        if _rc==1 exit 1
+        if _rc mkmat _X _Y, matrix(`SYMBOL')
+        else   mkmat _X _Y _PLEVEL, matrix(`SYMBOL')
     }
 end
 
@@ -3353,6 +3371,24 @@ void _glegend_reverse(string scalar nm)
     tokenset(t, st_local(nm))
     S = tokengetall(t)
     st_local(nm, invtokens(S[length(S)..1]))
+}
+
+void _slegend_symbol_update_tfpos(real scalar tfirst, real scalar tfpos0)
+{   // check whether labels can be moved closes based on 45 degree rotation
+    real scalar tfpos
+    real matrix XY
+    
+    XY = st_data(.,"_X _Y")
+    XY = XY[,1] :- sum(minmax(XY[,1]))/2, XY[,2] :- sum(minmax(XY[,2]))/2
+    if (tfirst) {
+        _geo_rotate(XY, 45)
+        tfpos = -geo_rotate((minmax(XY[,1])',J(2,1,0)), 45)[1,2]
+    }
+    else {
+        _geo_rotate(XY, -45)
+        tfpos = geo_rotate((minmax(XY[,1])',J(2,1,0)), 45)[2,2]
+    }
+    if (tfpos<tfpos0) st_local("tfpos", strofreal(tfpos, "%18.0g"))
 }
 
 void _compass_store(real colvector X, real colvector Y, real colvector A)

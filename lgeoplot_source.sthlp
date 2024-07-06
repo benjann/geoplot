@@ -317,7 +317,7 @@ end
 
 *! {smcl}
 *! {marker geo_bshare}{bf:geo_bshare()}{asis}
-*! version 1.2.0  24jun2024  Ben Jann
+*! version 1.2.1  05jul2024  Ben Jann
 *!
 *! Algorithm to extract/identify shared borders between shape items; a shared
 *! border is defined as an identical sequence of vertices (apart from
@@ -424,7 +424,7 @@ struct `NBRDRS' { // collection of non-shared border infos
     }
     // collect polygons
     P = _geo_bshare_items(ID, PID, XY)
-    // tag points on common borders
+    // identify common borders
     i = length(P)
     if (!nodots) {
         displayas("txt")
@@ -756,6 +756,7 @@ void _geo_bshare(`Brdrs' B, `Item' pi, `Item' pj, `Int' id1, `Int' id2)
 {   // find match of point in XY; use the last match in case of ties
     `Int' j
     
+    if (!anyof(XY[J,1], xy[1])) return(0) // quick check in one dimension
     for (j=rows(J);j;j--) {
         if (xy==XY[J[j],]) return(J[j])
     }

@@ -1,5 +1,5 @@
 {smcl}
-{* 04jul2024}{...}
+{* 06jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -1794,12 +1794,12 @@ or
 
 {phang2}
     {opt over:lay}[{cmd:(}{it:offset}{cmd:)}] creates a legend with overlayed
-    symbols. Use optional argument {it:offset} to stagger the positions of the symbols,
-    where {it:offset} specifies the proportion
-    of width by which each symbol will be shifted.
+    symbols. Use optional argument {it:offset} to stagger the positions of the
+    symbols, where {it:offset} specifies the proportion of each symbol's width
+    that is used to shift the symbols.
 
 {phang2}
-    {opt tfl:oat} causes the horizontal positions of labels to be adaptive to the
+    {opt tfl:oat} makes the horizontal positions of labels dependent on the
     sizes of the symbols. The default is to align the labels at a fixed position.
 
 {phang2}

@@ -169,6 +169,15 @@ Inset.
 
 Main changes:
 
+    06jul2024
+    geoplot
+    - the placement of symbols and labels in slegend() could be off if option
+      angle() was applied to the symbol layer; this is fixed
+    - option tfloat in slegend() now moves the labels closer to the symbols if
+      feasible
+    mata library:
+    - geo_bshare() is now faster (typically by a factor of about 3-4)
+
     04jul2024
     geoplot
     - global option slegend() added
