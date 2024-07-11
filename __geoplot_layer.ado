@@ -1,4 +1,4 @@
-*! version 1.1.9  03jul2024  Ben Jann
+*! version 1.2.0  06jul2024  Ben Jann
 
 /*
     Syntax:
@@ -428,7 +428,7 @@ program __geoplot_layer
     }
     // prepare PLV
     if `hasPLV' {
-        if `"`ecolor'"'=="" local ecolor white // default for enclaves
+        if `"`ecolor'"'=="" local ecolor white%100 // default for enclaves
         mata: _get_colors("ecolor")
         qui replace PLV = 0 if PLV>=. `in' // treat missing as 0
         qui levelsof PLV `in'

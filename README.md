@@ -169,6 +169,15 @@ Inset.
 
 Main changes:
 
+    11jul2024
+    - suboption title() added to zoom()
+    - glegend() can now create legend keys with composite symbols from several
+      layers
+    - slegend(, overlay): a minimum vertical skip equal to lineskip() is now enforced
+      from one label to the next to prevent label overlap
+    - enclaves were not displayed in white if the main color option contained an
+      opacity operator; this is fixed
+
     06jul2024
     geoplot
     - the placement of symbols and labels in slegend() could be off if option

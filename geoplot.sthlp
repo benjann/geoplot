@@ -1,5 +1,5 @@
 {smcl}
-{* 06jul2024}{...}
+{* 11jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -1569,12 +1569,13 @@ or
 
 {marker project}{...}
 {phang}
-    {cmd:project}[{cmd:(}[{it:projection} [{it:args}]] [{cmd:,} {opt rad:ian}]{cmd:)}] applies the
-    specified projection, where {it:projection} and {it:args} are as described in
-    {helpb geoframe##project:geoframe project}. Original
-    coordinates are assumed to be in (unprojected) degrees; specify suboption {cmd:radian} if the
-    coordinates are in radians. If {cmd:project} is
-    specified without arguments, the {cmd:webmercator} projection is applied.
+    {cmd:project}[{cmd:(}[{it:projection} [{it:args}]] [{cmd:,} {opt rad:ian}]{cmd:)}]
+    applies the specified projection, where {it:projection} and {it:args} are
+    as described in {helpb geoframe##project:geoframe project}. Original
+    coordinates are assumed to represent latitude (Y) and longitude (X) in
+    degrees (typically WGS84); specify suboption {cmd:radian} if the
+    coordinates are in radians. If {cmd:project} is specified without
+    arguments, the {cmd:webmercator} projection is applied.
 
 {marker angle}{...}
 {phang}
@@ -1596,8 +1597,7 @@ or
     where {it:el} is one of
 
 {p2colset 17 26 28 2}{...}
-{p2col: {it:#}}include the legend keys of layer {it:#}; can specify
-    {it:{help numlist}} to select multiple layers
+{p2col: {it:#}}include the legend keys of layer {it:#}
     {p_end}
 {p2col: {cmd:.}}add a gap
     {p_end}
@@ -1608,7 +1608,8 @@ or
     {p_end}
 
 {pmore2}
-    {opt laye:rs()} can be used as a synonym for {cmd:layout()}.
+    Series of {it:#} elements can be specified using shorthand notation as described
+    in {it:{help numlist}}. {opt laye:rs()} can be used as a synonym for {cmd:layout()}.
 
 {phang2}
     {opt bot:tom} aligns the legend keys at the bottom (rightmost) if there are multiple
@@ -1660,8 +1661,7 @@ or
     where {it:el} is one of
 
 {p2colset 17 26 28 2}{...}
-{p2col: {it:#}}include the legend keys of layer {it:#}; can specify
-    {it:{help numlist}} to select multiple layers
+{p2col: {it:layers}}include the legend keys of the specified layers
     {p_end}
 {p2col: {cmd:.}}add a gap between layers
     {p_end}
@@ -1672,7 +1672,18 @@ or
     {p_end}
 
 {pmore2}
-    {opt laye:rs()} can be used as a synonym for {cmd:layout()}.
+    and {it:layers} is a single {it:#} to include the keys of layer {it:#}, a
+    {it:{help numlist}} to include the keys from multiple layers (one after
+    the other), or
+
+                {it:#1} {cmd:&} {it:#2} [ {cmd:&} {it:#3} ... ]
+
+{pmore2}
+    to include legend keys with composite symbols from two or more
+    layers (i.e., symbols from multiple layers printed on top of each
+    other; labels will be determined in such as way that for
+    each key the last non-empty label is printed). {opt laye:rs()}
+    can be used as a synonym for {cmd:layout()}.
 
 {phang2}
     {opt bot:tom} aligns the legend keys at the bottom if there are multiple
@@ -2054,6 +2065,17 @@ or
     ({it:x},{it:y}), or specify {cmd:se} to place the objects in south-east direction
     of ({it:x},{it:y}). Main arguments {it:offset} and {it:angle}, if specified, will
     be applied after {cmd:position()} has taken effect.
+
+{phang2}
+    {opt ti:tle(tinfo)} adds a title to the zoom, where {it:tinfo} is
+
+                {cmd:"}{it:text}{cmd:"} [{cmd:,} {it:suboptions} ]
+
+{pmore2}
+    {it:suboptions} are {opt bot:tom} to place the title at the bottom rather
+    than at the top, as well as rendering options {cmd:size()}, {cmd:color()},
+    {cmd:angle()}, {cmd:tstyle()}, {cmd:gap()}, and {cmd:position()} as described
+    for layertype {helpb geoplot##labels:label}.
 
 {phang2}
     {cmd:box}[{cmd:(}{it:which}{cmd:)}] displays the origin bounding box and

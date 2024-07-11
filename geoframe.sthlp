@@ -1,5 +1,5 @@
 {smcl}
-{* 02jul2024}{...}
+{* 11jul2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -899,8 +899,9 @@
     {browse "https://en.wikipedia.org/wiki/List_of_map_projections":en.wikipedia.org/wiki/List_of_map_projections}).
 
 {pstd}
-    The following projections are currently supported by {cmd:geoframe project}. Input coordinates are
-    assumed to be unprojected and in degrees; Y values outside +/- 90 will
+    The following projections are currently supported by {cmd:geoframe project}. Input
+    coordinates are assumed to represent latitude (Y) and
+    longitude (X) in degrees (typically WGS84); Y values outside +/- 90 will
     clipped before applying the projection (unless noted otherwise). The names
     of the projections can be abbreviated and typed in lower- or uppercase
     letters (if abbreviation is ambiguous, the first match in the list will be
