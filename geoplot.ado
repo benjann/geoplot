@@ -1,4 +1,4 @@
-*! version 1.2.3  10jul2024  Ben Jann
+*! version 1.2.3  13jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -247,11 +247,11 @@ program _geoplot, rclass
         
     // insets
         forv i = 1/`inset_n' {
-            // collect data from insets with option below
+            // collect data from inset with option below
             if `ins_`i'' {
                 mata: _inset_get("`insframe'", `ins_`i'_n0', `ins_`i'_n1')
             }
-            // process remaining insets
+            // process remaining inset
             else {
                 local n0 = _N
                 capt n _inset 0 `"`project2'"' `"`project_opts'"' `angle'/*
@@ -264,14 +264,18 @@ program _geoplot, rclass
                 }
                 local ins_`i'_n0 = `n0' + 1
                 local ins_`i'_n1 = _N
-                local p0 `p'
                 local plots `plots' `plot'
             }
             // set size and position of inset
-            mata: _inset(`ins_`i'_n0', `ins_`i'_n1',`ins_`i'_ti', `ins_`i'_s',/*
+            mata: _inset(`ins_`i'_n0', `ins_`i'_n1', `ins_`i'_s',/*
                 */ `ins_`i'_pos', strtoreal(tokens("`ins_`i'_mrg'")),/*
                 */ `ins_`i'_ym', `ins_`i'_xm', "`refdim'", `refsize',/*
                 */ `Ymin', `Ymax', `Xmin', `Xmax')
+            // add inset title(s)
+            if `"`ins_`i'_ti'"'!="" {
+                _inset_add_title `p' `ins_`i'_n0' `ins_`i'_n1' `ins_`i'_ti'
+                local plots `plots' `plot'
+            }
         }
         
     // scale bar
@@ -797,30 +801,34 @@ program _inset
     }
     local 0 , `lg_op'
     // options
-    syntax [, below nobox BOX2(str) TItle(str asis)/*
+    syntax [, below nobox BOX2(str)/*
         */ BACKground BACKground2(str) grid GRID2(str)/*
         */ NOPROJect PROJect PROJect2(str)/*
         */ ANGle(numlist max=1) rotate(numlist max=1)/*
         */ SIze(numlist max=1 >=0 missingok) Margin(str) POSition(str)/*
-        */ XMargin(numlist max=1 >=0 <=50) YMargin(numlist max=1 >=0 <=50) ]
+        */ XMargin(numlist max=1 >=0 <=50) YMargin(numlist max=1 >=0 <=50) * ]
     // exit if first try and not below
     if `BELOW' & "`below'"=="" {
         c_local ins_`inum' 0 // process inset later
         exit
     }
     // parse further options
-    _inset_parse_title `title'
+    _collect_repeated title `"`macval(options)'"' // title_n, title_1 ...
+    local TITLE
+    forv i = 1/`title_n' {
+        local TITLE `TITLE' `title_`i''
+    }
     if "`size'"=="" local size 30
     mata: _geo_parse_marginexp("margin", `"`margin'"', 0, "`box'"=="")
     if `"`position'"'=="" local position 0 // center
     else                  _parse_position `position'
-    if "`xmargin'"==""    local xmargin 0
+    if "`xmargin'"=="" {
+        if `title_n' local xmargin 3
+        else         local xmargin 0
+    }
     if "`ymargin'"=="" {
-        local ymargin 0
-        if `titl' & !inlist(`position',0,3,4) {
-            if    (`titl'==2 &  `position'>3 & `position'<9) | /*
-               */ (`titl'!=2 & (`position'>9 | `position'<3)) local ymargin 3
-        }
+        if `title_n' local ymargin 3
+        else         local ymargin 0
     }
     if "`angle'"=="" local angle `rotate'
     if "`angle'"=="" local angle `ANGLE'
@@ -884,14 +892,9 @@ program _inset
     // project and rotate
     qui _project `"`project2'"' `"`project_opts'"' "in `N1'/l"
     _rotate `angle' "in `N1'/l"
-    // add title
-    if `titl' {
-        _inset_title `p' `"`title'"' `"`ti_opts'"'
-        local plots `plots' `plot'
-    }
     // returns
     c_local ins_`inum' 1
-    c_local ins_`inum'_ti  `titl'
+    c_local ins_`inum'_ti  `"`TITLE'"'
     c_local ins_`inum'_s   `size'
     c_local ins_`inum'_pos `position'
     c_local ins_`inum'_mrg `margin'
@@ -899,33 +902,6 @@ program _inset
     c_local ins_`inum'_ym  `ymargin'
     c_local plot `plots'
     c_local p `p'
-end
-
-program _inset_parse_title
-    _parse comma ti 0 : 0
-    syntax [, BOTtom POSition(numlist max=1 int >=0 <=12) TSTYle(passthru) * ]
-    if `"`ti'"'=="" {
-        c_local titl 0
-        exit
-    }
-    local bottom = "`bottom'"!=""
-    if "`position'"=="" {
-        if `bottom' local position 6
-        else        local position 12
-    }
-    if `"`tstyle'"'=="" local tstyle tstyle(small_label)
-    c_local title `"`ti'"'
-    c_local titl = 1 + `bottom'
-    c_local ti_pos `position'
-    c_local ti_opts position(`position') `tstyle' `options'
-end
-
-program _inset_title
-    args p ti opts
-    _geoplot_labeli . `p' . . `"`ti'"', `opts'
-    local plots `plots' `plot'
-    c_local p `p'
-    c_local plot `plots'
 end
 
 program _inset_box
@@ -940,6 +916,31 @@ program _inset_box
     __geoplot_layer area . `p' `BOX'`0'
     c_local p `p'
     c_local plot `plot'
+end
+
+program _inset_add_title
+    gettoken p 0 : 0
+    gettoken a 0 : 0
+    gettoken b 0 : 0
+    su X in `a'/`b', meanonly
+    local X0 = r(min)
+    local X1 = r(max)
+    su Y in `a'/`b', meanonly
+    local Y0 = r(min)
+    local Y1 = r(max)
+    _collect_repeated title `"`macval(0)'"' // title_n, title_1 ...
+    local TITLE
+    forv i = 1/`title_n' { 
+        _parse_titleopt `i', `title_`i''
+        if `"`title_`i''"'=="" continue
+        _set_xy_from_pos Xti Yti `X0' `X1' `Y0' `Y1' `title_`i'_pos'
+        local TITLE `TITLE' text(`Yti' `Xti' `title_`i'', `title_`i'_opts')
+    }
+    if `"`TITLE'"'!="" {
+        _geoplot_scatteri . `p' . ., ms(i) `TITLE'
+    }
+    c_local plot `plot'
+    c_local p `p'
 end
 
 program _zoom
@@ -971,7 +972,7 @@ program _zoom
     local r = mod(`angle', 360) * _pi / 180
     if `"`args'"'!="" exit 198
     syntax [, ABSolute POSition(str) box BOX2(str) CIRcle CIRcle2(str)/*
-        */ PADding(real 0) NOCONnect CONnect CONnect2(str) TItle(str asis)/*
+        */ PADding(real 0) NOCONnect CONnect CONnect2(str)/*
         */ LPattern(passthru) LWidth(passthru) LColor(passthru)/*
         */ LAlign(passthru) LSTYle(passthru) PSTYle(passthru) * ]
     if `"`connect2'"'!="" local connect connect
@@ -984,7 +985,10 @@ program _zoom
     _zoom_parse_box, `box2' `circle2'
     if "`box_none'"!="" & "`connect'"=="" local noconnect noconnect
     _zoom_parse_positition `position' //=> pos_x, pos_y, pos_clock
-    _inset_parse_title `title' //=> title, titl, ti_pos, ti_opts
+    _collect_repeated title `"`macval(options)'"' // title_n, title_1 ...
+    forv i = 1/`title_n' { 
+        _parse_titleopt `i', `title_`i''
+    }   //=> title_`i', title_`i'_pos, title_`i'_opts
     // mark sample
     tempvar touse
     gen byte `touse' = 0
@@ -1070,6 +1074,10 @@ program _zoom
     if "`circle'"!="" {
         local s = `R' * (1 + `padding'/100)
         local S = `s' * `scale'
+        local XMIN = `XMID' - `S'
+        local XMAX = `XMID' + `S'
+        local YMIN = `YMID' - `S'
+        local YMAX = `YMID' + `S'
         if "`box_none'"=="" {
             if "`box_destination'`box_origin'"=="" {
                 local box_destination box_destination
@@ -1148,18 +1156,17 @@ program _zoom
         }
     }
     // plot title
-    if `titl' {
-        if "`circle'"!="" {
-            if `titl'==2 local YTI = `YMID' - `S'
-            else         local YTI = `YMID' + `S'
-        }
-        else {
-            if `titl'==2 local YTI `YMIN'
-            else         local YTI `YMAX'
-        }
-        _geoplot_labeli . `p' `XMID' `YTI' `"`title'"', `ti_opts'
+    local TITLE
+    forv i = 1/`title_n' {
+        if `"`title_`i''"'=="" continue
+        _set_xy_from_pos Xti Yti `XMIN' `XMAX' `YMIN' `YMAX' `title_`i'_pos'
+        local TITLE `TITLE' text(`Yti' `Xti' `title_`i'', `title_`i'_opts')
+    }
+    if `"`TITLE'"'!="" {
+        _geoplot_scatteri . `p' . ., ms(i) `TITLE'
         local plots `plots' `plot'
     }
+    // return
     c_local plot `plots'
     c_local p `p'
 end
@@ -1179,7 +1186,7 @@ program _zoom_parse_positition
     if `:list sizeof xy'==0 exit
     numlist `"`x' `y'"', min(2) max(2)
     if `"`position'"'=="" local position 0
-    _parse_position `position'
+    else                  _parse_position `position'
     c_local pos_x `x'
     c_local pos_y `y'
     c_local pos_clock `position'
@@ -1902,9 +1909,8 @@ program _Legend
         syntax [, glegend2(str asis) PCYCle(numlist int max=1 >0) ]
         local 0 `", `glegend2'"'
         if "`pcycle'"=="" local pcycle 15
-        local lhs 
+        local lhs
         local opts Layout(str asis) LAYErs(str asis) BOTtom SYMScale(real .8)
-        local star
     }
     else {
         syntax [, slegend(str asis) ]
@@ -1912,7 +1918,6 @@ program _Legend
         local lhs anything(id="{it:numlist}")
         local opts Layer(numlist int max=1 >0) OVERlay OVERLay2(numlist max=1)/*
             */ SAlign(str) TFLoat Format(str) HEADing(str asis)
-        local star *
     }
     syntax `lhs'[, `opts' REVerse/*
         */ SYMYsize(numlist max=1) SYMXsize(numlist max=1) /* 
@@ -1921,9 +1926,15 @@ program _Legend
         */ TSIze(str) TCOLor(str asis) tgap(str) TANGle(str)/*
         */ HEADSKip(numlist max=2) nospan HAlign(str)/*
         */ HSIze(str) HCOLor(str asis) hgap(str) HANGle(str)/*
-        */ box BOX2(passthru) TItle(passthru) Margin(passthru) POSition(str)/*
-        */ XMargin(passthru) YMargin(passthru) `star' ]
+        */ box BOX2(passthru) Margin(passthru) POSition(str)/*
+        */ XMargin(passthru) YMargin(passthru) * ]
+    _collect_repeated title `"`macval(options)'"' // title_n, title_1 ...
+    local TITLE
+    forv i = 1/`title_n' {
+        local TITLE `TITLE' `title_`i''
+    }
     if "`ltype'"=="glegend" {
+        
         if "`symysize'"==""   local symysize  3
         if "`symxsize'"==""   local symxsize  3
         if "`rowgap'"==""     local rowgap    0
@@ -1995,13 +2006,18 @@ program _Legend
         exit
     }
     local n0 = _N + 1
-    _inset 0 "" "" 0 1 0 "", inset(`plot', size(.) `box'`box2' `title'/*
+    _inset 0 "" "" 0 1 0 "", inset(`plot', size(.) `box'`box2' `TITLE'/*
         */ `margin' `position' `xmargin' `ymargin')
-    c_local plot `plot'
+    local plots `plot'
     local n1 = _N
-    mata: _inset(`n0', `n1', `ins_1_ti', `ins_1_s', `ins_1_pos',/*
+    mata: _inset(`n0', `n1', `ins_1_s', `ins_1_pos',/*
         */ strtoreal(tokens("`ins_1_mrg'")), `ins_1_ym', `ins_1_xm',/*
         */ "`refdim'", `refsize', `Ymin', `Ymax', `Xmin', `Xmax')
+    if `"`ins_1_ti'"'!="" {
+        _inset_add_title 0 `n0' `n1' `ins_1_ti'
+        local plots `plots' `plot'
+    }
+    c_local plot `plots'
 end
 
 program _glegend
@@ -2694,7 +2710,7 @@ program _scalebar
     syntax anything [,/*
         */ Length(numlist max=1 >0) Scale(numlist max=1 >0)/*
         */ n(numlist max=1 int >0) even/*
-        */ Units(str) NOLABels LABels(str) TItle(str)/*
+        */ Units(str) NOLABels LABels(str)/*
         */ Color(passthru) FIntensity(passthru) LWidth(passthru) /*
         */ Height(numlist max=1 >=0 <=100) POSition(str)/*
         */ XMargin(numlist max=1 >=0 <=50)/*
@@ -2704,10 +2720,13 @@ program _scalebar
     gettoken Ymax    anything : anything // (includes margin)
     gettoken Xmin    anything : anything // (includes margin)
     gettoken Xmax    anything : anything // (includes margin)
+    _collect_repeated title `"`macval(options)'"' // title_n, title_1 ...
+    forv i = 1/`title_n' { 
+        _parse_titleopt `i', `title_`i''
+    }   //=> title_`i', title_`i'_pos, title_`i'_opts
     if `"`scale'"'=="" local scale 1000
     if "`n'"=="" local n 5
     _parse_scalerbar_labels, `labels'
-    _parse_scalerbar_title `title'
     if `"`color'"'==""       local color color(black)
     if `"`fintensity'"'==""  local fintensity finten(100)
     if `"`lwidth'"'==""      local lwidth lwidth(.15)
@@ -2803,16 +2822,12 @@ program _scalebar
     }
     else local LABEL
     // title
-    if `"`title'"'!="" {
-        if `ti_below' local Ylab `Y0'
-        else          local Ylab `Y1'
-        local x1 = (`X0' + `X1') / 2
-        local TITLE `Ylab' `x1' `"`title'"'
-        if `ti_below' local ti_opts place(s) `ti_opts'
-        else          local ti_opts place(n) `ti_opts'
-        local TITLE text(`TITLE', `ti_opts')
+    local TITLE
+    forv i = 1/`title_n' {
+        if `"`title_`i''"'=="" continue
+        _set_xy_from_pos Xti Yti `X0' `X1' `Y0' `Y1' `title_`i'_pos'
+        local TITLE `TITLE' text(`Yti' `Xti' `title_`i'', `title_`i'_opts')
     }
-    else local TITLE
     // plot for overall bar
     local plot (area Y X in `a'/`b', `LABEL' `TITLE' `options')
     // add stripes
@@ -2847,18 +2862,6 @@ program _parse_scalerbar_labels
     c_local lab_above = "`above'"!=""
     c_local lab_format `"`format'"'
     c_local lab_opts `options'
-end
-
-program _parse_scalerbar_title
-    _parse comma title 0 : 0
-    syntax [, Below SIze(passthru) Margin(passthru) * ]
-    if `"`size'"'==""   local size size(vsmall) 
-    local options `size' `options'
-    if `"`margin'"'=="" local margin margin(vsmall)
-    local options `margin' `options'
-    c_local title `"`title'"'
-    c_local ti_below = "`below'"!=""
-    c_local ti_opts `options'
 end
 
 program _compass
@@ -3023,16 +3026,59 @@ program _parse_compass_labels
     c_local lab_opts  `size' `options'
 end
 
+program _parse_titleopt
+    gettoken i 0 : 0, parse(" ,")
+    syntax [, TItle(str asis) ]
+    _parse comma title 0 : title
+    // clear title if options only
+    if `"`title'"'=="" {
+        c_local title_`i' ""
+        exit
+    }
+    // add quotes if needed
+    _add_quotes title `title'
+    // parse options
+    syntax [, Below POSition(str) SIze(passthru) PLACEment(passthru)/*
+        */ Justification(passthru) Margin(passthru) box/*
+        */ Color(str asis) BColor(str asis) FColor(str asis) LColor(str asis)/*
+        */ * ]
+    if `"`position'"'!=""      _parse_position `position'
+    else if "`below'"!=""      local position 6
+    else                       local position 12
+    if `"`placement'"'==""     _set_placement_from_pos `position'
+    if `"`justification'"'=="" _set_justification_from_pos `position'
+    if `"`margin'"'=="" {
+        if "`box'"!=""         local margin margin(vsmall)
+        else                   _set_margin_from_pos `position'
+    }
+    if `"`size'"'==""          local size size(small) 
+    local options `box' `options'
+    local options `margin' `options'
+    local options `justification' `options'
+    local options `size' `placement' `options'
+    foreach copt in color bcolor fcolor lcolor {
+        if `"``copt''"'=="" continue
+        mata: _get_colors("`copt'")
+        local options `copt'(``copt'') `options'
+    }
+    c_local title_`i' `"`title'"'
+    c_local title_`i'_pos `position'
+    c_local title_`i'_opts `options'
+end
+
 program _parse_position
     capt confirm number `0'
     if _rc==1 exit 1
     if _rc==0 {
         capt numlist `"`0'"', int max(1) range(>=0 <=12)
         if _rc==1 exit 1
-        if _rc==0 exit // position is valid clockpos
+        if _rc==0 {
+            c_local position `r(numlist)'
+            exit // position is valid clockpos
+        }
     }
     local l = strlen(`"`0'"')
-    if      `"`0'"'==substr("north", 1, `l')        local 0 12
+    if      `"`0'"'==substr("north", 1, `l')        local 0 12 // default
     else if `"`0'"'==substr("top", 1, `l')          local 0 12
     else if `"`0'"'==substr("neast", 1, max(2,`l')) local 0 1 // or 2
     else if `"`0'"'==substr("east", 1, `l')         local 0 3
@@ -3043,13 +3089,83 @@ program _parse_position
     else if `"`0'"'==substr("swest", 1, max(2,`l')) local 0 7 // or 8
     else if `"`0'"'==substr("west", 1, `l')         local 0 9
     else if `"`0'"'==substr("left", 1, `l')         local 0 9
-    else if `"`0'"'==substr("nwest", 1, max(2,`l')) local 0 11 // 10
+    else if `"`0'"'==substr("nwest", 1, max(2,`l')) local 0 11 // or 10
     else if `"`0'"'==substr("center", 1, `l')       local 0 0
     else {
         di as err "invalid syntax in position()"
         exit 198
     }
     c_local position `0'
+end
+
+program _set_xy_from_pos
+    args xnm ynm xmin xmax ymin ymax pos
+    if      inlist(`pos',1,2,3,4,5)    local x = `xmax'
+    else if inlist(`pos',7,8,9,10,11)  local x = `xmin'
+    else                               local x = (`xmin' + `xmax') / 2
+    if      inlist(`pos',1,2,10,11,12) local y = `ymax'
+    else if inlist(`pos',4,5,6,7,8)    local y = `ymin'
+    else                               local y = (`ymin' + `ymax') / 2
+    c_local `xnm' `x'
+    c_local `ynm' `y'
+end
+
+program _set_placement_from_pos
+    if      `0'==2  c_local placement placement(4)
+    else if `0'==4  c_local placement placement(2)
+    else if `0'==5  c_local placement placement(7)
+    else if `0'==7  c_local placement placement(5)
+    else if `0'==8  c_local placement placement(10)
+    else if `0'==10 c_local placement placement(8)
+    else if `0'==11 c_local placement placement(1)
+    else if `0'==1  c_local placement placement(11)
+    else            c_local placement placement(`0') // 0 12 3 6 9
+end
+
+program _set_justification_from_pos
+    if      inlist(`0',1,5,8,9,10) c_local justification justification(right)
+    else if inlist(`0',2,3,4,7,11) c_local justification justification(left)
+    else                           c_local justification // 0 6 12
+end
+
+program _set_margin_from_pos
+    local vsmall .6944
+    if      inlist(`0',11,12,1) c_local margin margin(b=`vsmall')
+    else if inlist(`0',2,3,4)   c_local margin margin(l=`vsmall')
+    else if inlist(`0',5,6,7)   c_local margin margin(t=`vsmall')
+    else if inlist(`0',8,9,10)  c_local margin margin(r=`vsmall')
+    else                        c_local margin // 0
+end
+
+program _add_quotes
+    gettoken nm 0 : 0
+    __add_quotes `0'
+    c_local `nm' `"`0'"'
+end
+
+program __add_quotes
+    // if first token unquoted: scan for quotes in rest
+    gettoken tok rest : 0, qed(hasquotes)
+    if !`hasquotes' { 
+        while (`"`rest'"'!="") {
+            gettoken tok rest : rest, qed(hasquotes)
+            if `hasquotes' continue, break
+        }
+    }
+    // no token quoted: enclose entire string in quotes
+    if !`hasquotes' {
+        c_local 0 `"`"`0'"'"'
+        exit
+    }
+    // at least one token quoted; add quotes to all tokens
+    local 1
+    local space
+    while (`"`0'"'!="") {
+        gettoken tok 0 : 0
+        local 1 `"`1'`space'`"`tok'"'"'
+        local space " "
+    }
+    c_local 0 `"`1'"'
 end
 
 program _geoplot_area
@@ -3295,6 +3411,18 @@ version 16.1
 mata:
 mata set matastrict on
 
+void _get_colors(string scalar lname)
+{   /* function assumes that global ColrSpace object "_GEOPLOT_ColrSpace_S"
+       exists; maintaining a global is less work than initializing ColrSpace
+       in each call */
+    pointer (class ColrSpace scalar) scalar S
+    
+    S = findexternal("_GEOPLOT_ColrSpace_S")
+    //if ((S = findexternal("_GEOPLOT_ColrSpace_S"))==NULL) S = &(ColrSpace())
+    S->colors(st_local(lname))
+    st_local(lname, S->colors())
+}
+
 void _st_welzl()
 {
     real rowvector C
@@ -3404,7 +3532,7 @@ void _inset_get(string scalar frame, real scalar a, real scalar b)
     }
 }
 
-void _inset(real scalar a, real scalar b, real scalar ti, real scalar s,
+void _inset(real scalar a, real scalar b, real scalar s,
     real scalar pos, real rowvector mrg, real scalar ym, real scalar xm,
     string scalar refdim, real scalar refsize, real scalar Ymin,
     real scalar Ymax, real scalar Xmin, real scalar Xmax) // arguments assumed fleeting
@@ -3429,8 +3557,6 @@ void _inset(real scalar a, real scalar b, real scalar ti, real scalar s,
         (xminmax[1], yminmax[2]) \
         (xminmax[1], yminmax[1]) \
         (xminmax[2], yminmax[1]))
-    // position of title
-    if (ti) st_store(b, ("X","Y"), (sum(xminmax)/2, yminmax[3-ti]))
     // get data of inset
     if (_st_varindex("Y2")<.) st_view(Y=., (a,b), "Y Y2")
     else                      st_view(Y=., (a,b), "Y")

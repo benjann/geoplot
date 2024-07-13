@@ -1957,10 +1957,13 @@ or
     this to denote units, e.g., {cmd:units(km)}.
 
 {phang2}
-    {cmdab:ti:tle(}{it:text}[{cmd:,} {it:options}]{cmd:)} adds a title above the
-    scale bar. {it:options} are {it:{help textbox_options}} such as {cmd:color()}
-    or {cmd:size()} (defaults are {cmd:color(black)} and {cmd:size(vsmall)}), and
-    {opt b:elow} to place the title below the scale bar (rather than above).
+    {cmdab:ti:tle(}{cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} ...][{cmd:,} {it:suboptions}]{cmd:)}
+    adds a title to the scale bar. Multiple lines are created if multiple
+    {cmd:"}{it:text}{cmd:"} elements are specified. {it:suboptions} are
+    {opth pos:ition(compassdirstyle)} to set the position
+    of the title (default is at the top) as well as {it:{help textbox_options}} such
+    as {cmd:color()} or {cmd:size()} to affect the rendering of the title. Option
+    {cmd:title()} can be repeated to create multiple titles.
 
 {phang2}
     {opth pos:ition(compassdirstyle)} overrides the default location
@@ -2067,15 +2070,13 @@ or
     be applied after {cmd:position()} has taken effect.
 
 {phang2}
-    {opt ti:tle(tinfo)} adds a title to the zoom, where {it:tinfo} is
-
-                {cmd:"}{it:text}{cmd:"} [{cmd:,} {it:suboptions} ]
-
-{pmore2}
-    {it:suboptions} are {opt bot:tom} to place the title at the bottom rather
-    than at the top, as well as rendering options {cmd:size()}, {cmd:color()},
-    {cmd:angle()}, {cmd:tstyle()}, {cmd:gap()}, and {cmd:position()} as described
-    for layertype {helpb geoplot##labels:label}.
+    {cmdab:ti:tle(}{cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} ...][{cmd:,} {it:suboptions}]{cmd:)}
+    adds a title to the zoom. Multiple lines are created if multiple
+    {cmd:"}{it:text}{cmd:"} elements are specified. {it:suboptions} are
+    {opth pos:ition(compassdirstyle)} to set the position
+    of the title (default is at the top) as well as {it:{help textbox_options}} such
+    as {cmd:color()} or {cmd:size()} to affect the rendering of the title. Option
+    {cmd:title()} can be repeated to create multiple titles.
 
 {phang2}
     {cmd:box}[{cmd:(}{it:which}{cmd:)}] displays the origin bounding box and
@@ -2162,15 +2163,13 @@ or
     inset on top.
 
 {phang2}
-    {opt ti:tle(tinfo)} adds a title to the inset, where {it:tinfo} is
-
-                {cmd:"}{it:text}{cmd:"} [{cmd:,} {it:suboptions} ]
-
-{pmore2}
-    {it:suboptions} are {opt bot:tom} to place the title at the bottom rather
-    than at the top, as well as rendering options {cmd:size()}, {cmd:color()},
-    {cmd:angle()}, {cmd:tstyle()}, {cmd:gap()}, and {cmd:position()} as described
-    for layertype {helpb geoplot##labels:label}.
+    {cmdab:ti:tle(}{cmd:"}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} ...][{cmd:,} {it:suboptions}]{cmd:)}
+    adds a title to the inset. Multiple lines are created if multiple
+    {cmd:"}{it:text}{cmd:"} elements are specified. {it:suboptions} are
+    {opth pos:ition(compassdirstyle)} to set the position
+    of the title (default is at the top) as well as {it:{help textbox_options}} such
+    as {cmd:color()} or {cmd:size()} to affect the rendering of the title. Option
+    {cmd:title()} can be repeated to create multiple titles.
 
 {phang2}
     {opth box(area_options)} affects the rendering of frame around the
@@ -2205,8 +2204,8 @@ or
     {opt xm:argin(#)} and {opt ym:argin(#)} specify how much the
     inset will be moved away from the edge of the plotregion, in percent
     of the map's {help geoplot##refdim:reference size}. The default
-    for {cmd:xmargin()} is {cmd:0}; for {cmd:ymargin()} the default
-    depends on context.
+    for is {cmd:xmargin(0)} and {cmd:ymargin(0)} unless {cmd:title()} is specified,
+    in which case the default is {cmd:xmargin(3)} and {cmd:ymargin(3)}.
 
 {phang2}
     {cmdab:back:ground}[{cmd:(}{it:options}{cmd:)}] adds a background to the

@@ -1,4 +1,4 @@
-*! version 1.2.0  06jul2024  Ben Jann
+*! version 1.2.1  13jul2024  Ben Jann
 
 /*
     Syntax:
@@ -1358,48 +1358,16 @@ void _generate_mlabels(string scalar var, string scalar VAR, string scalar fmt,
     st_sstore(., var, touse, L)
 }
 
-void _get_colors(string scalar lname, | string scalar lname2)
+void _get_colors(string scalar lname)
 {   /* function assumes that global ColrSpace object "_GEOPLOT_ColrSpace_S"
        exists; maintaining a global is less work than initializing ColrSpace
        in each call */
     pointer (class ColrSpace scalar) scalar S
     
-    if (args()<2) lname2 = lname
     S = findexternal("_GEOPLOT_ColrSpace_S")
     //if ((S = findexternal("_GEOPLOT_ColrSpace_S"))==NULL) S = &(ColrSpace())
-    S->colors(st_local(lname2))
+    S->colors(st_local(lname))
     st_local(lname, S->colors())
-}
-
-void _parse_colorspec(string scalar lname)
-{
-    real scalar      l
-    string rowvector c
-    
-    c = tokens(st_local(lname))
-    if (length(c)!=1) return
-    if (anyof(("none", ".", "bg", "fg", "background", "foreground"), c)) {
-        st_local("color_is_kw","1")
-        return
-    }
-    if (substr(c,1,1)=="%") {
-        l = strpos(c,"*")
-        if (l) {
-            st_local("color_is_op", substr(c,2,l-2))
-            st_local("color_is_in", substr(c,l+1,.))
-        }
-        else st_local("color_is_op", substr(c,2,.))
-        return
-    }
-    if (substr(c,1,1)=="*") {
-        l = strpos(c,"%")
-        if (l) {
-            st_local("color_is_in", substr(c,2,l-2))
-            st_local("color_is_op", substr(c,l+1,.))
-        }
-        else st_local("color_is_in", substr(c,2,.))
-        return
-    }
 }
 
 void  _get_lbl(string scalar key, string scalar keys, string scalar lbls,

@@ -1,4 +1,4 @@
-*! version 1.2.4  04jul2024  Ben Jann
+*! version 1.2.5  11jul2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -3836,7 +3836,7 @@ program _translate_save
     // display geoframe create message (add quotes if needed)
     local 0 `"`"`0'"'"'
     local 0: list clean 0
-    di as txt `"(type {bf:{stata geoframe create `0'}}"'/*
+    di as txt `"(type {bf:{stata geoframe create `target'}}"'/*
         */ " to load the data)"
 end
 
@@ -4853,19 +4853,21 @@ void _translate_zipname(string scalar fn)
 }
 
 void _translate_zip_cleanup(string scalar PATH)
-{   // use with extreme care; can potentially wipe disk 
+{   // use with extreme care; recursively deletes a directory
     real scalar   rc
     string scalar path, folder
     
-    if      (!pathisabs(PATH)) rc = 1
-    else if (!direxists(PATH)) rc = 1
+    if      (!pathisabs(PATH)) rc =  1
+    else if (!direxists(PATH)) rc = -1
     else {
         path = folder = ""
         pathsplit(PATH, path, folder)
         if (path!=st_global("c(tmpdir)")) rc = 1
-        else rc = path_remove(PATH) // undocumented Mata function
+        else rc = _stata("__rm_dir " + "`" + `"""' + PATH + `"""' + "'" +
+            ", force",1) // undocumented command to delete folder recursively
+            // returns -1 if the folder does not exist
     }
-    if (rc) errprintf("could not remove temporary folder '%s'\n", PATH)
+    if (rc>0) errprintf("could not remove temporary folder '%s'\n", PATH)
 }
 
 void _translate_findsource(string scalar nm, string scalar subcmd,

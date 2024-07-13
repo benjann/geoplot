@@ -169,6 +169,18 @@ Inset.
 
 Main changes:
 
+    13jul2024
+    geoplot:
+    - option title() in inset(), zoom(), glegend(), slegend(), and sbar() can
+      now be repeated to create multiple titles; furthermore, title() now
+      supports multiline specifications, has a position() suboption for flexible
+      positioning, and supports textbox rendering options
+    geoframe:
+    - now using command __rm_dir rather than mata function path_remove() to delete
+      tempdir when translating/importing shapes from zipfile
+    - geoframe translate/convert without option -toframe- displayed an invalid
+      geoframe create message; this is fixed
+
     11jul2024
     - suboption title() added to zoom()
     - glegend() can now create legend keys with composite symbols from several
