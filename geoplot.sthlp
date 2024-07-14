@@ -1,5 +1,5 @@
 {smcl}
-{* 11jul2024}{...}
+{* 14jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -1962,7 +1962,9 @@ or
     {cmd:"}{it:text}{cmd:"} elements are specified. {it:suboptions} are
     {opth pos:ition(compassdirstyle)} to set the position
     of the title (default is at the top) as well as {it:{help textbox_options}} such
-    as {cmd:color()} or {cmd:size()} to affect the rendering of the title. Option
+    as {cmd:color()} or {cmd:size()} to affect the rendering of the title; color
+    options support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}. Option
     {cmd:title()} can be repeated to create multiple titles.
 
 {phang2}
@@ -2054,9 +2056,20 @@ or
     in northward direction. {it:options} are as follows.
 
 {phang2}
-    {opt abs:olute} specifies that {it:offset} is in absolute units of the map. The default
-    is to interpret {it:offset} as a percentage of the radius (half-diagonal) of the bounding box
-    (or enclosing circle) of the objects (including padding).
+    {opt ot:ype(type)} sets the scaling of the {it:offset} argument, where
+    {it:type} may be one of the following.
+
+{p2colset 13 23 25 2}{...}
+{p2col:{cmdab:z:oom}}{it:offset} is in percent of the radius (half-diagonal)
+    of the zoom's bounding box (or minimum enclosing circle), including padding
+    and magnification; this is the default
+    {p_end}
+{p2col:{cmdab:m:ap}}{it:offset} is in percent of the map's
+    {help geoplot##refdim:reference size}, before processing any {cmd:zoom()} option and
+    before processing {helpb geoplot##margin:margin()}
+    {p_end}
+{p2col:{opt a:bsolute}}{it:offset} is in absolute units of the map
+    {p_end}
 
 {phang2}
     {cmdab:pos:ition(}{it:x} {it:y} [{it:{help compassdirstyle}}]{cmd:)} moves
@@ -2075,7 +2088,9 @@ or
     {cmd:"}{it:text}{cmd:"} elements are specified. {it:suboptions} are
     {opth pos:ition(compassdirstyle)} to set the position
     of the title (default is at the top) as well as {it:{help textbox_options}} such
-    as {cmd:color()} or {cmd:size()} to affect the rendering of the title. Option
+    as {cmd:color()} or {cmd:size()} to affect the rendering of the title; color
+    options support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}. Option
     {cmd:title()} can be repeated to create multiple titles.
 
 {phang2}
@@ -2168,7 +2183,9 @@ or
     {cmd:"}{it:text}{cmd:"} elements are specified. {it:suboptions} are
     {opth pos:ition(compassdirstyle)} to set the position
     of the title (default is at the top) as well as {it:{help textbox_options}} such
-    as {cmd:color()} or {cmd:size()} to affect the rendering of the title. Option
+    as {cmd:color()} or {cmd:size()} to affect the rendering of the title; color
+    options support {it:colorspec} as described in
+    {helpb colorpalette##colorlist:colorpalette}. Option
     {cmd:title()} can be repeated to create multiple titles.
 
 {phang2}

@@ -169,6 +169,12 @@ Inset.
 
 Main changes:
 
+    14jul2024
+    geoplot
+    - zoom() now has option otype() to set the scaling if the offset; option absolute
+      now undocumented
+    - option box in zoom() returned error in some situations; this is fixed
+
     13jul2024
     geoplot:
     - option title() in inset(), zoom(), glegend(), slegend(), and sbar() can

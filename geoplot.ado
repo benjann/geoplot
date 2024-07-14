@@ -1,4 +1,4 @@
-*! version 1.2.3  13jul2024  Ben Jann
+*! version 1.2.4  14jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -222,8 +222,9 @@ program _geoplot, rclass
         capt drop cY cX
         
     // zoom
+        local N1 = _N
         forv i = 1/`zoom_n' {
-            capt n _zoom `p' `layer_n', `zoom_`i'' // plot, p
+            capt n _zoom `N1' "`refdim'" `p' `layer_n', `zoom_`i'' // plot, p
             if _rc==1 exit 1
             if _rc {
                 di as err "error in zoom()"
@@ -944,7 +945,9 @@ program _inset_add_title
 end
 
 program _zoom
-    gettoken p 0 : 0
+    gettoken n      0 : 0
+    gettoken refdim 0 : 0
+    gettoken p      0 : 0
     _parse comma LAYERS 0 : 0
     syntax [, zoom(str) ]
     if `"`zoom'"'=="" exit // zoom() specified, but empty
@@ -971,10 +974,13 @@ program _zoom
     if "`angle'"==""  local angle 0
     local r = mod(`angle', 360) * _pi / 180
     if `"`args'"'!="" exit 198
-    syntax [, ABSolute POSition(str) box BOX2(str) CIRcle CIRcle2(str)/*
+    syntax [, OType(str) ABSolute/*
+        */ POSition(str) box BOX2(str) CIRcle CIRcle2(str)/*
         */ PADding(real 0) NOCONnect CONnect CONnect2(str)/*
         */ LPattern(passthru) LWidth(passthru) LColor(passthru)/*
         */ LAlign(passthru) LSTYle(passthru) PSTYle(passthru) * ]
+    if `"`otype'"'=="" local otype `absolute'
+    _zoom_parse_otype, `otype'
     if `"`connect2'"'!="" local connect connect
     if `"`circle2'"'!=""  local circle circle
     if `"`box2'"'!=""     local box box
@@ -1011,9 +1017,27 @@ program _zoom
         local Ymid = (`Ymin' + `Ymax') / 2
         local R = sqrt((`Xmax'-`Xmid')^2 + (`Ymax'-`Ymid')^2) // half diagonal
     }
-    // compute offset (if necessary) as a percentage of the diameter
-    if "`absolute'"=="" local offset =/*
-        */ `offset'/100 * `R' * `scale' * (1 + `padding'/100)
+    // set size if offset (if necessary)
+    if  "`otype'"=="map" {
+        if "`refdim'"=="x" {
+            su X in 1/`n', meanonly
+            local refsize = r(max) - r(min)
+        }
+        else if "`refdim'"=="y" {
+            su Y in 1/`n', meanonly
+            local refsize = r(max) - r(min)
+        }
+        else {
+            su X in 1/`n', meanonly
+            local refsize = r(max) - r(min)
+            su Y in 1/`n', meanonly
+            if (r(max) - r(min)) < `refsize' local refsize = r(max) - r(min)
+        }
+        local offset = `offset'/100 * `refsize'
+    }
+    else if "`otype'"=="zoom" {
+        local offset = `offset'/100 * `R' * `scale' * (1 + `padding'/100)
+    }
     // new midpoint
     if ("`pos_x'"!="") {
         if "`circle'"!="" {
@@ -1169,6 +1193,18 @@ program _zoom
     // return
     c_local plot `plots'
     c_local p `p'
+end
+
+program _zoom_parse_otype
+    syntax [, Zoom Map Absolute ]
+    local otype `zoom' `map' `absolute'
+    if `: list sizeof otype'>1 {
+        di as err "otype(): only one of {bf:zoom}, {bf:map},"/*
+            */ " and {bf:absolute} allowed"
+        exit 198
+    }
+    if "`otype'"=="" local otype zoom
+    c_local otype `otype'
 end
 
 program _zoom_parse_box
@@ -3468,7 +3504,8 @@ void _zoom_boxconnect(real scalar all,
         YX = geo_rotate(YX, 90)
     }
     P = (P :+ (YMIN, YMAX))[,(2,1)] // flip
-    st_local("XY", invtokens(strofreal(vec(P')', "%18.0g")))
+    if (rows(P)) st_local("XY", invtokens(strofreal(vec(P')', "%18.0g")))
+    else         st_local("XY", "")
 }
 
 real matrix __zoom_boxconnect(real scalar all, real scalar i, real matrix yx,
