@@ -385,6 +385,9 @@ program __geoplot_layer
         // inject colors
         _process_coloropts options, `lcolor' `options'
         if `"`fcolor'"'!="" local fcolor fcolor(`fcolor')
+        if `"`gloptions'"'!="" {
+            _process_coloropts gloptions, `gloptions'
+        }
     }
     // copy relevant variables from unit frame into shpframe
     if `hasSHP' {
@@ -943,6 +946,9 @@ program _z_parse_missing
         }
     }
     local options color(`color') `options'
+    if `"`gloptions'"'!="" {
+        _process_coloropts gloptions, `gloptions'
+    }
     c_local missing `options'
     c_local missing_color `"`color'"'
     c_local missing_lab   `"`label'"'
