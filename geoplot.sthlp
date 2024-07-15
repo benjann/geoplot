@@ -1,5 +1,5 @@
 {smcl}
-{* 14jul2024}{...}
+{* 15jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -144,7 +144,10 @@ or
 {p2coldent:* {helpb geoplot##label:{ul:lab}el({it:spec})}}set labels of legend
     keys and related settings
     {p_end}
-{synopt :{helpb geoplot##nolegend:nolegend}}do not consider the layer for the default
+{p2coldent:* {helpb geoplot##gloptions:{ul:gl}options({it:options})}}override options
+    for the symbols created by {helpb geoplot##glegend:glegend()}
+    {p_end}
+{p2coldent:* {helpb geoplot##nolegend:nolegend}}do not consider the layer for the default
     legend
     {p_end}
 
@@ -155,7 +158,7 @@ or
 {synoptline}
 {p 4 6 2}
     * These options are also effective if {help geoplot##zvar:{it:zvar}} is not
-    specified, albeit with different interpretation and syntax. See the
+    specified, possibly with different interpretation and syntax. See the
     descriptions of the options below.
 
 
@@ -1367,8 +1370,7 @@ or
 
 {pmore}
     In case of {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}, or if {it:zvar} is a string variable,
-    the default is
-    {cmd:label("@lab")}. For example, type {cmd:label("@lab (@n)")} to
+    the default is {cmd:label("@lab")}. For example, type {cmd:label("@lab (@n)")} to
     include the number of units in the label. For continuous {help geoplot##zvar:{it:zvar}},
     the default is equivalent to {cmd:label(1 = "[@lb,@ub]" * = "(@lb,@ub]")}. For example,
     type {cmd:label("@lb - @ub")} or {cmd:label("@lab")} to create labels
@@ -1395,6 +1397,13 @@ or
     set the label of the layer's legend key (the default is to use the name of
     the plotted frame as label). The above {it:options} and placeholders are ineffective in this case.
 
+{marker gloptions}{...}
+{phang}
+    {opt gl:options(options)} provides override options to be applied to
+    the symbols created by {helpb geoplot##glegend:glegend()}. Depending on layer
+    type, these are {it:{help area_options}},
+    {it:{help line_options}}, or {it:{help marker_options}}.
+
 {marker nolegend}{...}
 {phang}
     {opt nolegend} requests that the current layer not be considered for the
@@ -1407,6 +1416,11 @@ or
 {phang}
     {opt missing(options)} specifies the styling of elements for which {help geoplot##zvar:{it:zvar}}
     is missing, where {it:options} are as follows.
+
+{phang2}
+    Standard rendering options depending on layer type, such as {cmd:color()},
+    {cmd:lwidth()}, {cmd:lpattern()}, etc. In case of {helpb geoplot##area:area},
+    the default is to use color {cmd:gs14} for areas for which {help geoplot##zvar:{it:zvar}} is missing.
 
 {phang2}
     {cmdab:lab:el("}{it:text}{cmd:"} [{cmd:"}{it:text}{cmd:"} {it:...}]{cmd:)}
@@ -1426,9 +1440,8 @@ or
     {opt nogap} omits the gap between missing and the other keys in the legend.
 
 {phang2}
-    {cmd:color()}, {cmd:lwidth()}, {cmd:lpattern()}, etc. are standard graph
-    options depending on layer type. In case of {helpb geoplot##area:area},
-    the default is to use color {cmd:gs14} for areas for which {help geoplot##zvar:{it:zvar}} is missing.
+    {opt gl:options(options)} provides override options to be applied to
+    the missing symbol created by {helpb geoplot##glegend:glegend()}.
 
 {dlgtab:Global options}
 

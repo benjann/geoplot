@@ -1,4 +1,4 @@
-*! version 1.2.1  13jul2024  Ben Jann
+*! version 1.2.2  15jul2024  Ben Jann
 
 /*
     Syntax:
@@ -42,8 +42,8 @@ program __geoplot_layer
     gettoken p 0 : 0
     gettoken frame 0 : 0, parse(" ,")
     local hasSHP 0
-    local OPTS NOLEGEND LABel(str asis) Feature(passthru) box BOX2(str)/*
-        */ SELect(str asis)
+    local OPTS NOLEGEND LABel(str asis) GLoptions(str) Feature(passthru)/*
+        */ box BOX2(str) SELect(str asis)
     local hasPLV 0
     local PLVopts
     local WGT
@@ -519,7 +519,7 @@ program __geoplot_layer
     else local plot
     // compile plot
     if `hasWGT' local in inrange(_n,`n0',`n1')) | (_n<3)
-    local PLOTOPTS
+    local GLOPTS
     local p0 = `p' + 1
     gettoken pl0 : plevels
     foreach pl of local plevels {
@@ -576,7 +576,13 @@ program __geoplot_layer
             }
             if `layer'<. {
                 if `pl'==`pl0' {
-                    local PLOTOPTS `PLOTOPTS' (`OPTS')
+                    if `hasZ' & `i'==0 { // missing
+                        local GLOPT `OPTS' `missing_glopts'
+                    }
+                    else {
+                        local GLOPT `OPTS' `gloptions'
+                    }
+                    local GLOPTS `GLOPTS' (`GLOPT')
                 }
             }
             local OPTS `opts0' `OPTS'
@@ -674,7 +680,7 @@ program __geoplot_layer
     if `layer'<. {
         char LAYER[keys_`layer'] `keys'
         char LAYER[plottype_`layer'] `plottype'
-        char LAYER[plotopts_`layer'] `PLOTOPTS'
+        char LAYER[glopts_`layer'] `GLOPTS'
         char LAYER[labels_`layer'] `"`labels'"'
         char LAYER[nolegend_`layer'] `nolegend'
         char LAYER[hasz_`layer'] `hasZ'
@@ -923,8 +929,8 @@ end
 program _z_parse_missing
     gettoken plottype 0 : 0
     gettoken hasMLAB 0 : 0, parse(", ")
-    syntax [, NOLABel LABel(str asis) first nogap COLor(str asis)/*
-        */ MLABColor(passthru) * ]
+    syntax [, NOLABel LABel(str asis) GLoptions(str) first nogap/*
+        */ COLor(str asis) MLABColor(passthru) * ]
     if `"`label'"'=="" local label `"no data"'
     _add_quotes label `label'
     if `:list sizeof label'>1 local label `"`"`label'"'"'
@@ -940,6 +946,7 @@ program _z_parse_missing
     c_local missing `options'
     c_local missing_color `"`color'"'
     c_local missing_lab   `"`label'"'
+    c_local missing_glopts `"`gloptions'"'
     c_local missing_nolab = "`nolabel'"!=""
     c_local missing_first = "`first'"!=""
     c_local missing_gap   = "`gap'"==""

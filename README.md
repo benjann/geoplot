@@ -169,6 +169,13 @@ Inset.
 
 Main changes:
 
+    15jul2024
+    geoplot
+    - zvar options gloptions() and missing(gloptions()) added to specify override
+      options that will be applied to the symbols created by glegend()
+    - glegend() ignored unsupported options; an error is now displayed if unsupported
+      options are specified
+
     14jul2024
     geoplot
     - zoom() now has option otype() to set the scaling if the offset; option absolute

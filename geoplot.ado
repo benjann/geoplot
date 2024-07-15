@@ -1,4 +1,4 @@
-*! version 1.2.4  14jul2024  Ben Jann
+*! version 1.2.5  15jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -1970,7 +1970,6 @@ program _Legend
         local TITLE `TITLE' `title_`i''
     }
     if "`ltype'"=="glegend" {
-        
         if "`symysize'"==""   local symysize  3
         if "`symxsize'"==""   local symxsize  3
         if "`rowgap'"==""     local rowgap    0
@@ -2024,7 +2023,7 @@ program _Legend
             */ `"`layout'"' `"`layers'"' "`bottom'" `symscale'/*
             */ `reverse' `symysize' `symxsize' `keygap' `rowgap' `colgap'/*
             */ `lineskip' `tfirst' "`textwidth'" `talign' "`headskip'" `span'/*
-            */ `halign' `"`topts'"' `"`hopts'"' `pcycle'
+            */ `halign' `"`topts'"' `"`hopts'"' `pcycle' `"`options'"'
     }
     else {
         tempname SYM SYMBOL
@@ -2061,7 +2060,8 @@ program _glegend
         */ layout layers bottom symscale/*
         */ reverse ht wd keygap rowgap colgap/*
         */ lskip tfirst twidth talign hskip span/*
-        */ halign topts hopts pcycle
+        */ halign topts hopts pcycle options
+    _glegend_optsnotallowed, `options'
     // select layer if layout() is empty
     if !`:list sizeof layout' local layout: copy local layers
     local layers
@@ -2162,6 +2162,10 @@ program _glegend
     c_local plot `plots'/*
         */ (label `LBL' L if !H, msize(0) vpos(P) `topts')/*
         */ (label `LBL' L if H,  msize(0) vpos(P) `hopts')
+end
+
+program _glegend_optsnotallowed
+    syntax [, options_not_allowed ]
 end
 
 program  _glegend_parse_align
@@ -2266,9 +2270,9 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         }
         // collect info from layer l
         local ++j
-        local KEYS_`j': char LAYER[keys_`l']
-        local LBLS    : char LAYER[labels_`l']
-        local OPTS_`j': char LAYER[plotopts_`l']
+        local KEYS_`j' : char LAYER[keys_`l']
+        local LBLS     : char LAYER[labels_`l']
+        local OPTS_`j' : char LAYER[glopts_`l']
         local hasz_`j' = `"`: char LAYER[hasz_`l']'"'=="1"
         local hasmis_`j' = `"`: char LAYER[z_hasmis_`l']'"'=="1"
         if `hasmis_`j'' { // remove missing from lists
@@ -2276,7 +2280,7 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
             gettoken mopt_`j' OPTS_`j' : OPTS_`j', bind
             // use settings from last layer that has missing
             gettoken mlbl LBLS : LBLS, quotes
-            local mleg: char LAYER[z_mleg_`l'] 
+            local mleg: char LAYER[z_mleg_`l']
         }
         if (`"`:char LAYER[z_reverse_`l']'"'=="1")==`reverse' {
            mata: _glegend_reverse("KEYS_`j'")
