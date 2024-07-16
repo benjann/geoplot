@@ -169,6 +169,26 @@ Inset.
 
 Main changes:
 
+
+    16jul2024
+    general
+    - handling of paired-coordinates data has been made more consistent; all
+      functions in the mata library now require/assume n x 2 input; if needed,
+      geoplot and geoframe reshape the data on the fly (or display error if pc data
+      is not supported); several geoplot options and geoframe subcommands
+      did not handle pc data correctly (typically ignoring the secondary
+      coordinates); this should now be fixed; pc items are now classified as
+      LineString, no longer as Point
+    geoplot
+    - new predefined symbol shapes: line, pipe, plus, x, diamond, v, arrow, farrow
+    - option grid() can now be repeated
+    - if -glegend- and -glegend(...)- are both specified, two glegends are now
+      created
+    geoframe:
+    - the by() option in -geoframe generate plevel- did not work; this is fixed
+    - geoframe contract/collapse failed unless option id() was specified; this is
+      fixed
+
     15jul2024
     geoplot
     - zvar options gloptions() and missing(gloptions()) added to specify override

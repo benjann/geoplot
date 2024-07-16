@@ -1,5 +1,5 @@
 {smcl}
-{* 11jul2024}{...}
+{* 17jul2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -1092,10 +1092,7 @@
 
 {phang}
     {opt nocl:ip} applies selection rather than clipping. Shape items that
-    are at least partially inside the clipping window will be selected. {cmd:noclip}
-    is implied when processing point data or paired-coordinate data. For
-    paired-coordinate data, an item is considered inside if the origin coordinate
-    is within the clipping window.
+    are at least partially inside the clipping window will be selected.
 
 {phang}
     {opt st:rict} changes the behavior of {cmd:noclip}. By default, {cmd:noclip}

@@ -1,5 +1,5 @@
 {smcl}
-{* 15jul2024}{...}
+{* 17jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -170,7 +170,7 @@ or
     background frame behind the map
     {p_end}
 {synopt :{helpb geoplot##grid:grid{sf:[}({it:options}){sf:]}}}draw grid lines on
-    top of the map
+    top of the map (can be repeated)
     {p_end}
 {synopt :{helpb geoplot##tissot:tissot{sf:[}({it:options}){sf:]}}}draw Tissot's
     indicatrices on top of the map
@@ -600,6 +600,22 @@ or
 {p2col:{cmdab:a:rc} [{it:angle}]}section of circle; {it:angle} in [-360,360]
     {p_end}
 {p2col:{cmdab:sl:ice} [{it:angle}]}slice of circle; {it:angle} in [-360,360]
+    {p_end}
+{p2col:{cmdab:l:ine}}horizontal line
+    {p_end}
+{p2col:{cmd:pipe}}vertical line
+    {p_end}
+{p2col:{cmdab:pl:us}}upright cross
+    {p_end}
+{p2col:{cmd:x}}diagonal cross
+    {p_end}
+{p2col:{cmdab:di:amond}}diamond
+    {p_end}
+{p2col:{cmd:v}}V symbol
+    {p_end}
+{p2col:{cmdab:arr:ow}}arrow with open head
+    {p_end}
+{p2col:{cmdab:farr:ow}}arrow with closed head
     {p_end}
 {p2col:{cmdab:star}}5-pointed star
     {p_end}
@@ -1495,13 +1511,16 @@ or
 
 {marker grid}{...}
 {phang}
-    {cmd:grid}[{cmd:(}{it:options}{cmd:)}] draws grid lines on
-    top of the map, where {it:options} are as follows.
+    {cmd:grid}[{cmd:(}{it:options}{cmd:)}] draws grid lines on top of the
+    map. {cmd:grid()} can be repeated to draw multiple grids. {it:options} are
+    as follows.
 
 {phang2}
     {cmd:x()}, {cmd:y()}, {cmd:tight}, {cmd:padding()}, {cmd:radian},
     {cmd:noextend}, {cmd:mesh}, and {cmd:n()} define the lines as described in
-    {helpb geoframe##grid:geoframe grid}.
+    {helpb geoframe##grid:geoframe grid}. If {cmd:grid()} is repeated, shapes
+    created by earlier calls to {cmd:grid()} will be included in the
+    computations.
 
 {phang2}
     {it:{help line_options}} affect the look of lines as

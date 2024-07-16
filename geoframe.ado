@@ -1,4 +1,4 @@
-*! version 1.2.5  11jul2024  Ben Jann
+*! version 1.2.6  16jul2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -194,7 +194,7 @@ program _create
 end
 
 program _create_parse_type
-    syntax [, Attriute pc Shape ]
+    syntax [, Attribute pc Shape ]
     local type `attribute' `pc' `shape'
     if `: list sizeof type'>1 {
         di as err "{bf:type()}: only one of {bf:attribute}, {bf:shape},"/*
@@ -1224,18 +1224,13 @@ program _generate_plevel
             qui gen byte `ID' = 1
         }
         _get coordinates, local(XY) strict
-        _get pid, local(PID)
-        if `"`PID'"'=="" {
-            tempvar PID
-            qui geoframe_generate pid `PID', noset
-        }
         tempname PL
         qui gen long `PL' = .
         if "`BY'"!="" {
             qui levelsof `BY' if `touse', local(bylvls)
             foreach lvl of local bylvls {
                 if "`dots'"=="" di as txt "(processing `by'=`lvl')"
-                mata: _plevel("`dots'"!="", "`PL'", `"`ID'"', `"`PID'"',/*
+                mata: _generate_plevel("`dots'"!="", "`PL'", `"`ID'"',/*
                     */ `"`XY'"', "`touse'", "`BY'", `lvl') // returns N
                 if `N'==1 local msg item
                 else      local msg items
@@ -1245,7 +1240,7 @@ program _generate_plevel
         }
         else {
             mata: _generate_plevel("`dots'"!="", "`PL'", `"`ID'"',/*
-                */ `"`PID'"', `"`XY'"', "`touse'")
+                */ `"`XY'"', "`touse'")
             if `N'==1 local msg item
             else      local msg items
             di as txt "(`N' nested `msg' found)"
@@ -1854,7 +1849,13 @@ end
 
 program _manipulate_simplify
     args touse delta absolute jointly drop dots refine
-    qui _get coordinates, local(XY) strict
+    _get coordinates, local(XY) strict
+    if `: list sizeof XY'==4 {
+        di as err "four coordinate variables found in frame"/*
+            */ " {bf:`c(frame)'}" _n "paired-coordinates data not"/*
+            */ " supported by {bf:geoframe simplify}"
+        exit 499
+    }
     gettoken X XY : XY
     gettoken Y XY : XY
     _get id, local(ID)
@@ -1887,7 +1888,13 @@ end
 
 program _manipulate_refine
     args touse delta absolute dots
-    qui _get coordinates, local(XY) strict
+    _get coordinates, local(XY) strict
+    if `: list sizeof XY'==4 {
+        di as err "four coordinate variables found in frame"/*
+            */ " {bf:`c(frame)'}" _n "paired-coordinates data not"/*
+            */ " supported by {bf:geoframe refine}"
+        exit 499
+    }
     gettoken X XY : XY
     gettoken Y XY : XY
     _get id, local(ID)
@@ -1975,29 +1982,42 @@ program _grid
         }
         if `"`shpframe'"'=="" {
             _get coordinates, local(XY) strict
-            gettoken X XY : XY
-            gettoken Y XY : XY
-            markout `touse' `X' `Y'
+            markout `touse' `XY'
             local shpframe `"`cframe'"'
         }
         else {
             _markshapes `shpframe' `touse' `touse'
             frame `shpframe' {
                 _get coordinates, local(XY) strict
-                gettoken X XY : XY
-                gettoken Y XY : XY
-                markout `touse' `X' `Y'
+                markout `touse' `XY'
             }
         }
         // obtain data range
         frame `shpframe' {
+            gettoken X XY : XY
+            gettoken Y XY : XY
+            local PAD: copy local padding
             foreach x in X Y {
                 tempname `x'min `x'max
                 su ``x'' if `touse', meanonly
-                gettoken pad padding : padding
+                gettoken pad PAD : PAD
                 scalar ``x'min' = r(min) - (r(max)-r(min))*(`pad'/100)
-                gettoken pad padding : padding
+                gettoken pad PAD : PAD
                 scalar ``x'max' = r(max) + (r(max)-r(min))*(`pad'/100)
+            }
+            if `"`XY'"'!="" { // pc-data
+                gettoken X XY : XY
+                gettoken Y XY : XY
+                local PAD: copy local padding
+                foreach x in X Y {
+                    su ``x'' if `touse', meanonly
+                    gettoken pad PAD : PAD
+                    scalar ``x'min' = min(``x'min',/*
+                        */ r(min) - (r(max)-r(min))*(`pad'/100))
+                    gettoken pad PAD : PAD
+                    scalar ``x'max' = max(``x'max',/*
+                        */ r(max) + (r(max)-r(min))*(`pad'/100))
+                }
             }
             if `tissot' { // restrict Y
                 if "`radian'"!="" {
@@ -2314,6 +2334,12 @@ program geoframe_bshare
     // obtain boxes/MECs
     frame `shpframe' {
         _get coordinates, local(XY) strict
+        if `: list sizeof XY'==4 {
+            di as err "four coordinate variables found in frame"/*
+                */ " {bf:`shpframe'}" _n "paired-coordinates data not"/*
+                */ " supported by {bf:geoframe bshare}"
+            exit 499
+        }
         _get id, local(ID)
         mata: _bshare("`newshpframe'", "`ID'", `"`XY'"', "`touse'",/*
             */ `rtype', "`dots'"!="")
@@ -2458,9 +2484,10 @@ program _collapse
         else { // create ID using spjoin
             // check coordinates
             if `"`coordinates'"'=="" {
-                capt _get coordinates, strict
+                capt geoframe_get coordinates, strict
                 if _rc==1 exit 1
                 if _rc {
+                    di "ccc"
                     di as err "no coordinates found in frame {bf:`frame'}"/*
                         */ "; specify option {bf:coordinates()}"
                     exit 111
@@ -2563,7 +2590,15 @@ program geoframe_spjoin
     if "`id'"=="" local id _ID
     if "`replace'"=="" confirm new variable `id'
     if `"`coordinates'"'!="" local xy `coordinates'
-    else _get coordinates, local(xy) strict
+    else {
+        _get coordinates, local(xy) strict
+        if `: list sizeof xy'==4 {
+            di as err "four coordinate variables found in frame"/*
+                */ " {bf:`c(frame)'}" _n "paired-coordinates data not"/*
+                */ " supported by {bf:geoframe spjoin}"
+            exit 499
+        }
+    }
     markout `touse' `xy'
     local frame = c(frame)
     local TOUSE
@@ -2591,6 +2626,12 @@ program geoframe_spjoin
         _get ID, local(ID) strict
         local type: type `ID'
         _get coordinates, local(XY) strict
+        if `: list sizeof XY'==4 {
+            di as err "four coordinate variables found in frame"/*
+                */ " {bf:`shpframe'}" _n "paired-coordinates data not"/*
+                */ " supported by {bf:geoframe spjoin}"
+            exit 499
+        }
         _get pid, local(PID)
         if "`PID'"=="" {
             tempvar PID
@@ -4155,6 +4196,7 @@ void _query_n(string scalar R, string scalar id, string scalar xy,
     N = J(5,1,0)
     if (rows(ID)) {
         st_view(XY=., ., xy, touse)
+        if (cols(XY)==4) XY = J(rows(XY),2,0) // pc-data; each row is an item
         PID = geo_pid(ID, XY)
         p = selectindex(_mm_uniqrows_tag((ID, PID)))
         N[2] = rows(p)              // total number of items
@@ -4175,6 +4217,11 @@ void _query_dir(string scalar R, string rowvector id,
 
     st_view(ID=., ., id, touse)
     st_view(XY=., ., xy, touse)
+    if (cols(XY)==4) {
+        // pc-data; each row is an item with undefined direction
+        st_matrix(R, 0 \ 0 \ rows(XY))
+        return
+    }
     p = selectindex(_mm_uniqrows_tag((ID, geo_pid(ID,XY))))
     i = rows(p)
     a = rows(XY) + 1
@@ -4192,23 +4239,29 @@ void _query_dir(string scalar R, string rowvector id,
 void _query_gtype(string scalar R, string scalar id, string scalar xy,
     string scalar touse)
 {
-    real colvector ID
+    real colvector ID, PID
     real matrix    XY
 
     st_view(ID=., ., id, touse)
     st_view(XY=., ., xy, touse)
-    st_matrix(R, geo_gtype(2, ID, geo_pid(ID, XY), XY))
+    if (cols(XY)==4) (void) _reshape_pc_to_line(ID, XY, PID=.)
+    else             PID = geo_pid(ID, XY)
+    st_matrix(R, geo_gtype(2, ID, PID, XY))
 }
 
 void _generate_centroids(string rowvector centr, string scalar id,
     string scalar xy)
 {
-    real colvector ID
+    real colvector ID, p
     real matrix    XY
     
     st_view(ID=., ., id)
     st_view(XY=., ., xy)
-    st_store(., centr, geo_centroid(1, ID, XY))
+    if (cols(XY)==4) {
+        p = _reshape_pc_to_line(ID, XY)
+        st_store(., centr, geo_centroid(1, ID, XY)[p,])
+    }
+    else st_store(., centr, geo_centroid(1, ID, XY))
 }
 
 void _generate_area(string scalar area, string scalar id, string scalar xy)
@@ -4218,7 +4271,7 @@ void _generate_area(string scalar area, string scalar id, string scalar xy)
     
     st_view(ID=., ., id)
     st_view(XY=., ., xy)
-    st_store(., area, geo_area(1, ID, XY))
+    st_store(., area, cols(XY)==4 ? J(rows(XY), 1, 0) : geo_area(1, ID, XY))
 }
 
 void _generate_pid(string scalar pid, string scalar id, string scalar xy)
@@ -4228,7 +4281,25 @@ void _generate_pid(string scalar pid, string scalar id, string scalar xy)
     
     st_view(ID=., ., id)
     st_view(XY=., ., xy)
-    st_store(., pid, geo_pid(ID, XY))
+    st_store(., pid, cols(XY)==4 ? _generate_pid_pc(ID) : geo_pid(ID, XY))
+}
+
+real colvector _generate_pid_pc(real colvector ID)
+{
+    real scalar    i, n, id, pid
+    real colvector PID
+    
+    n = rows(ID)
+    PID = J(n,1,.)
+    id = pid = 0
+    for (i=1;i<=n;i++) {
+        if (ID[i]!=id) { // next unit
+            pid = 0
+            id  = ID[i]
+        }
+        PID[i] = ++pid
+    }
+    return(PID)
 }
 
 void _generate_dir(string scalar dir, string rowvector id,
@@ -4240,6 +4311,10 @@ void _generate_dir(string scalar dir, string rowvector id,
 
     st_view(ID=., ., id)
     st_view(XY=., ., xy)
+    if (cols(XY)==4) {
+        st_store(., dir, J(rows(XY),1,0))
+        return
+    }
     st_view(DIR=., ., dir)
     p = selectindex(_mm_uniqrows_tag((ID, geo_pid(ID,XY))))
     i = rows(p)
@@ -4253,36 +4328,51 @@ void _generate_dir(string scalar dir, string rowvector id,
 void _generate_gtype(string scalar gtype, string rowvector id,
     string rowvector xy)
 {
-    real colvector ID
+    real colvector ID, PID, p
     real matrix    XY
 
     st_view(ID=., ., id)
     st_view(XY=., ., xy)
-    st_store(., gtype, geo_gtype(1, ID, geo_pid(ID, XY), XY))
+    if (cols(XY)==4) {
+        p = _reshape_pc_to_line(ID, XY, PID=.)
+        st_store(., gtype, geo_gtype(1, ID, PID, XY)[p,])
+    }
+    else {
+        PID = geo_pid(ID, XY)
+        st_store(., gtype, geo_gtype(1, ID, PID, XY))
+    }
 }
 
 void _generate_plevel(real scalar nodots, string scalar pl, string scalar id,
-    string scalar pid, string scalar xy, string scalar touse,
-    | string scalar BY, real scalar lvl)
+    string scalar xy, string scalar touse, | string scalar BY, real scalar lvl)
 {
-    real colvector ID, PID, PL, p, L
+    real colvector ID, PID, PL, p, pc, L
     real matrix    XY
     
     if (BY!="") {
         p   = selectindex(st_data(., BY, touse):==lvl)
         ID  = st_data(., id,  touse)[p]
-        PID = st_data(., pid, touse)[p]
         XY  = st_data(., xy,  touse)[p,]
-        L = geo_plevel(1, ID, PID, XY, nodots)
-        st_view(PL=., ., pl,  touse)
-        PL[p,] = L
     }
     else {
         st_view(ID=.,  ., id,  touse)
-        st_view(PID=., ., pid, touse)
         st_view(XY=.,  ., xy,  touse)
+    }
+    if (cols(XY)==4) {
+        pc = _reshape_pc_to_line(ID, XY, PID=.)
+        L  = geo_plevel(1, ID, PID, XY, nodots)
+    }
+    else {
+        pc = .
+        PID = geo_pid(ID, XY)
         L = geo_plevel(1, ID, PID, XY, nodots)
-        st_store(., pl, touse, L)
+    }
+    if (BY!="") {
+        st_view(PL=., ., pl,  touse)
+        PL[p,] = L[pc]
+    }
+    else {
+        st_store(., pl, touse, L[pc])
     }
     st_local("N", strofreal(sum(L:!=0 :& _mm_uniqrows_tag((ID,PID))), "%18.0g"))
 }
@@ -4305,21 +4395,26 @@ void _clip(string scalar id, string scalar out, string rowvector xy,
     string scalar touse, string scalar mask, real scalar rclip,
     real scalar method, real scalar nodrop, real scalar dots)
 {
-    real scalar    i, a, b, dn, d0
-    real colvector ID, OUT, p
+    real scalar    i, a, b, dn, d0, pc
+    real colvector ID, OUT, p, pp
     real matrix    MASK, XY, XYi, MAP
     struct _clip_expand_info scalar I
     
     if (rclip) MASK = _geo_rclip_limits(st_matrix(mask))
     else       MASK = _geo_clip_mask(st_matrix(mask), "matname")
     st_view(ID=., ., id, touse)
-    st_view(OUT=., ., out, touse)
     st_view(XY=., ., xy, touse)
+    pc = cols(XY)==4
+    if (pc) {
+        pp  = _reshape_pc_to_line(ID, XY)
+        OUT = J(rows(XY),1,0)
+    }
+    else st_view(OUT=., ., out, touse)
     p = selectindex(_mm_unique_tag(ID))
     i = rows(p)
     if (dots) {
         displayas("txt")
-        printf("(clipping %g shape item%s)\n", i, i!=1 ? "s" : "")
+        printf("(clipping shape items of %g unit%s)\n", i, i!=1 ? "s" : "")
         d0 = _geo_progress_init("(")
         dn = i
     }
@@ -4334,13 +4429,26 @@ void _clip(string scalar id, string scalar out, string rowvector xy,
                 XY[a,] = J(1, cols(XY), .)
                 OUT[a] = 0
             }
-            continue 
+            continue
         }
         _clip_fillin(OUT, XY, a-1, I, XYi, MAP)
     }
     st_local("Nadd", "0")
-    _clip_expand(touse, I.XY, I.ab, xy) // store items with additional points
-    if (dots) _geo_progress_end(d0, ")")
+    if (pc) {
+        if (dots) _geo_progress_end(d0, ")")
+        if (length(I.ab)) {
+            errprintf("unexpected data inconsistency;" +
+                " cannot store clipped shapes")
+            exit(499)
+        }
+        _clip_recast_line_to_pc(OUT, XY, pp)
+        st_store(., out, touse, OUT)
+        st_store(., xy, touse, XY)
+    }
+    else {
+        _clip_expand(touse, I.XY, I.ab, xy) // store items with extra points
+        if (dots) _geo_progress_end(d0, ")")
+    }
 }
 
 void _clip_fillin(real colvector OUT, real matrix XY, real scalar a0,
@@ -4398,6 +4506,32 @@ void _clip_expand(string scalar touse, pointer rowvector XY,
     for (i=l;i;i--) {
         V[|*ab[i],(1\.)|] = *XY[i]
     }
+}
+
+void _clip_recast_line_to_pc(real colvector OUT0, real matrix XY0,
+    real colvector pp)
+{
+    real scalar    i, a, b
+    real colvector OUT
+    real matrix    XY
+    
+    i = rows(pp)
+    OUT = J(i,1,0)
+    XY  = J(i,4,.)
+    a = rows(OUT) + 1
+    for (;i;i--) {
+        b = a - 1
+        a = pp[i]
+        if (OUT0[a]==1) { // dropped item
+            OUT[i] = 1
+            continue
+        }
+        if (b==a)         continue // empty item in original data
+        if (OUT0[a+1]==1) continue // keep empty item
+        XY[i,] = XY0[a+1,], XY0[a+2,] // copy (clipped) coordinates
+    }
+    swap(OUT0,OUT)
+    swap(XY0,XY)
 }
 
 void _simplify(string scalar id, string scalar out, string rowvector xy,
@@ -4599,6 +4733,7 @@ void _bbox(string scalar frame, string scalar xy, string scalar touse,
     if (by=="") {
         p  = 1
         ID = 1
+        if (cols(XY)==4) XY = XY[,(1,2)] \ XY[,(3,4)] // stack data if pc
     }
     else {
         st_view(ID=., ., by, touse)
@@ -4607,6 +4742,7 @@ void _bbox(string scalar frame, string scalar xy, string scalar touse,
             ID = ID[p]
             XY = XY[p,]
         }
+        if (cols(XY)==4) (void) _reshape_pc_to_line(ID, XY) // stack data if pc
         p = selectindex(_mm_unique_tag(ID))
     }
     // generate shapes
@@ -4812,7 +4948,7 @@ void _clean_empty(string scalar empty, string scalar id, string rowvector xy,
     a = rows(ID) + 1
     for (;i;i--) {
         b = a - 1; a = p[i]
-        if (all(rowmissing(XY[|a,1 \ b,2|]))) {
+        if (all(rowmissing(XY[|a,1 \ b,.|]))) {
             E[|a \ b|] = J(b-a+1, 1, 1)
             nempty++
         }
@@ -5207,6 +5343,50 @@ void _tag_unit_if_any(string scalar id, string scalar touse)
         b = a - 1; a = p[i]
         if (anyof(TOUSE[|a \ b|],1)) TOUSE[|a \ b|] = J(b-a+1, 1, 1)
     }
+}
+
+real colvector _reshape_pc_to_line(real colvector ID0, real matrix XY0,
+    | real matrix PID)
+{   // modifies ID0 and XY0
+    real scalar    i, n, a, b, id, pid
+    real colvector ID, p
+    real matrix    XY
+    
+    n = rows(XY0)
+    p = J(n,1,.)
+    ID = PID = J(n*3,1,.)
+    XY = J(n*3,2,.)
+    b = id = pid = 0
+    for (i=1;i<=n;i++) {
+        if (ID0[i]!=id) { // next unit
+            pid = 0
+            id  = ID0[i]
+        }
+        pid++
+        if (missing(XY0[i,])==4) { // empty item
+            b++
+            p[i]   = b
+            ID[b]  = id
+            PID[b] = pid
+            continue
+        }
+        a = b + 1
+        b = b + 3
+        p[i]       = a
+        ID[|a\b|]  = J(3,1,id)
+        PID[|a\b|] = J(3,1,pid)
+        XY[|a,1\b,.|] = (.,.) \ XY0[i,(1,2)] \ XY0[i,(3,4)]
+    }
+    if (b<(n*3)) {
+        ID0 = ID[|1\b|]
+        XY0 = XY[|1,1\b,.|]
+        PID = PID[|1\b|]
+    }
+    else {
+        swap(ID0, ID)
+        swap(XY0, XY)
+    }
+    return(p)
 }
 
 end

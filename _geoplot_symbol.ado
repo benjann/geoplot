@@ -1,4 +1,4 @@
-*! version 1.1.6  04jul2024  Ben Jann
+*! version 1.1.7  16jul2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -183,7 +183,11 @@ program __geoplot_symbol
         }
         if "`coordinates'"=="" {
             geoframe get coordinates, strict local(coord)
-            if `:list sizeof coord'!=2 {
+            if `:list sizeof coord'>2 {
+                mata: st_local("coord",/*
+                    */ invtokens(tokens(st_local("coord"))[|1\2|]))
+            }
+            else if `:list sizeof coord'<2 {
                 di as err "wrong number of coordinate variables"
                 exit 498
             }
@@ -266,7 +270,7 @@ program __geoplot_symbol
         }
         char _dta[GEOPLOT_sourcename] `sourcename'
     }
-    // create shape frame an plot command
+    // create shape frame and plot command
     ___geoplot_symbol `layer' `p' `frame1' "`FV'`ZVAR'" "`wgt'",/*
         */ size(`SIZE' `RELSIZE') _frameonly(`_frameonly')/*
         */ `mlabel' `mlabvposition' `options'
@@ -413,7 +417,8 @@ program _parse_shape
     // predefined shapes
     local SHAPES0 Triangle Square Pentagon HEXagon HEPtagon Octagon
     local shapes0 = strlower("`SHAPES0'")
-    local SHAPES  `SHAPES0' Circle Arc SLice star star6 PENTAGRam HEXAGRam pin
+    local SHAPES  `SHAPES0' Circle Arc SLice star star6 PENTAGRam HEXAGRam pin/*
+        */ Line pipe PLus x DIamond v ARRow FARRow
     local shapes  = strlower("`SHAPES'")
     gettoken shape arg : shape
     local arg = strtrim(`"`arg'"')
