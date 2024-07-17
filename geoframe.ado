@@ -1,4 +1,4 @@
-*! version 1.2.6  16jul2024  Ben Jann
+*! version 1.2.7  17jul2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -1932,6 +1932,7 @@ program _grid
     syntax namelist(id="newname" name=newnames max=2) [if] [in] [,/*
         */ x(str) y(str) `opts' tight PADding(str)/*
         */ RADian n(numlist int max=1 >0)/*
+        */ coordinates(namelist) /* undocumented
         */ noShp replace CURrent ]
     if "`n'"=="" local n 100
     if `"`padding'"'!="" local tight tight
@@ -1981,14 +1982,16 @@ program _grid
             }
         }
         if `"`shpframe'"'=="" {
-            _get coordinates, local(XY) strict
+            if `"`coordinates'"'!="" local XY `coordinates'
+            else _get coordinates, local(XY) strict
             markout `touse' `XY'
             local shpframe `"`cframe'"'
         }
         else {
             _markshapes `shpframe' `touse' `touse'
             frame `shpframe' {
-                _get coordinates, local(XY) strict
+                if `"`coordinates'"'!="" local XY `coordinates'
+                else _get coordinates, local(XY) strict
                 markout `touse' `XY'
             }
         }

@@ -1,4 +1,4 @@
-*! version 1.1.7  16jul2024  Ben Jann
+*! version 1.1.8  17jul2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -176,10 +176,12 @@ program __geoplot_symbol
         local ORG
         local TGT
         // id and coordinates
-        geoframe get id, local(id)
-        if `"`id'"'!="" {
-            local ORG `ORG' `id'
-            local TGT `TGT' _ID
+        if !`PLOT' { // use existing id if called by geoframe
+            geoframe get id, local(id)
+            if `"`id'"'!="" {
+                local ORG `ORG' `id'
+                local TGT `TGT' _ID
+            }
         }
         if "`coordinates'"=="" {
             geoframe get coordinates, strict local(coord)

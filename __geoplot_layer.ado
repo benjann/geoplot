@@ -1,4 +1,4 @@
-*! version 1.2.2  15jul2024  Ben Jann
+*! version 1.2.3  17jul2024  Ben Jann
 
 /*
     Syntax:
@@ -1067,7 +1067,7 @@ program _box
     mata: _box_copy_XY("`XY'", `n0', `n1', "`TYPE'"=="pc")
     // generate frame containing box
     tempname BOX BOXSHP
-    frame `XY': qui geoframe bbox `BOX' `BOXSHP', `boxopts'
+    frame `XY': qui geoframe bbox `BOX' `BOXSHP', noshp `boxopts'
     if "`refine'"!="" {
         frame `BOX': qui geoframe refine, fast
     }

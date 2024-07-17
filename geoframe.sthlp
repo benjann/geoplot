@@ -181,7 +181,7 @@
     same folder as {it:filename}, it will be loaded into a secondary frame
     called {it:name}{cmd:_shp} and the two frames will be linked. Type
     {cmd:noshp} to suppress this behavior. Data types
-    {cmd:shape} and {cmd:pc} imply {cmd:noshp}; see option 
+    {cmd:shape} and {cmd:pc} imply {cmd:noshp}; see option
     {helpb geoframe##create_type:type()}.
 
 {phang}
@@ -320,7 +320,7 @@
     if a frame called {it:frame}{cmd:_shp} is in memory, it will be treated as
     a shape frame to be linked to the current frame. Type
     {cmd:noshp} to suppress this behavior. Data types
-    {cmd:shape} and {cmd:pc} imply {cmd:noshp}; see option 
+    {cmd:shape} and {cmd:pc} imply {cmd:noshp}; see option
     {helpb geoframe##create_type:type()}.
 
 {phang}
@@ -764,7 +764,7 @@
     generates (or updates) a variable identifying the plot order of the shape
     items. If the current frame is linked to a shape frame,
     {cmd:geoframe generate plevel} will be applied to the linked shape
-    frame. 
+    frame.
 
 {pstd}
     {it:PLEVEL} specifies a name for the generated variable; {cmd:_PLEVEL} is used as default
@@ -1234,6 +1234,9 @@
     be dropped unless their length is at least 2*sqrt(2*{it:d}), where {it:d} is the
     threshold. Polygon items that are simplified to two points will be dropped.
 
+{pstd}
+    {cmd:geoframe simplify} cannot be used with paired-coordinates data.
+
 {marker refine}{...}
 {dlgtab:geoframe refine}
 
@@ -1266,6 +1269,9 @@
 {phang}
     {cmd:nodots}, {cmd:ifshp()}, {cmd:into()}, {cmd:replace},
     {cmd:fast}, and {cmd:current} as described for {helpb geoframe##clip:geoframe clip}.
+
+{pstd}
+    {cmd:geoframe refine} cannot be used with paired-coordinates data.
 
 {marker grid}{...}
 {dlgtab:geoframe grid}
@@ -1506,6 +1512,9 @@
 {phang}
     {opt cur:rent} makes the created frame the current frame.
 
+{pstd}
+    {cmd:geoframe bshare} cannot be used with paired-coordinates data.
+
 {marker symbol}{...}
 {dlgtab:geoframe symbol}
 
@@ -1689,6 +1698,9 @@
 
 {phang}
     {opt nodot:s} suppresses the progress dots that are displayed by default.
+
+{pstd}
+    {cmd:geoframe spjoin} cannot be used with paired-coordinates data.
 
 {marker copy}{...}
 {dlgtab:geoframe copy}

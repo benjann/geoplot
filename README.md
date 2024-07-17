@@ -170,6 +170,11 @@ Inset.
 Main changes:
 
 
+    17jul2024
+    - some further refinements related to pc-data; geoframe grid/tissot now have 
+      undocumented coordinates() option; layertype symbol now always generates
+      a unique internal ID
+
     16jul2024
     general
     - handling of paired-coordinates data has been made more consistent; all

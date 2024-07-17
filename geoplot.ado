@@ -1,4 +1,4 @@
-*! version 1.2.6  17jul2024  Ben Jann
+*! version 1.2.7  17jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -548,9 +548,7 @@ program _background
     frame `background' {
         qui set obs `=`n'*4 + 2'
         qui replace _ID = 1
-        if `"`feat'"'!="" {
-            geoframe set feature `feat'
-        }
+        if `"`feat'"'!="" geoframe set feature `feat'
     }
     _geoplot_area . `p' `background', `opts'
     c_local plot `plot'
@@ -599,17 +597,10 @@ program _grid
     tempname GRID GRID_shp
     capt confirm var X2, exact
     if _rc==1 exit 1
-    if _rc {
-        geoframe set coordinates X Y
-    }
-    else {
-        geoframe set type pc
-        geoframe set coordinates X Y X2 Y2
-    }
-    qui geoframe grid `GRID' `GRID_shp', `x' `y' `tight' `padding'/*
-        */ `radian' `n' `extend' `mesh'
-    geoframe set coordinates
-    geoframe set type
+    if _rc local XY X Y
+    else   local XY X Y X2 Y2
+    qui geoframe grid `GRID' `GRID_shp', coordinates(`XY')/*
+        */ `x' `y' `tight' `padding' `radian' `n' `extend' `mesh'
     _geoplot_line . `p' `GRID', `options'
     local plots `plot'
     if "`labels'"!="" {
@@ -705,16 +696,10 @@ program _tissot
     tempname tissot tissot_shp
     capt confirm var X2, exact
     if _rc==1 exit 1
-    if _rc {
-        geoframe set coordinates X Y
-    }
-    else {
-        geoframe set type pc
-        geoframe set coordinates X Y X2 Y2
-    }
-    qui geoframe tissot `tissot' `tissot_shp' in 1/`Nlast', `tissot2'
-    geoframe set coordinates
-    geoframe set type
+    if _rc local XY X Y
+    else   local XY X Y X2 Y2
+    qui geoframe tissot `tissot' `tissot_shp' in 1/`Nlast', coordinates(`XY')/*
+        */ `tissot2'
     _geoplot_area . `p' `tissot', `opts'
     local plots `plot'
     if `"`mark'"'!="" {
@@ -740,11 +725,11 @@ end
 program _project
     args project opts in
     if strtrim(`"`project'"')=="" exit
-    local XY X Y
-    capt confirm variable Y2, exact
+    capt confirm var X2, exact
     if _rc==1 exit 1
-    if !_rc local XY `XY' X2 Y2
-    capt confirm variable cY, exact
+    if _rc local XY X Y
+    else   local XY X Y X2 Y2
+    capt confirm var cX, exact
     if _rc==1 exit 1
     if _rc==0 { // lock non-rotating shapes
         local XY `XY' cX cY
@@ -756,9 +741,7 @@ program _project
         su X `in', meanonly
         scalar `rescale' = r(max) - r(min)
     }
-    geoframe set type shape
-    geoframe project `project' `in', `opts' xy(`XY') fast
-    geoframe set type
+    geoframe project `project' `in', `opts' xy(`XY') fast noshp
     if "`dY'"!="" { // rescale and restore non-rotating shapes
         su X `in', meanonly
         scalar `rescale' = (r(max) - r(min)) / `rescale'
@@ -772,7 +755,7 @@ program _rotate
     args r in
     if `r'==0 exit
     local r = `r' * _pi / 180
-    capt confirm variable Y2, exact
+    capt confirm var X2, exact
     if _rc==1 exit 1
     local hasXY2 = _rc==0
     tempname min max
@@ -781,7 +764,7 @@ program _rotate
         _get_minmax `v' `in'
         scalar ``v'mid' = (r(max) + r(min)) / 2
     }
-    capt confirm variable cY, exact
+    capt confirm var cX, exact
     if _rc==1 exit 1
     if _rc==0 { // lock non-rotating shapes
         tempvar dY dX
@@ -1112,7 +1095,7 @@ program _zoom
     qui replace Y = (Y - `Ymid') * `scale' + `YMID' if `touse'
     qui replace X = (X - `Xmid') * `scale' + `XMID' if `touse'
     // also transform Y2, X2 if present
-    capt confirm variable Y2, exact
+    capt confirm var X2, exact
     if _rc==1 exit 1
     if _rc==0 {
         qui replace Y2 = (Y2 - `Ymid') * `scale' + `YMID' if `touse'
@@ -2759,7 +2742,7 @@ program _slegend_symbol
         if `overlay' qui replace _Y = _Y - r(min) // bottom align
         else         qui replace _Y = _Y - (r(min) + r(max))/2 // center align
         // fill in matrix
-        capt confirm variable _PLEVEL
+        capt confirm var _PLEVEL
         if _rc==1 exit 1
         if _rc mkmat _X _Y, matrix(`SYMBOL')
         else   mkmat _X _Y _PLEVEL, matrix(`SYMBOL')
@@ -3230,15 +3213,15 @@ program __add_quotes
 end
 
 program _get_minmax, rclass
+    gettoken x 0 : 0
     tempname min max
-    syntax varname [if] [in]
-    su `varlist' `if' `in', meanonly
+    su `x' `0', meanonly
     scalar `min' = r(min)
     scalar `max' = r(max)
-    capt confirm variable `varlist'2, exact
+    capt confirm var `x'2, exact
     if _rc==1 exit 1
     if _rc==0 {
-        su `varlist'2 `if' `in', meanonly
+        su `x'2 `0', meanonly
         if r(N) {
             scalar `min' = min(`min', r(min))
             scalar `max' = max(`max', r(max))
