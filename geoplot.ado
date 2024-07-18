@@ -1,4 +1,4 @@
-*! version 1.2.7  17jul2024  Ben Jann
+*! version 1.2.8  18jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -218,6 +218,7 @@ program _geoplot, rclass
         
     // project map
         _project `"`project2'"' `"`project_opts'"'
+        local xrescale = r(xrescale)
     
     // rotate map
         _rotate `angle'
@@ -322,8 +323,8 @@ program _geoplot, rclass
     
     // slegend
         forv i = 1/`slegend_n' {
-            capt n _Legend slegend "`refdim'" `refsize'/*
-                */ `Ymin' `Ymax' `Xmin' `Xmax', `slegend_`i'' // plot
+            capt n _Legend slegend "`refdim'" `refsize' `Ymin' `Ymax'/*
+                */ `Xmin' `Xmax', xrescale(`xrescale') `slegend_`i'' // plot
             if _rc==1 exit 1
             if _rc {
                 di as err "error in slegend()"
@@ -722,9 +723,14 @@ program _parse_project
     c_local project_opts `radian'
 end
 
-program _project
+program _project, rclass
     args project opts in
-    if strtrim(`"`project'"')=="" exit
+    tempname xrescale
+    scalar `xrescale' = 1
+    if strtrim(`"`project'"')=="" {
+        return scalar xrescale = `xrescale'
+        exit
+    }
     capt confirm var X2, exact
     if _rc==1 exit 1
     if _rc local XY X Y
@@ -733,22 +739,23 @@ program _project
     if _rc==1 exit 1
     if _rc==0 { // lock non-rotating shapes
         local XY `XY' cX cY
-        tempvar dY dX rescale
+        tempvar dY dX
         qui gen double `dY' = Y - cY if cY<. `in'
         qui gen double `dX' = X - cX if cX<. `in'
         qui replace Y = cY if cY<. `in'
         qui replace X = cX if cX<. `in'
         su X `in', meanonly
-        scalar `rescale' = r(max) - r(min)
+        scalar `xrescale' = r(max) - r(min)
     }
     geoframe project `project' `in', `opts' xy(`XY') fast noshp
     if "`dY'"!="" { // rescale and restore non-rotating shapes
         su X `in', meanonly
-        scalar `rescale' = (r(max) - r(min)) / `rescale'
-        if `rescale'>=. scalar `rescale' = 1
-        qui replace Y = Y + `dY'*`rescale' if cY<. `in'
-        qui replace X = X + `dX'*`rescale' if cX<. `in'
+        scalar `xrescale' = (r(max) - r(min)) / `xrescale'
+        if `xrescale'>=. scalar `xrescale' = 1
+        qui replace Y = Y + `dY'*`xrescale' if cY<. `in'
+        qui replace X = X + `dX'*`xrescale' if cX<. `in'
     }
+    return scalar xrescale = `xrescale'
 end
 
 program _rotate
@@ -1957,10 +1964,10 @@ program _Legend
         local opts Layout(str asis) LAYErs(str asis) BOTtom SYMScale(real .8)
     }
     else {
-        syntax [, slegend(str asis) ]
+        syntax [, slegend(str asis) xrescale(str) ]
         local 0: copy local slegend
         local lhs anything(id="{it:numlist}")
-        local opts Layer(numlist int max=1 >0) OVERlay OVERLay2(numlist max=1)/*
+        local opts Layer(numlist int max=1 >0) OVERlay OVERlay2(numlist max=1)/*
             */ SAlign(str) TFLoat Format(str) HEADing(str asis)
     }
     syntax `lhs'[, `opts' REVerse/*
@@ -2036,7 +2043,7 @@ program _Legend
     else {
         tempname SYM SYMBOL
         frame create `SYM' double(_X _Y W)
-        _slegend `LBL' `SYM' `SYMBOL' `refsize'/*
+        _slegend `LBL' `SYM' `SYMBOL' `refsize' `xrescale'/*
             */ `"`anything'"' `"`layer'"' "`overlay'" "`overlay2'"/*
             */ `"`salign'"' "`tfloat'" `"`format'"' `"`heading'"'/*
             */ `reverse' `symysize' `symxsize' `keygap' `rowgap' `colgap'/*
@@ -2264,9 +2271,14 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
     args LBL SHP PC x y c symscale reverse ht wd keygap rowgap /*
         */ lskip tfirst twd talign pcycle layers
     // collect keys and labels
+    local sxmin .
+    local sxmax .
+    local sxdim 0
+    local symin .
+    local symax .
+    local sydim 0
     local n 0
     local j 0
-    local symsize 0
     foreach l of local layers {
         if `"`: char LAYER[keys_`l']'"'=="" {
             di as txt "(glegend(): layer `l' not found)"
@@ -2296,7 +2308,13 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         if `"`ltype_`j''"'=="symbol" {
             local symbl_`j': char LAYER[symbol_`l']
             local symsi_`j': char LAYER[symsize_`l']
-            local symsize = max(`symsize',`symsi_`j'')
+            _glegend_symdim, size(`symsi_`j'') `symbl_`j''
+            local sxmin = min(`sxmin', r(xmin))
+            local sxmax = cond(`sxmax'<., max(`sxmax', r(xmax)), r(xmax))
+            local symin = min(`symin', r(ymin))
+            local symax = cond(`symax'<., max(`symax', r(ymax)), r(ymax))
+            local sxdim = max(`sxmax'-`sxmin', 2*`symsi_`j'') // min 2 units
+            local sydim = max(`symax'-`symin', 2*`symsi_`j'') // min 2 units
         }
         // update global list of labels
         local i 0
@@ -2310,6 +2328,10 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
     }
     local J `j'
     if !inlist(`"`mleg'"',"1","2","3","4") local mleg 0
+    // scaling and midpoint of (composite) symbols
+    local symsize = min(`wd'/`sxdim', `ht'/`sydim')
+    local sxmid = `symscale' * `symsize' * (`sxmin' + `sxmax') / 2
+    local symid = `symscale' * `symsize' * (`symin' + `symax') / 2
     // plot labels
     if `tfirst' local x0 = `x'
     else        local x0 = `x' + `wd' + `keygap'
@@ -2351,8 +2373,8 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         }
         else local i0 = 1
         if `"`ltype_`j''"'=="symbol" {
-            local symopt = `symscale' * (`symsi_`j''/`symsize') * `ht'/2
-            local symopt align(center) size(`symopt') `symbl_`j''
+            local symopt = `symscale' * `symsize' * `symsi_`j''
+            local symopt size(`symopt') `symbl_`j''
             if `"`ptype_`j''"'=="line" local symopt `symopt' line
         }
         forv i = `i0'/`n' {
@@ -2370,7 +2392,8 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
             local psty = mod(`key'-1,`pcycle') + 1
             local opt pstyle(p`psty') `opt'
             if `"`ltype_`j''"'=="symbol" {
-                _glegend_post_symbol `SHP' `c' `x0' `y_`i'', `symopt' `opt'
+                _glegend_post_symbol `SHP' `c' `x0' `sxmid' `y_`i'' `symid',/*
+                    */ `symopt' `opt'
             }
             else if `"`ltype_`j''"'=="label" {
                 _glegend_post_label `SHP' `c' `x0' `y_`i'', `opt'
@@ -2395,6 +2418,19 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
     c_local plot `plots'
 end
 
+program _glegend_symdim, rclass
+    tempname SYM SHP
+    qui geoframe symboli `SYM' `SHP' 0 0 `0'
+    frame `SHP' {
+        su _X, meanonly
+        return scalar xmin = r(min)
+        return scalar xmax = r(max)
+        su _Y, meanonly
+        return scalar ymin = r(min)
+        return scalar ymax = r(max) 
+    }
+end
+
 program _glegend_post_lbl
     args LBL c h lskip x y pos lbl
     gettoken tmp : lbl, qed(hasquote)
@@ -2416,8 +2452,10 @@ program _glegend_post_symbol
     gettoken SHP 0 : 0
     gettoken c   0 : 0
     gettoken x   0 : 0
-    gettoken y   0 : 0, parse(" ,")
-    frame post `SHP' (`c') (`x') (`y')
+    gettoken cx  0 : 0
+    gettoken y   0 : 0
+    gettoken cy  0 : 0, parse(" ,")
+    frame post `SHP' (`c') (`x'-`cx') (`y'-`cy')
     frame `SHP': local n = _N
     c_local plot (symbol `SHP' in `n'`0')
 end
@@ -2501,7 +2539,7 @@ program _glegend_bottom
 end
 
 program _slegend
-    args LBL SYM SYMBOL refsize/*
+    args LBL SYM SYMBOL refsize xrescale/*
         */ levels layer overlay overlay2/*
         */ salign tfloat format heading/*
         */ reverse ht wd keygap rowgap colgap/* (colgap not used)
@@ -2534,6 +2572,7 @@ program _slegend
         c_local noplot noplot
         exit
     }
+    local symsize = `symsize' * `xrescale' // rescaling due to projection
     // parse levels
     _slegend_parse_levels `"`format'"' `levels' // levels, labels
     // parse remaining options
@@ -2582,14 +2621,15 @@ program _slegend
     local xl0 = `keygap'
     if      `talign'==cond(`tfirst',3,9) local xl0 = `xl0' + `twidth'
     else if `talign'==0                  local xl0 = `xl0' + `twidth'/2
-    if `overlay' local yl = `y' - `lskip'
+    if `overlay' local yl = `y' - .5*`lskip'
     foreach lev of local levels {
         local lysize = `ysize' * sqrt(`lev'/`wmax')
         local lxsize = `xsize' * sqrt(`lev'/`wmax')
         if `overlay' {
             local x = `x' + `offset' * max(`lxsize', `wd')
-            local y0 = `y'
-            local yl = max(`y0' + `lysize', `yl' + `lskip')
+            if `reverse' local y0 = `y' + `lysize'
+            else         local y0 = `y'
+            local yl = max(`y' + `lysize', `yl' + `lskip')
         }
         else {
             local lysize = max(`lysize', `ht')
@@ -2635,7 +2675,7 @@ program _slegend
         local y0 = `ysize' * sqrt(`lmin'/`wmax')
         local y0 = min(0, `y0' - `rowgap')
         local y1 = max(max(`ht',`ysize' * sqrt(`lmax'/`wmax')), `yl')
-        local y1 = `y1' + `rowgap'
+        local y1 = `y1'
     }
     else {
         local y0 0
@@ -2679,10 +2719,13 @@ program _slegend
     _glegend_post_lbl `LBL' 1 0 0 `x1' `y1' 0 ""
     // return plot command
     if `overlay' {
-        if `reverse' local align align(top)
-        else         local align align(bottom)
+        if `reverse' {
+            local topts mlabalign(bottom) `topts'
+        }
+        else {
+            local topts mlabalign(top) `topts'
+        }
     }
-    else local align align(center)
     c_local plot/*
         */ (symbol `SYM' [iw=W], wmax(`wmax') size(1) shape(`SYMBOL')/*
         */ `options')/*

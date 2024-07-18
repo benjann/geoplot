@@ -169,6 +169,20 @@ Inset.
 
 Main changes:
 
+    18jul2024
+    geoplot:
+    - glegend():
+       o now using min(symysize(), symxsize()) to determine the size of keys from
+         symbol layers, no just symysize()
+       o when creating composite keys from multiple symbol layers, the relative
+         positioning of symbols depending on align() and offset() is now preserved
+         (in addition to preserving relative size)
+    - slegend():
+       o rescaling imposed by project() was not taken account; this is fixed
+       o option reverse did not work as expected in case of overlay; this is fixed
+       o positioning of labels somewhat improved in case of overlay
+    geoframe
+    - geoframe symbol did not allow option align(); this is fixed
 
     17jul2024
     - some further refinements related to pc-data; geoframe grid/tissot now have 

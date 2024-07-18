@@ -1,4 +1,4 @@
-*! version 1.2.7  17jul2024  Ben Jann
+*! version 1.2.8  18jul2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2395,7 +2395,7 @@ end
 program _symbol
     syntax anything [if] [in] [, _immediate replace/*
         */ SHape(passthru) SIze(passthru) OFFset(passthru) ANGle(passthru)/*
-        */ ratio(passthru) n(passthru) CURrent ]
+        */ ratio(passthru) n(passthru) align(passthru) CURrent ]
     gettoken newname     anything : anything
     gettoken newshpname  anything : anything
     if "`newshpname'"=="" local newshpname "`newname'_shp"
@@ -2417,12 +2417,12 @@ program _symbol
         }
         _geoplot_symbol . . `anything', _immediate/*
             */ _frameonly(`newframe' `newshpframe')/*
-            */ `shape' `size' `offset' `angle' `ratio' `n'
+            */ `shape' `size' `offset' `angle' `ratio' `n' `align'
     }
     else {
         _geoplot_symbol . . `cframe' `if' `in',/*
             */ _frameonly(`newframe' `newshpframe')/*
-            */ `shape' `size' `offset' `angle' `ratio' `n'
+            */ `shape' `size' `offset' `angle' `ratio' `n' `align'
     }
     // cleanup
     frame `newshpframe' {

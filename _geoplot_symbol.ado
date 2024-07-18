@@ -1,4 +1,4 @@
-*! version 1.1.8  17jul2024  Ben Jann
+*! version 1.1.9  18jul2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -377,9 +377,13 @@ program ___geoplot_symbol
     }
     if !`PLOT' exit
     if `layer'<. {
-        local SHAPE shape(`shape' `arg')
+        local SHAPE `shape' `arg'
+        local SHAPE shape(`SHAPE')
         if `n'<. local SHAPE `SHAPE' n(`n')
-        char LAYER[symbol_`layer'] `SHAPE' angle(`angle') ratio(`ratio')
+        local SHAPE `SHAPE' offset(`offset' `oangle')
+        local SHAPE `SHAPE' angle(`angle') ratio(`ratio')
+        if "`align'"!="" local SHAPE `SHAPE' align(`align')
+        char LAYER[symbol_`layer'] `SHAPE'
         char LAYER[symsize_`layer'] `=`SIZE''
         char LAYER[layertype_`layer'] symbol
     }
