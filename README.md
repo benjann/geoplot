@@ -169,6 +169,11 @@ Inset.
 
 Main changes:
 
+    19jul2024
+    geoplot:
+    - suboption common added to symscale() in glegend() to preserve symbol sizes
+      across keys
+
     18jul2024
     geoplot:
     - glegend():

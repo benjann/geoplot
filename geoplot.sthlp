@@ -1,5 +1,5 @@
 {smcl}
-{* 17jul2024}{...}
+{* 19jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -1742,9 +1742,18 @@ or
     {cmd:symysize(3)} and {cmd:symxsize(3)}.
 
 {phang2}
-    {opt syms:cale(#)} specifies the relative size of symbols from layertype
-    {helpb geoplot##symbol:symbol}, in proportion to the height set by
-    {cmd:symysize()}. Default is {cmd:symscale(0.8)}.
+    {cmdab:syms:cale(}[{it:#}][{cmd:,} {cmdab:c:ommon}]{cmd:)} specifies the
+    size of symbols from layertype {helpb geoplot##symbol:symbol} in the
+    legend keys, as a proportion of the minimum of the height and width set by
+    {cmd:symysize()} and {cmd:symxsize()}. Default is {cmd:symscale(0.8)}, which
+    means that at most 80% of the available space will be consumed.
+
+{pmore2}
+    Suboption {cmd:common} causes the relevant rescaling factor to be computed
+    jointly across all keys containing elements from
+    {helpb geoplot##symbol:symbol} layers, such that relative symbol sizes
+    will be preserved across keys. The default is to rescale each key
+    individually, preserving relative symbol sizes only within key.
 
 {phang2}
     {opt rowg:ap(#)} specifies the vertical gap between legend keys, in percent
