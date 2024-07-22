@@ -169,6 +169,14 @@ Inset.
 
 Main changes:
 
+    22jul2024
+    geoplot:
+    - layertype label now has better support in glegend(); if syntax
+      -label frame ("text" ...)- is used, the specified texts are use as symbols
+      in the legend keys
+    - arrow and farrow shapes in layertype symbol now have arguments; by default,
+      the shaft of farrow now has nonzero width
+
     19jul2024
     geoplot:
     - suboption common added to symscale() in glegend() to preserve symbol sizes

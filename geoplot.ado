@@ -1,4 +1,4 @@
-*! version 1.2.9  19jul2024  Ben Jann
+*! version 1.3.0  22jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
