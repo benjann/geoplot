@@ -1,4 +1,4 @@
-*! version 1.2.3  17jul2024  Ben Jann
+*! version 1.2.4  22jul2024  Ben Jann
 
 /*
     Syntax:
@@ -661,10 +661,12 @@ program __geoplot_layer
         local labels `"`label'"'
     }
     // mlabi()/mlabz
+    local mlabels
     if `"`mlabi'`mlabz'"'!="" {
         if "`mlabz'"!="" local MLBLS labels
         else             local MLBLS mlabi
         if `hasZ' {
+            local space
             local MLABI
             foreach i of local zindex {
                 if `"`MLABI'"'=="" { // recycle
@@ -672,11 +674,21 @@ program __geoplot_layer
                 }
                 gettoken mlbi MLABI : MLABI
                 qui replace MLAB = `"`mlbi'"' in `n0'/`n1' if Z==`i'
+                local mlabels `"`mlabels'`space'`"`mlbi'"'"'
+                local space " "
             }
         }
         else {
             gettoken mlbi : `MLBLS'
             qui replace MLAB = `"`mlbi'"' in `n0'/`n1'
+            local mlabels `"`"`mlbi'"'"'
+        }
+    }
+    else if `"`mlabel'"'!="" {
+        if `layer'<. {
+            foreach i of local zindex {
+                local mlabels `mlabels' `mlabel'
+            }
         }
     }
     // returns
@@ -685,6 +697,7 @@ program __geoplot_layer
         char LAYER[plottype_`layer'] `plottype'
         char LAYER[glopts_`layer'] `GLOPTS'
         char LAYER[labels_`layer'] `"`labels'"'
+        char LAYER[mlabels_`layer'] `"`mlabels'"'
         char LAYER[nolegend_`layer'] `nolegend'
         char LAYER[hasz_`layer'] `hasZ'
         char LAYER[wmax_`layer'] `wmax2'

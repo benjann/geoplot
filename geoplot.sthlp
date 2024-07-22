@@ -1,5 +1,5 @@
 {smcl}
-{* 19jul2024}{...}
+{* 22jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -580,10 +580,11 @@ or
     absolute (and normalized) values of {it:exp}. {it:options} are as follows.
 
 {phang}
-    {opt sh:ape(spec)} selects or defines the shape of the symbols. {it:shape} may be
+    {opt sh:ape(shape)} selects or defines the shape of the symbols. {it:shape} may be
+    as follows.
 
 {p2colset 9 25 27 2}{...}
-{p2col:{cmdab:c:ircle}}circle (or oval)
+{p2col:{cmdab:c:ircle}}circle (or oval); this is the default
     {p_end}
 {p2col:{cmdab:t:riangle}}triangle
     {p_end}
@@ -597,9 +598,13 @@ or
     {p_end}
 {p2col:{cmdab:o:ctagon}}octagon
     {p_end}
-{p2col:{cmdab:a:rc} [{it:angle}]}section of circle; {it:angle} in [-360,360]
+{p2col:{cmdab:a:rc} [{it:angle}]}section of circle; specify
+    option {cmd:line} (see below) to prevent closing the arc;
+    {it:angle} in [-360,360] specifies the size of the segment
+    in degrees; default is 180 (half circle);
     {p_end}
-{p2col:{cmdab:sl:ice} [{it:angle}]}slice of circle; {it:angle} in [-360,360]
+{p2col:{cmdab:sl:ice} [{it:angle}]}slice of circle; {it:angle} in [-360,360] as for
+    {cmd:arc}
     {p_end}
 {p2col:{cmdab:l:ine}}horizontal line
     {p_end}
@@ -613,9 +618,15 @@ or
     {p_end}
 {p2col:{cmd:v}}V symbol
     {p_end}
-{p2col:{cmdab:arr:ow}}arrow with open head
+{p2col:{cmdab:arr:ow} [{it:l} {it:w}]}arrow with open head; {it:l} specifies the
+    length and {it:w} the width of the arrowhead (in proportion to the length
+    of the arrow); defaults are 0.5 for {it:l} and two thirds for {it:w}
     {p_end}
-{p2col:{cmdab:farr:ow}}arrow with closed head
+{p2col:{cmdab:farr:ow} [{it:l} {it:w} {it:b}]}arrow with closed head; {it:l}
+    specifies the length and {it:w} the width of the arrowhead,
+    {it:b} the with of the shaft (in proportion to the length
+    of the arrow); defaults are 0.5
+    for {it:l}, 0.5 for {it:w}, and 0.2 for {it:b}
     {p_end}
 {p2col:{cmdab:star}}5-pointed star
     {p_end}
@@ -625,9 +636,11 @@ or
     {p_end}
 {p2col:{cmdab:hexagr:am}}hexagram (6-pointed star with crossing lines)
     {p_end}
-{p2col:{cmdab:pin} [{it:headsize}]}pin (needle); {it:headsize} in [0,1]
+{p2col:{cmdab:pin} [{it:headsize}]}pin (needle); {it:headsize} in [0,1] specifies
+    the size of the head; default is one third
     {p_end}
-{p2col:{cmdab:pin2} [{it:headsize}]}alternative pin; {it:headsize} in [0,1]
+{p2col:{cmdab:pin2} [{it:headsize}]}alternative pin; {it:headsize} in [0,1] specifies
+    the size of the head; default is 0.6
     {p_end}
 {p2col:{it:{help numlist}}}manual shape coordinates
     {p_end}
@@ -635,15 +648,6 @@ or
     {p_end}
 {p2col:{it:name} [{it:arg}]}mata function {cmd:_geo_symbol_}{it:name}{cmd:()} returning shape coordinates
     {p_end}
-
-{pmore}
-    The default is {cmd:circle}. For {cmd:arc} and
-    {cmd:slice}, argument {it:angle} in [-360,360] specifies the size of the
-    segment in degrees; default is {cmd:180} (half circle). In case of
-    {cmd:arc} you may want to specify option {cmd:line} (see below) to prevent
-    connecting the first and the last point. For {cmd:pin} and {cmd:pin2}, argument
-    {it:headsize} in [0,1] specifies the size of the head; default is one third for
-    {cmd:pin} and 0.6 for {cmd:pin2}.
 
 {pmore}
     Use {opt shape(numlist)} or {opt shape(matname)} to

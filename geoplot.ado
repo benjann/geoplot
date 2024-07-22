@@ -2376,12 +2376,14 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         local ++j
         local KEYS_`j' : char LAYER[keys_`l']
         local LBLS     : char LAYER[labels_`l']
+        local MLBLS_`j': char LAYER[mlabels_`l']
         local OPTS_`j' : char LAYER[glopts_`l']
         local hasz_`j' = `"`: char LAYER[hasz_`l']'"'=="1"
         local hasmis_`j' = `"`: char LAYER[z_hasmis_`l']'"'=="1"
         if `hasmis_`j'' { // remove missing from lists
-            gettoken mkey_`j' KEYS_`j' : KEYS_`j'
-            gettoken mopt_`j' OPTS_`j' : OPTS_`j', bind
+            gettoken mkey_`j' KEYS_`j'  : KEYS_`j'
+            gettoken mopt_`j' OPTS_`j'  : OPTS_`j', bind
+            gettoken MLBL_`j' MLBLS_`j' : MLBLS_`j', quotes
             // use settings from last layer that has missing
             gettoken mlbl LBLS : LBLS, quotes
             local mleg: char LAYER[z_mleg_`l']
@@ -2389,6 +2391,7 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         if (`"`:char LAYER[z_reverse_`l']'"'=="1")==`reverse' {
            mata: _glegend_reverse("KEYS_`j'")
            mata: _glegend_reverse("LBLS")
+           mata: _glegend_reverse("MLBLS_`j'")
            mata: _glegend_reverse("OPTS_`j'")
         }
         local ltype_`j': char LAYER[layertype_`l']
@@ -2442,8 +2445,9 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         if `mleg' {
             if `hasmis_`j'' {
                 local i0 = 0
-                local KEYS_`j' `"`mkey_`j'' `KEYS_`j''"'
-                local OPTS_`j' `"`mopt_`j'' `OPTS_`j''"'
+                local KEYS_`j'  `"`mkey_`j'' `KEYS_`j''"'
+                local OPTS_`j'  `"`mopt_`j'' `OPTS_`j''"'
+                local MLBLS_`j' `"`MLBL_`j'' `MLBLS_`j''"'
             }
             else if `hasz_`j'' local i0 1
             else               local i0 0 // (no zvar; include missing)
@@ -2456,14 +2460,16 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         }
         forv i = `i0'/`n' {
             if `hasz_`j'' {
-                gettoken key KEYS_`j' : KEYS_`j'
+                gettoken key KEYS_`j'  : KEYS_`j'
                 if "`key'"=="" continue, break
-                gettoken opt OPTS_`j' : OPTS_`j', match(paren)
+                gettoken opt OPTS_`j'  : OPTS_`j', match(paren)
+                gettoken MLBL MLBLS_`j': MLBLS_`j'
             }
             else { // (no zvar; repeat key)
                 if `i'==`i0' {
-                    gettoken key KEYS_`j' : KEYS_`j'
-                    gettoken opt OPTS_`j' : OPTS_`j', match(paren)
+                    gettoken key KEYS_`j'  : KEYS_`j'
+                    gettoken opt OPTS_`j'  : OPTS_`j', match(paren)
+                    gettoken MLBL MLBLS_`j': MLBLS_`j'
                 }
             }
             local psty = mod(`key'-1,`pcycle') + 1
@@ -2473,7 +2479,7 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
                     */ `symopt' `opt'
             }
             else if `"`ltype_`j''"'=="label" {
-                _glegend_post_label `SHP' `c' `x0' `y_`i'', `opt'
+                _glegend_post_label `SHP' `c' `"`MLBL'"' `x0' `y_`i'', `opt'
             }
             else if `"`ptype_`j''"'=="area" {
                 _glegend_post_area `SHP' `c' `wd' `ht' `x0' `y_`i'', `opt'
@@ -2527,12 +2533,13 @@ end
 program _glegend_post_label
     gettoken SHP 0 : 0
     gettoken c   0 : 0
+    gettoken lbl 0 : 0
     gettoken x   0 : 0
     gettoken y   0 : 0, parse(" ,")
     frame post `SHP' (`c') (`x') (`y')
     syntax [, MLABPosition(passthru) /*MLABSize(passthru)*/ *]
     frame `SHP': local n = _N
-    c_local plot (label `SHP' ("...") in `n',/*
+    c_local plot (label `SHP' (`"`lbl'"') in `n',/*
         */ mlabpos(0) /*mlabsize(vsmall)*/ `options')
 end
 
@@ -3796,7 +3803,8 @@ void _glegend_reverse(string scalar nm)
     t = tokeninit(" ", "", (`""""', `"`""'"',"()"))
     tokenset(t, st_local(nm))
     S = tokengetall(t)
-    st_local(nm, invtokens(S[length(S)..1]))
+    if (length(S)>1) st_local(nm, invtokens(S[length(S)..1]))
+    else             st_local(nm, invtokens(S))
 }
 
 void _slegend_symbol_update_tfpos(real scalar tfirst, real scalar tfpos0)

@@ -1,4 +1,4 @@
-*! version 1.1.4  02jul2024  Ben Jann
+*! version 1.1.5  22jul2024  Ben Jann
 
 program _geoplot_label
     version 16.1
@@ -17,7 +17,7 @@ program _geoplot_label
     else                      local mlabl mlabel(`mlabl')
     _parse comma lhs 0 : 0
     syntax [, POSition(str) VPOSition(str) gap(str) ANGle(str) TSTYle(str) /*
-           */ SIze(str) COLor(str) Format(str) * ]
+           */ SIze(str) COLor(str asis) Format(str) * ]
     if `"`position'"'=="" local position 0
     local opts
     foreach opt in position vposition gap angle size color format {

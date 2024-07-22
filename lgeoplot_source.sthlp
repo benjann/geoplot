@@ -3879,7 +3879,7 @@ end
 
 *! {smcl}
 *! {marker geo_symbol}{bf:symbol()}{asis}
-*! version 1.0.3  16jul2024  Ben Jann
+*! version 1.0.4  22jul2024  Ben Jann
 *!
 *! Returns the coordinates of a selected symbol
 *!
@@ -4119,18 +4119,33 @@ real matrix _geo_symbol_v(| real scalar n, string scalar arg)
 
 real matrix _geo_symbol_arrow(| real scalar n, string scalar arg)
 {
+    real scalar    l, w
+    real rowvector ARG
     pragma unused n
-    pragma unused arg
-
-    return((-1,0) \ (1,0) \ (.,.) \ (1,0) \ (0,2/3) \ (.,.) \ (1,0) \ (0,-2/3))
+    
+    ARG = strtoreal(tokens(arg))
+    if (length(ARG)<2) ARG = ARG, J(1,2-length(ARG),.)
+    l = ARG[1]; w = ARG[2]
+    if (l>=.) l = .5
+    if (w>=.) w = 2/3
+    l = 1 - l*2
+    return((-1,0) \ (1,0) \ (.,.) \ (1,0) \ (l,w) \ (.,.) \ (1,0) \ (l,-w))
 }
 
 real matrix _geo_symbol_farrow(| real scalar n, string scalar arg)
 {
+    real scalar    l, w, b
+    real rowvector ARG
     pragma unused n
-    pragma unused arg
 
-    return((-1,0) \ (0,0) \ (0,.5) \ (1,0) \ (0,-.5) \ (0,0) \ (-1,0))
+    ARG = strtoreal(tokens(arg))
+    if (length(ARG)<3) ARG = ARG, J(1,3-length(ARG),.)
+    l = ARG[1]; w = ARG[2]; b = ARG[3]
+    if (l>=.) l = .5
+    if (w>=.) w = .5
+    if (b>=.) b = .2
+    l = 1 - l*2
+    return((-1,b) \ (l,b) \ (l,w) \ (1,0) \ (l,-w) \ (l,-b) \ (-1,-b) \ (-1, b))
 }
 
 end
