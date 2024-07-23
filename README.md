@@ -170,6 +170,14 @@ Inset.
 Main changes:
 
     22jul2024
+    geoplot
+    - layertype symbol now allows syntax -symbol frame (shape) ...- as an
+      alternative to -symbol frame ..., shape()-; likewise, symboli now allows
+      -symboli (shape) ...- as an alternative to -symboli ..., shape(shape)-
+    - glegend() returned error if applied to symbol layers containing
+      -shape(numlist)- or -shape(matname)-; this is fixed
+
+    22jul2024
     geoplot:
     - layertype label now has better support in glegend(); if syntax
       -label frame ("text" ...)- is used, the specified texts are use as symbols

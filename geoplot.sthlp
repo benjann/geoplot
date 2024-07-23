@@ -1,5 +1,5 @@
 {smcl}
-{* 22jul2024}{...}
+{* 23jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -567,21 +567,23 @@ or
 {dlgtab:single-coordinate symbols}
 
 {p 8 15 2}
-    {cmdab:sym:bol} {it:frame} [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
+    {cmdab:sym:bol} {it:frame} [{cmd:(}{it:shape}{cmd:)}] [[{cmd:i.}]{help geoplot##zvar:{it:zvar}}] {ifin} {weight}
     [{cmd:,}
     {it:options} ]
 
 {pstd}
     where {it:frame} is the frame containing the positions of
-    the symbols (see {helpb geoframe}), {help geoplot##zvar:{it:zvar}} is an optional
+    the symbols (see {helpb geoframe}), {it:shape} defines the shape of the symbols
+    (see below), {help geoplot##zvar:{it:zvar}} is an optional
     variable to determine styling, and {it:weight}, specified as
     {cmd:[}{cmdab:w:eight}{cmd:=}{it:exp}{cmd:]} or
     {cmd:[}{cmdab:iw:eight}{cmd:=}{it:exp}{cmd:]}, scales the symbols by the
     absolute (and normalized) values of {it:exp}. {it:options} are as follows.
 
 {phang}
-    {opt sh:ape(shape)} selects or defines the shape of the symbols. {it:shape} may be
-    as follows.
+    {opt sh:ape(shape)} is an alternative to specifying argument
+    {cmd:(}{it:shape}{cmd:)}; if both are specified, option {cmd:shape()} takes
+    precedence. {it:shape} may be as follows.
 
 {p2colset 9 25 27 2}{...}
 {p2col:{cmdab:c:ircle}}circle (or oval); this is the default
@@ -1077,7 +1079,7 @@ or
 {dlgtab:symbol with immediate arguments}
 
 {p 8 15 2}
-    {cmd:symboli} {it:immediate_values} [{cmd:,} {it:options} ]
+    {cmd:symboli} [{cmd:(}{help geoplot##symbol:{it:shape}}{cmd:)}] {it:immediate_values} [{cmd:,} {it:options} ]
 
 {pstd}
     where {it:immediate_values} is one or more of
@@ -1103,7 +1105,7 @@ or
     are created if multiple {cmd:"}{it:text}{cmd:"} elements are specified.
 
 {phang}
-    Rendering options as described for layertype {helpb geoplot##symbol:symbol}.
+    Further options as described for layertype {helpb geoplot##symbol:symbol}.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes, arrows, or markers}

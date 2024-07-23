@@ -1,4 +1,4 @@
-*! version 1.1.9  18jul2024  Ben Jann
+*! version 1.2.0  23jul2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -34,6 +34,9 @@ program __geoplot_symboli
         local mlabel mlabel(LAB)
         if `haspos' local mlabvpos mlabvpos(POS)
     }
+    if `"`shparg'"'!="" {
+        local options shparg(`shparg') `options'
+    }
     ___geoplot_symbol `layer' `p' `frame', size(`SIZE' `RELSIZE')/*
         */ _frameonly(`_frameonly') `mlabel' `mlabvpos' `options'
     if !`PLOT' exit
@@ -46,6 +49,7 @@ program _symboli
     gettoken SIZE 0 : 0
     gettoken RELSIZE 0 : 0
     gettoken PLOT 0 : 0
+    // process size()
     if `"`Size'"'!="" {
         if substr(`"`Size'"',1,1)=="*" {
             local Size = substr(`"`Size'"',2,.)
@@ -63,6 +67,13 @@ program _symboli
         local Size 1
         local Relsize 1
     }
+    // get optional shape argument
+    gettoken shparg : 0, match(paren)
+    if "`paren'"=="(" {
+        gettoken shparg 0 : 0, match(paren)
+        c_local shparg `"`shparg'"'
+    }
+    // collect values and labels
     local xy X Y
     local n 0
     local HASLAB 0
@@ -97,7 +108,7 @@ program _symboli
             qui replace `SIZE' = (`size') in `n'
         }
         else {
-            qui replace `SIZE'    = `Size' in `n'
+            qui replace `SIZE' = `Size' in `n'
             if `Relsize' {
                 qui replace `RELSIZE' = 1 in `n'
             }
@@ -167,6 +178,11 @@ program __geoplot_symbol
             */ CENTRoids(str) area(str)/* (will be ignored)
             */ _frameonly(str)/* undocumented; used by geoframe symbol
             */ * ]
+        gettoken shparg : anything, match(paren)
+        if "`paren'"=="(" {
+            gettoken shparg anything : anything, match(paren)
+            local options shparg(`shparg') `options'
+        }
         _parse_zvar 0 varlist `anything'
         _parse_zvar 1 colorvar `colorvar'
         // mode (plot vs. data only) and name for tempframe
@@ -339,17 +355,26 @@ program ___geoplot_symbol
         local MLOPTS `MLOPTS' `opt'(passthru)
     }
     local mlopts = strlower("`mlopts'")
-    syntax  [iw/] [, size(str) _frameonly(str)/*
+    syntax [iw/] [, size(str) _frameonly(str) shparg(str asis)/*
         */ SHape(passthru) n(passthru) OFFset(numlist max=2)/*
         */ ANGle(real 0) ratio(real 1) align(str)/*
         */ line `MLOPTS' * ]
-    // size(), _frameonly()
+    // size(), _frameonly(), shparg()
     gettoken size relsize : size
     gettoken relsize      : relsize
     local PLOT = `"`_frameonly'"'==""
     if `PLOT' tempname frame1
     else      local frame1 `_frameonly'
+    if `"`shape'"'=="" {
+        if `"`shparg'"'!="" local shape shape(`shparg')
+    }
     // parse symbol options: size(), shape(), n(), offset(), align()
+    if `layer'<. {
+        local SHAPE `shape' `n'
+        if `"`offset'"'!="" local SHAPE `SHAPE' offset(`offset')
+        local SHAPE `SHAPE' angle(`angle') ratio(`ratio')
+        if "`align'"!="" local SHAPE `SHAPE' align(`align')
+    }
     _parse_shape, `n' `shape' // returns shape, arg, n
     gettoken offset oangle : offset
     gettoken oangle: oangle
@@ -377,12 +402,6 @@ program ___geoplot_symbol
     }
     if !`PLOT' exit
     if `layer'<. {
-        local SHAPE `shape' `arg'
-        local SHAPE shape(`SHAPE')
-        if `n'<. local SHAPE `SHAPE' n(`n')
-        local SHAPE `SHAPE' offset(`offset' `oangle')
-        local SHAPE `SHAPE' angle(`angle') ratio(`ratio')
-        if "`align'"!="" local SHAPE `SHAPE' align(`align')
         char LAYER[symbol_`layer'] `SHAPE'
         char LAYER[symsize_`layer'] `=`SIZE''
         char LAYER[layertype_`layer'] symbol
