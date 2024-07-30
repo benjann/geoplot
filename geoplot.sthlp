@@ -1651,7 +1651,10 @@ or
 {p2colset 17 26 28 2}{...}
 {p2col: {it:#}}include the legend keys of layer {it:#}
     {p_end}
-{p2col: {cmd:.}}add a gap
+{p2col: {it:{help numlist}}}shorthand notation to include
+    several layers, one after the other
+    {p_end}
+{p2col: {cmd:.}}add a gap between layers
     {p_end}
 {p2col: {cmd:|}}start a new column (or a new row)
     {p_end}
@@ -1660,8 +1663,7 @@ or
     {p_end}
 
 {pmore2}
-    Series of {it:#} elements can be specified using shorthand notation as described
-    in {it:{help numlist}}. {opt laye:rs()} can be used as a synonym for {cmd:layout()}.
+    {opt laye:rs()} can be used as a synonym for {cmd:layout()}.
 
 {phang2}
     {opt bot:tom} aligns the legend keys at the bottom (rightmost) if there are multiple
@@ -1712,8 +1714,18 @@ or
 {pmore2}
     where {it:el} is one of
 
-{p2colset 17 26 28 2}{...}
-{p2col: {it:layers}}include the legend keys of the specified layers
+{p2colset 17 32 34 2}{...}
+{p2col: {it:#} [{it:label}]}include the legend keys of layer {it:#},
+    optionally with custom labels
+    {p_end}
+{p2col: {it:{help numlist}}}shorthand notation to include
+    several layers, one after the other
+    {p_end}
+{p2col: {it:#} {cmd:&} {it:#} [{it:label}]}include legend keys with composite
+    symbols from two layers (i.e., symbols from two layers printed on top of each
+    other), optionally with custom labels (more than two layers can be combined
+    by typing {it:#} {cmd:&} {it:#} {cmd:&} {it:#} ...); default
+    labels will be taken from the last layer
     {p_end}
 {p2col: {cmd:.}}add a gap between layers
     {p_end}
@@ -1724,18 +1736,17 @@ or
     {p_end}
 
 {pmore2}
-    and {it:layers} is a single {it:#} to include the keys of layer {it:#}, a
-    {it:{help numlist}} to include the keys from multiple layers (one after
-    the other), or
-
-                {it:#1} {cmd:&} {it:#2} [ {cmd:&} {it:#3} ... ]
+    The syntax of argument {it:label} is {cmd:"}{it:text}{cmd:"}
+    [{cmd:"}{it:text}{cmd:"} {it:...}]. If {help geoplot##zvar:{it:zvar}} has
+    been applied in a layer, the specified {cmd:"}{it:text}{cmd:"} elements
+    will be assigned to the legend keys one by one. If {help geoplot##zvar:{it:zvar}}
+    has not been applied (such that the layer has only a single legend key),
+    specifying multiple {cmd:"}{it:text}{cmd:"} elements will create a
+    multiline label. If argument {it:label} is omitted, the label(s) from
+    option {helpb geoplot##label:label()} within the layer will be used.
 
 {pmore2}
-    to include legend keys with composite symbols from two or more
-    layers (i.e., symbols from multiple layers printed on top of each
-    other; labels will be determined in such as way that for
-    each key the last non-empty label is printed). {opt laye:rs()}
-    can be used as a synonym for {cmd:layout()}.
+    {opt laye:rs()} can be used as a synonym for {cmd:layout()}.
 
 {phang2}
     {opt bot:tom} aligns the legend keys at the bottom if there are multiple

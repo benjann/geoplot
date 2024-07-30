@@ -1,4 +1,4 @@
-*! version 1.3.2  30jul2024  Ben Jann
+*! version 1.3.3  30jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -2140,6 +2140,7 @@ program _glegend
         local LAYOUT `LAYOUT' `layers'
         while (`"`layers'"'!="") {
             gettoken l layers : layers, match(paren)
+            gettoken lbl l : l // first element is label
             local ++j
             _glegend_symdim `j' `l'
         }
@@ -2172,10 +2173,12 @@ program _glegend
         // case 1: add keys and labels from selected layer(s)
         if "`paren'"!="" {
             local ++j
+            gettoken lbl l : l // first element is label
             _glegend_plot_keys `LBL' `SHP' `PC' `x' `y' `c'/*
                 */ "`scale_`j''" "`xmid_`j''" "`ymid_`j''"/* (for symbol layers)
                 */ `reverse' `ht' `wd' `keygap' `rowgap' `lskip' `tfirst'/*
-                */ `twd' `talign' `pcycle' "`l'" // returns plot, updates y
+                */ `twd' `talign' `pcycle' "`l'" `"`lbl'"'
+                // returns plot, updates y
             local plots `plots' `plot'
             continue
         }
@@ -2271,23 +2274,35 @@ end
 
 program _glegend_collect_layers
     // pass 1: expand numlists until next "|", ".", or "-"
-    local layout
+    local layout : copy local 0
+    local LAYOUT
     local ll
-    while (`"`0'"'!="") {
-        gettoken l : 0, parse(" &|.-")
+    while (`"`layout'"'!="") {
+        gettoken l : layout, parse(" &|.-")
         if inlist(`"`l'"',"|",".","-") continue, break
-        gettoken l 0 : 0, parse(" &")
-        if `"`l'"'=="&" { // expand (sub)sequence
-            if `"`ll'"'=="" continue // ignore & at start of sequence
+        gettoken l layout : layout, parse(" &") qed(qed)
+        if `qed' | `"`l'"'=="&" { // expand (sub)sequence
+            if `"`ll'"'=="" {
+                if `qed' {
+                    di as err "invalid syntax in layout()"
+                    exit 198
+                }
+                else continue // ignore & at start of sequence
+            }
             capt numlist `"`ll'"', int range(>0)
             if _rc==1 exit 1
             if _rc {
                 di as err `"{bf:`ll'} not allowed in layout()"'
                 exit 198
             }
-            local layout `layout' `r(numlist)' &
+            if `qed' {
+                _glegend_collect_label `"`l'"' `layout' // lbl, layout
+                local LAYOUT `LAYOUT' `r(numlist)' `"`lbl'"'
+            }
+            else {
+                local LAYOUT `LAYOUT' `r(numlist)' &
+            }
             local ll
-            local space
             continue
         }
         local ll `ll' `l'
@@ -2299,27 +2314,32 @@ program _glegend_collect_layers
             di as err `"{bf:`ll'} not allowed in layout()"'
             exit 198
         }
-        local layout `layout' `r(numlist)'
+        local LAYOUT `LAYOUT' `r(numlist)'
     }
     // pass 2: process overlays (set of layers merged by &)
     local layers
     local ll
-    while (`"`layout'"'!="") {
-        gettoken l layout : layout
+    while (`"`LAYOUT'"'!="") {
+        gettoken l LAYOUT : LAYOUT
         local ll `ll' `l'
-        gettoken amp : layout, parse(" &")
-        if `"`amp'"'=="&" {
-            gettoken amp layout : layout, parse(" &")
-            continue
+        gettoken lbl : LAYOUT, qed(qed)
+        if `qed' gettoken lbl LAYOUT : LAYOUT, qed(qed)
+        else {
+            local lbl
+            gettoken amp : LAYOUT, parse(" &")
+            if `"`amp'"'=="&" {
+                gettoken amp LAYOUT : LAYOUT, parse(" &")
+                continue
+            }
         }
-        local layers `layers' (`ll')
+        local layers `layers' (`"`lbl'"' `ll')
         local ll
     }
     if `"`ll'"'!="" { // add last set
-        local layers `layers' (`ll')
+        local layers `layers' ("" `ll')
     }
     c_local layers `layers'
-    c_local layout `"`0'"'
+    c_local layout `"`layout'"'
 end
 
 program _glegend_symdim, rclass
@@ -2396,11 +2416,12 @@ end
 
 program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
     args LBL SHP PC x y c symscale sxmid symid reverse ht wd keygap rowgap /*
-        */ lskip tfirst twd talign pcycle layers
+        */ lskip tfirst twd talign pcycle layers LBL0
     // collect keys and labels
     local n 0
     local j 0
     local nsym 0
+    local nz 0
     foreach l of local layers {
         if `"`: char LAYER[keys_`l']'"'=="" {
             di as txt "(glegend(): layer `l' not found)"
@@ -2413,6 +2434,7 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
         local MLBLS_`j': char LAYER[mlabels_`l']
         local OPTS_`j' : char LAYER[glopts_`l']
         local hasz_`j' = `"`: char LAYER[hasz_`l']'"'=="1"
+        if `hasz_`j'' local ++nz
         local hasmis_`j' = `"`: char LAYER[z_hasmis_`l']'"'=="1"
         if `hasmis_`j'' { // remove missing from lists
             gettoken mkey_`j' KEYS_`j'  : KEYS_`j'
@@ -2447,6 +2469,19 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
             local lbl_`i' `"`lbl'"'
         }
         local n = max(`n',`i')
+    }
+    if `"`LBL0'"'!="" { // override labels
+        if `nz' {
+            forv i=1/`n' {
+                gettoken lbl0 LBL0 : LBL0
+                if `"`lbl0'"'!="" {
+                    local lbl_`i' `"`lbl0'"'
+                }
+            }
+        }
+        else {
+            local lbl_1 `"`LBL0'"'
+        }
     }
     local J `j'
     if !inlist(`"`mleg'"',"1","2","3","4") local mleg 0

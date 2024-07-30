@@ -171,6 +171,10 @@ Main changes:
 
     30jul2024
     geoplot:
+    - glegend(): custom key labels can now be specified directly within layout()
+
+    30jul2024
+    geoplot:
     - glegend() now has option symsize() as shorthand for symxsize() and symysize();
       minimum abbreviaton of option symscale() now symsc(), not syms()
 
