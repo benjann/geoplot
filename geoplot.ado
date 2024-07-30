@@ -1,4 +1,4 @@
-*! version 1.3.1  30jul2024  Ben Jann
+*! version 1.3.2  30jul2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -1966,7 +1966,7 @@ program _Legend
         local 0 `", `glegend2'"'
         if "`pcycle'"=="" local pcycle 15
         local lhs
-        local opts Layout(str asis) LAYErs(str asis) BOTtom SYMScale(str)
+        local opts Layout(str asis) LAYErs(str asis) BOTtom SYMSCale(str)
     }
     else {
         syntax [, slegend(str asis) xrescale(str) ]
@@ -1975,7 +1975,7 @@ program _Legend
         local opts Layer(numlist int max=1 >0) OVERlay OVERlay2(numlist max=1)/*
             */ SAlign(str) TFLoat Format(str) HEADing(str asis)
     }
-    syntax `lhs'[, `opts' REVerse/*
+    syntax `lhs'[, `opts' REVerse SYMSIze(numlist max=1)/*
         */ SYMYsize(numlist max=1) SYMXsize(numlist max=1) /* 
         */ KEYGap(real 1) ROWGap(numlist max=1) COLGap(real 3)/*
         */ LINESKip(real 2) TEXTFirst TEXTWidth(numlist) TAlign(str)/*
@@ -1990,15 +1990,13 @@ program _Legend
         local TITLE `TITLE' `title_`i''
     }
     if "`ltype'"=="glegend" {
-        if "`symysize'"==""   local symysize  3
-        if "`symxsize'"==""   local symxsize  3
+        if "`symsize'"==""    local symsize   3
         if "`rowgap'"==""     local rowgap    0
         if "`textwidth'"==""  local textwidth 12
         if `"`position'"'=="" local position  2
     }
     else {
-        if "`symysize'"==""   local symysize  2
-        if "`symxsize'"==""   local symxsize  2
+        if "`symsize'"==""    local symsize   2
         if "`rowgap'"==""     local rowgap    1
         if "`textwidth'"==""  local textwidth 12
         else                  gettoken textwidth : textwidth
@@ -2006,6 +2004,8 @@ program _Legend
         else                  gettoken headskiph : headskip
         if `"`position'"'=="" local position  7
     }
+    if "`symysize'"=="" local symysize `symsize'
+    if "`symxsize'"=="" local symxsize `symsize'
     local reverse = "`reverse'"!=""
     local tfirst  = "`textfirst'"!=""
     local span    = "`span'"==""

@@ -1756,16 +1756,17 @@ or
     described in {helpb colorpalette##colorlist:colorpalette}.
 
 {phang2}
-    {opt symy:size(#)} and {opt symx:size(#)} specify the height and width of the
-    space used for the keys' symbols, in percent
-    of the map's {help geoplot##refdim:reference size}. Defaults are
-    {cmd:symysize(3)} and {cmd:symxsize(3)}.
+    {opt symsi:ze(#)} specifies the height and width of the
+    space used for the keys' symbols, in percent of the map's
+    {help geoplot##refdim:reference size}. Default is
+    {cmd:symsize(3)}. Use options {opt symy:size(#)} and {opt symx:size(#)}
+    to set the height and width individually.
 
 {phang2}
-    {cmdab:syms:cale(}[{it:#}][{cmd:,} {cmdab:c:ommon}]{cmd:)} specifies the
+    {cmdab:symsc:ale(}[{it:#}][{cmd:,} {cmdab:c:ommon}]{cmd:)} specifies the
     size of symbols from layertype {helpb geoplot##symbol:symbol} in the
-    legend keys, as a proportion of the minimum of the height and width set by
-    {cmd:symysize()} and {cmd:symxsize()}. Default is {cmd:symscale(0.8)}, which
+    legend keys, as a proportion of the minimum of the height and width of the
+    available space for legend symbols. Default is {cmd:symscale(0.8)}, which
     means that at most 80% of the available space will be consumed.
 
 {pmore2}
@@ -1891,7 +1892,7 @@ or
     labels.
 
 {phang2}
-    {cmd:reverse}, {cmd:position()}, {cmd:box()}, {cmd:symysize()},
+    {cmd:reverse}, {cmd:position()}, {cmd:box()}, {cmd:symsize()}, {cmd:symysize()},
     {cmd:symxsize()}, {cmd:rowgap()}, {cmd:keygap()}, {cmd:textfirst},
     {cmd:textwidth()}, {cmd:talign()}, {cmd:tsize()}, {cmd:tcolor()},
     {cmd:tangle()}, {cmd:lineskip()}, {cmd:headskip()}, {cmd:halign()},
@@ -1899,7 +1900,7 @@ or
     {cmd:title()}, {cmd:margin()}, {cmd:xmargin()}, and {cmd:ymargin()} as
     described for option {helpb geoplot##glegend:glegend()}, with the following
     differences: default for {cmd:position()} is {cmd:sw}; default for
-    {cmd:symysize()} and {cmd:symxsize()} is {cmd:2}; default for
+    {cmd:symsize()} is {cmd:2}; default for
     {cmd:rowgap()} is {cmd:1}; {cmd:headskip()} only has a single argument
     specifying the extra gap after the subtitle.
 

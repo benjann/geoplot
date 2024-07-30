@@ -171,6 +171,11 @@ Main changes:
 
     30jul2024
     geoplot:
+    - glegend() now has option symsize() as shorthand for symxsize() and symysize();
+      minimum abbreviaton of option symscale() now symsc(), not syms()
+
+    30jul2024
+    geoplot:
     - layertype symbol:
       o shape("text") now allowed
       o default symbil size (i.e. radius) is now 1.5% of reference size;
