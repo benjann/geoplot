@@ -98,7 +98,7 @@ Map with size legend.
 
     geoplot ///
         (area regions fortell) ///
-        (symbol capitals [w=pop98], color(stc2%50) lcolor(white) size(*3)) ///
+        (symbol capitals [w=pop98], color(stc2%50) lcolor(white) size(*6)) ///
         (label capitals city if pop98>250000, color(gs14) size(vsmall)) ///
         , glegend(layout(- "FORTELL" 1) position(sw)) ///
           slegend(100000 "100 K" 5e5 "500 K" 1e6 "1 M" 2e6 "2 M", position(ne) ///
@@ -168,6 +168,26 @@ Inset.
 ---
 
 Main changes:
+
+    30jul2024
+    geoplot:
+    - layertype symbol:
+      o shape("text") now allowed
+      o default symbil size (i.e. radius) is now 1.5% of reference size;
+        computation of reference size revised
+      o option select() was not fully functional; this is fixed
+    - global option -noisily- added
+    - layertype label: specified marker_label_options now take precedence over
+      size(), color(), angle() etc.; undocumented options justification() and
+      align() added
+    - if zvar is specified and color()/mlabcolor() contains a single opacity and/or
+      intensity operator, colors will now be selected from the default palette (st
+      or viridis, depending on context); in the previous version, the operator was
+      passed through without selecting explicit colors
+    - layertype labels: msize(0) is now applied; this affects the positioning of the
+      labels if position() is unequal 0
+    - glegend(): improved handling of options related to marker labels; support for
+      symbol with shape("text") added
 
     22jul2024
     geoplot

@@ -1,5 +1,5 @@
 {smcl}
-{* 23jul2024}{...}
+{* 30jul2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -227,9 +227,11 @@ or
 {synopt :{help geoplot##twopts:{it:twoway_options}}}twoway options, other than {cmd:by()}
 
 {syntab :Data}
-{synopt :{helpb geoplot##frame:frame({it:spec})}}store ploted data in new frame
+{synopt :{helpb geoplot##frame:frame({it:spec})}}store plotted data in new frame
     {p_end}
-{synopt :{helpb nograph}}do not generate a graph
+{synopt :{helpb geoplot##nograph:nograph}}do not generate a graph
+    {p_end}
+{synopt :{helpb geoplot##noisily:{ul:nois}ily}}display graph command
     {p_end}
 {synoptline}
 
@@ -650,6 +652,10 @@ or
     {p_end}
 {p2col:{it:name} [{it:arg}]}mata function {cmd:_geo_symbol_}{it:name}{cmd:()} returning shape coordinates
     {p_end}
+{p2col:{cmd:"}{help graph_text:{it:text}}{cmd:"}}print the specified text rather
+    than a geometric shape; {it:text} may contain Unicode characters and SMCL
+    tags; weights are not allowed with {cmd:shape("}{it:text}{cmd:")}
+    {p_end}
 
 {pmore}
     Use {opt shape(numlist)} or {opt shape(matname)} to
@@ -734,7 +740,8 @@ or
 
 {phang}
     {opt ratio(#)} adjusts the ratio between the height and the width of the symbols. The default
-    is {cmd:ratio(1)}. For example, type {cmd:ratio(2)} to double the height.
+    is {cmd:ratio(1)}. For example, type {cmd:ratio(2)} to double the height. {cmd:ratio()}
+    has no effect in case of {cmd:shape("}{it:text}{cmd:")}.
 
 {phang}
     {opt ang:le(angle)} rotates the symbols by {it:angle} degrees (counterclockwise). Global
@@ -748,10 +755,15 @@ or
     the unit length of the specified coordinates. Type {opt size(exp)} to specify
     an absolute size (i.e. in units of the underlying
     map). Alternatively, specify {cmd:size(*}{it:exp}{cmd:)} to multiply the default
-    size by {it:exp}. The default size is set to 3% of the minimum of the horizontal
+    size by {it:exp}. The default size is set to 1.5% of the minimum of the horizontal
     and vertical size of the underlying map (as it exists at the point when the
-    symbols are added, including the positions of the symbols; the smallest possible
-    default size is 1).
+    symbols are added, including the positions of the symbols).
+
+{pmore}
+    The size of the plotted symbols may be inaccurate in case of {cmd:shape("}{it:text}{cmd:")}
+    if the size of the overall graph is not equal to the size of the underlying
+    map (at the point when the symbols are added). Use global option
+    {helpb geoplot##tight:tight} to adjust the graph size to the size of the map.
 
 {phang}
     {cmdab:off:set(}{it:offset} [{it:angle}]{cmd:)} offsets the positions of the
@@ -767,21 +779,22 @@ or
     symbols depending on the values of {help geoplot##zvar:{it:zvar}}. Specify
     {cmd:color(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} or
     {cmd:fcolor(}{help colorpalette##colorlist:{it:colorspec}}{cmd:)} to set a
-    single fill color for all symbols.
+    single fill color for all symbols. {cmd:line} has no effect in case of
+    {cmd:shape("}{it:text}{cmd:")}.
+
+{phang}
+    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()}, {cmd:ecolor()}, {cmd:box()},
+    {opt feature()}, and {opt coordinates()} are options as described for layer type
+    {helpb geoplot##area:area}.
+
+{phang}
+    {it:{help marker_label_options}} to add marker labels.
 
 {phang}
     {it:{help area_options}} or {it:{help line_options}}, depending on whether
     option {cmd:line} has been specified, are regular graph options to affect
     the look of the symbols. Color options support {it:colorspec} as described in
     {helpb colorpalette##colorlist:colorpalette}.
-
-{phang}
-    {it:{help marker_label_options}} to add marker labels.
-
-{phang}
-    {it:{help geoplot##zopts:zvar_options}}, {cmd:wmax()}, {cmd:select()}, {cmd:ecolor()}, {cmd:box()},
-    {opt feature()}, and {opt coordinates()} are options as described for layer type
-    {helpb geoplot##area:area}.
 
 {marker pie}{...}
 {dlgtab:pie charts}
@@ -1105,7 +1118,8 @@ or
     are created if multiple {cmd:"}{it:text}{cmd:"} elements are specified.
 
 {phang}
-    Further options as described for layertype {helpb geoplot##symbol:symbol}.
+    Further options as described for layertype {helpb geoplot##symbol:symbol}. Note
+    that all symbols will have the same size in case of {cmd:shape("}{it:text}{cmd:")}.
 
 {marker pcspike}{...}
 {dlgtab:paired-coordinate spikes, arrows, or markers}
@@ -2395,6 +2409,10 @@ or
     {cmd:nograph} if you are only interested in obtaining the compiled data
     using option {helpb geoplot##frame:frame()} and do not want to waste
     computer time on rendering the graph.
+
+{marker noisily}{...}
+{phang}
+    {opt noisily} displays the compiled graph command.
 
 
 {marker examples}{...}

@@ -1,4 +1,4 @@
-*! version 1.2.4  22jul2024  Ben Jann
+*! version 1.2.5  29jul2024  Ben Jann
 
 /*
     Syntax:
@@ -878,11 +878,19 @@ program _z_colors
     syntax [, `nm'(str asis) ]
     mata: _z_color_parselastcomma("`nm'") // returns color and 0
     syntax [, class(passthru) n(passthru) IPolate(passthru) * ]
-    if "`noexpand'"=="" local noexpand noexpand
     if `"`n'`ipolate'"'=="" local n n(`k')
-    if `"`color'"'=="" {
-        if `discrete' local color st
-        else          local color viridis
+    if `discrete' local default_palette st
+    else          local default_palette viridis
+    local l: list sizeof color
+    if `l'==0 {
+        // use default palette if no palette specified
+        local color `default_palette'
+    }
+    else if `l'==1 {
+        // add default palette if single opacity/intensity specified
+        if inlist(substr(`"`color'"',1,1),"%","*") {
+            local color `"`default_palette'`color'"'
+        }
     }
     if `"`class'"'=="" & `discrete' local class class(categorical)
     colorpalette `color', nograph `class' `n' `ipolate' `options'
