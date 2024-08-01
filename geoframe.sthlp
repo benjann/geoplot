@@ -1,5 +1,5 @@
 {smcl}
-{* 30jul2024}{...}
+{* 01aug2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -1530,7 +1530,7 @@
     are as follows.
 
 {phang}
-    {cmd:shape()}, {cmd:n()}, {cmd:align()}, {cmd:ratio()}, {cmd:angle()},
+    {cmd:shape()}, {cmd:n()}, {cmd:align()}, {cmd:ratio()}, {cmd:slant()}, {cmd:angle()},
     {cmd:size()}, and {cmd:offset()} are options as described for layertype
     {helpb geoplot##symbol:symbol} in
     {helpb geoplot}. {cmd:shape("}{it:text}{cmd:")} is not allowed.
@@ -1571,7 +1571,7 @@
     symbols for which no custom size has been specified.
 
 {phang}
-    {cmd:shape()}, {cmd:n()}, {cmd:align()}, {cmd:ratio()}, {cmd:angle()}, and
+    {cmd:shape()}, {cmd:n()}, {cmd:align()}, {cmd:ratio()}, {cmd:slant()}, {cmd:angle()}, and
     {cmd:offset()} are options as described for
     layertype {helpb geoplot##symbol:symbol} in
     {helpb geoplot}.  {cmd:shape("}{it:text}{cmd:")} is not allowed.

@@ -1,4 +1,4 @@
-*! version 1.2.1  30jul2024  Ben Jann
+*! version 1.2.2  01aug2024  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -368,8 +368,8 @@ program ___geoplot_symbol
     syntax [, size(str) _frameonly(str) shparg(str asis)/*
         */ tsize(numlist max=1 >=0)/* (undocumented; fix text size)
         */ SHape(passthru) n(passthru) OFFset(numlist max=2)/*
-        */ ANGle(real 0) ratio(real 1) align(str)/*
-        */ line SELect(str asis) `MLOPTS' * ]
+        */ ANGle(numlist max=1) ratio(numlist max=1) slant(numlist max=1)/*
+        */ align(str) line SELect(str asis) `MLOPTS' * ]
     if `"`select'"'!="" {
         local options select(`select') `options'
         local select `" if (`select')"'
@@ -383,12 +383,14 @@ program ___geoplot_symbol
     if `"`shape'"'=="" {
         if `"`shparg'"'!="" local shape shape(`shparg')
     }
-    // parse symbol options: size(), shape(), n(), offset(), align()
+    // parse symbol options: size(), shape(), n(), offset(), align()...
     if `layer'<. {
         local SHAPE `shape' `n'
-        if `"`offset'"'!="" local SHAPE `SHAPE' offset(`offset')
-        local SHAPE `SHAPE' angle(`angle') ratio(`ratio')
-        if "`align'"!="" local SHAPE `SHAPE' align(`align')
+        if "`offset'"!="" local SHAPE `SHAPE' offset(`offset')
+        if "`angle'"!=""  local SHAPE `SHAPE' angle(`angle')
+        if "`ratio'"!=""  local SHAPE `SHAPE' ratio(`ratio')
+        if "`slant'"!=""  local SHAPE `SHAPE' slant(`slant')
+        if "`align'"!=""  local SHAPE `SHAPE' align(`align')
     }
     _parse_shape, `n' `shape' // returns shape, arg, n
     if "`shape'"=="@label" {
@@ -406,6 +408,9 @@ program ___geoplot_symbol
     gettoken oangle: oangle
     if "`offset'"=="" local offset 0
     if "`oangle'"=="" local oangle 0
+    if "`angle'"==""  local angle 0
+    if "`ratio'"==""  local ratio 1
+    if "`slant'"==""  local slant 0
     _parse_align, `align'
     // plottype
     if "`line'"!="" local plottype line
@@ -433,8 +438,8 @@ program ___geoplot_symbol
     frame `frame' {
         tempname SIZE
         mata: _compute_symbols("`frame1'", "`shape'", st_local("arg"),/* 
-            */ `n', `angle', `ratio', "`size'", "`relsize'", `REFSIZE',/*
-            */ `offset', `oangle', "`align_lr'", "`align_bt'")
+            */ `n', `angle', `ratio', `slant', "`size'", "`relsize'",/*
+            */ `REFSIZE', `offset', `oangle', "`align_lr'", "`align_bt'")
     }
     if !`PLOT' exit
     // generate plot
@@ -517,7 +522,8 @@ program _parse_shape
     local SHAPES0 Triangle Square Pentagon HEXagon HEPtagon Octagon
     local shapes0 = strlower("`SHAPES0'")
     local SHAPES  `SHAPES0' Circle Arc SLice star star6 PENTAGRam HEXAGRam pin/*
-        */ Line pipe PLus x DIamond v ARRow FARRow
+        */ Line pipe PLus x DIamond v ARRow FARRow BARRow FBARRow bar/*
+        */ CRoss ASTerisk FASTerisk TRApezoid pin2 pin3
     local shapes  = strlower("`SHAPES'")
     local 0 , `shape'
     capt syntax [, `SHAPES' ]
@@ -586,7 +592,7 @@ mata set matastrict on
 
 void _compute_symbols(string scalar frame,
     string scalar shape, string scalar arg, real scalar n,
-    real scalar angle, real scalar ratio,
+    real scalar angle, real scalar ratio, real scalar slant,
     string scalar SIZE, string scalar RELSIZE, real scalar refsize,
     real scalar off, real scalar oang, string scalar align_lr,
     string scalar align_bt)
@@ -643,9 +649,9 @@ void _compute_symbols(string scalar frame,
     if      (align_bt=="bottom") xy[,2] = xy[,2] :- min(xy[,2])
     else if (align_bt=="top")    xy[,2] = xy[,2] :- max(xy[,2])
     else if (align_bt=="center") xy[,2] = xy[,2] :- sum(minmax(xy[,2]))/2
-    // apply ratio to shape
-    if (ratio!=1) xy = xy[,1], xy[,2]*ratio
-    // apply angle to shape
+    // apply ratio, slant, and angle
+    if (ratio!=1) xy[,2] = ratio * xy[,2]
+    if (slant)    xy[,1] = xy[,1] + slant * xy[,2]
     _geo_rotate(xy, angle)
     // prepare destination data
     ID = st_data(., "_ID")

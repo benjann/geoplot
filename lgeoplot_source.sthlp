@@ -3879,7 +3879,7 @@ end
 
 *! {smcl}
 *! {marker geo_symbol}{bf:symbol()}{asis}
-*! version 1.0.4  22jul2024  Ben Jann
+*! version 1.0.5  01aug2024  Ben Jann
 *!
 *! Returns the coordinates of a selected symbol
 *!
@@ -4065,6 +4065,28 @@ real matrix _geo_symbol_pin2(| real scalar n0, string scalar arg)
     return(xy0 \ xy1)
 }
 
+real matrix _geo_symbol_pin3(| real scalar n0, string scalar arg)
+{
+    real colvector n, r, a, c
+    real matrix    xy
+    
+    if (arg=="") a = 1/3 // default
+    else {
+        a = strtoreal(arg)
+        if (a<0 | a>1) {
+            errprintf("symbol pin3: {it:headsize} must be in [0,1]\n")
+            exit(125)
+        }
+    }
+    if (n0>=.) n = max((4, ceil(a * 100)))
+    else       n = n0
+    c = 2 - a
+    r = rangen(-asin(a/c), pi()+asin(a/c), n+1)
+    xy = a * (cos(r),sin(r))
+    xy[,2] = xy[,2] :+ c
+    return(xy \ (0,0) \ xy[1,] )
+}
+
 real matrix _geo_symbol_line(| real scalar n, string scalar arg)
 {
     pragma unused n
@@ -4132,6 +4154,23 @@ real matrix _geo_symbol_arrow(| real scalar n, string scalar arg)
     return((-1,0) \ (1,0) \ (.,.) \ (1,0) \ (l,w) \ (.,.) \ (1,0) \ (l,-w))
 }
 
+real matrix _geo_symbol_barrow(| real scalar n, string scalar arg)
+{
+    real scalar    l, w
+    real rowvector ARG
+    pragma unused n
+    
+    ARG = strtoreal(tokens(arg))
+    if (length(ARG)<2) ARG = ARG, J(1,2-length(ARG),.)
+    l = ARG[1]; w = ARG[2]
+    if (l>=.) l = .375
+    if (w>=.) w = .5
+    l = 1 - l*2
+    return((-1,0) \ (-l,w) \ (.,.) \ (-1,0) \ (-l,-w) \ (.,.) \
+           (-1,0) \ ( 1,0) \ (.,.) \
+           ( 1,0) \ ( l,w) \ (.,.) \ ( 1,0) \ ( l,-w))
+}
+
 real matrix _geo_symbol_farrow(| real scalar n, string scalar arg)
 {
     real scalar    l, w, b
@@ -4146,6 +4185,112 @@ real matrix _geo_symbol_farrow(| real scalar n, string scalar arg)
     if (b>=.) b = .2
     l = 1 - l*2
     return((-1,b) \ (l,b) \ (l,w) \ (1,0) \ (l,-w) \ (l,-b) \ (-1,-b) \ (-1, b))
+}
+
+real matrix _geo_symbol_fbarrow(| real scalar n, string scalar arg)
+{
+    real scalar    l, w, b
+    real rowvector ARG
+    pragma unused n
+
+    ARG = strtoreal(tokens(arg))
+    if (length(ARG)<3) ARG = ARG, J(1,3-length(ARG),.)
+    l = ARG[1]; w = ARG[2]; b = ARG[3]
+    if (l>=.) l = 1/3
+    if (w>=.) w = 1/3
+    if (b>=.) b = 1/8
+    l = 1 - l*2
+    return((-1,0) \ (-l,w) \ (-l,b) \ (l,b) \ (l,w) \ (1,0) \ (l,-w) \ 
+           (l,-b) \ (-l,-b) \ (-l,-w) \ (-1,0))
+}
+
+real matrix _geo_symbol_bar(| real scalar n, string scalar arg)
+{
+    real scalar h
+    pragma unused n
+
+    h = strtoreal(arg)
+    if (h>=.) h = 1/3
+    return((-1,-h) \ (1,-h) \ (1,h) \ (-1,h) \ (-1,-h))
+}
+
+real matrix _geo_symbol_cross(| real scalar n, string scalar arg)
+{
+    real scalar h
+    pragma unused n
+
+    h = strtoreal(arg)
+    if (h>=.) h = 1/3
+    return((-h,-1) \ (h,-1) \ (h,-h) \ (1,-h) \ (1,h) \ (h,h) \ (h,1) \
+            (-h,1) \ (-h,h) \ (-1,h) \ (-1,-h) \ (-h,-h) \ (-h,-1))
+}
+
+real matrix _geo_symbol_asterisk(| real scalar n, string scalar arg)
+{
+    real scalar k, i
+    real matrix p, xy
+    pragma unused n
+    
+    k = trunc(strtoreal(arg))
+    if      (k>=.) k = 6
+    else if (k<2)  k = 2
+    p = rangen(.25, 1.25, k+1) * (2 * pi())
+    p = round((cos(p), sin(p)), 1e-14)
+    xy = J(k*3-1, 2, .)
+    for (;k;k--) {
+        i = (k*3) - 2
+        xy[i,]   = (0,0)
+        xy[i+1,] = p[k,]
+    }
+    return(xy)
+}
+
+real matrix _geo_symbol_fasterisk(| real scalar n, string scalar arg)
+{
+    real scalar    k, w, r
+    real matrix    xy, XY
+    real rowvector ARG
+    pragma unused n
+    
+    ARG = strtoreal(tokens(arg))
+    if (length(ARG)<2) ARG = ARG, J(1,2-length(ARG),.)
+    k = trunc(ARG[1]); w = ARG[2]
+    if      (k>=.) k = 6
+    else if (k<=2) k = 2
+    if (w>=.) w = .2 // should depend on k 
+    if (k==2) return((0-w,1) \ (0-w,-1) \ (0+w,-1) \ (0+w,1) \ (0-w,1))
+    r = 360 / k
+    xy = (0-w,1)\(0-w,0) \ geo_rotate((0+w,1)\(0+w,0), r)
+    xy = xy[1,] \ _geo_symbol_fasterisk_intersect(xy) \ xy[3,]
+    XY = J(0,2,.)
+    for (;k;k--) {
+        XY = XY \ xy
+        _geo_rotate(xy, r)
+    }
+    return(XY \ XY[1,])
+}
+
+real rowvector _geo_symbol_fasterisk_intersect(real matrix xy)
+{
+    real scalar a, b, d
+    
+    a = (xy[1,1] * xy[2,2] - xy[1,2] * xy[2,1])
+    b = (xy[3,1] * xy[4,2] - xy[3,2] * xy[4,1])
+    d = (xy[1,1] - xy[2,1]) * (xy[3,2] - xy[4,2]) -
+        (xy[1,2] - xy[2,2]) * (xy[3,1] - xy[4,1])
+    return(((a * (xy[3,1] - xy[4,1]) - (xy[1,1] - xy[2,1]) * b),
+            (a * (xy[3,2] - xy[4,2]) - (xy[1,2] - xy[2,2]) * b)) / d)
+}
+
+real matrix _geo_symbol_trapezoid(| real scalar n, string scalar arg)
+{
+    real scalar l, h
+    pragma unused n
+
+    l = strtoreal(arg)
+    if (l>=.) l = .5
+    h = .5
+    return((-1,-h) \ (1,-h) \ (l,h) \ (-l,h) \ (-1,-h))
 }
 
 end

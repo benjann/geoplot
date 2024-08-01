@@ -169,6 +169,13 @@ Inset.
 
 Main changes:
 
+    31jul2024
+    geoplot
+    - layertype symbol:
+      o option slant() added
+      o new predefined symbol shapes: bar, cross, asterisk, fasterisk, barrow,
+        fbarrow, trapezoid
+
     30jul2024
     geoplot:
     - glegend(): custom key labels can now be specified directly within layout()

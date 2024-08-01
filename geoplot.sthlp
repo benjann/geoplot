@@ -1,5 +1,5 @@
 {smcl}
-{* 30jul2024}{...}
+{* 01aug2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -588,11 +588,11 @@ or
     precedence. {it:shape} may be as follows.
 
 {p2colset 9 25 27 2}{...}
-{p2col:{cmdab:c:ircle}}circle (or oval); this is the default
+{p2col:{cmdab:c:ircle}}circle; this is the default
     {p_end}
 {p2col:{cmdab:t:riangle}}triangle
     {p_end}
-{p2col:{cmdab:s:quare}}square (or rectangle)
+{p2col:{cmdab:s:quare}}square
     {p_end}
 {p2col:{cmdab:p:entagon}}pentagon
     {p_end}
@@ -614,23 +614,42 @@ or
     {p_end}
 {p2col:{cmd:pipe}}vertical line
     {p_end}
-{p2col:{cmdab:pl:us}}upright cross
+{p2col:{cmdab:pl:us}}crossed lines, upright 
     {p_end}
-{p2col:{cmd:x}}diagonal cross
+{p2col:{cmd:x}}crossed lines, diagonal
+    {p_end}
+{p2col:{cmd:bar} [{it:w}]}horizontal bar; {it:w} specifies the
+    width (thickness) of the bar; default is one third
+    {p_end}
+{p2col:{cmdab:cr:oss} [{it:w}]}upright cross; {it:w} specifies the
+    width (thickness) of the arms; default is one third
     {p_end}
 {p2col:{cmdab:di:amond}}diamond
     {p_end}
-{p2col:{cmd:v}}V symbol
+{p2col:{cmdab:tra:pezoid} [{it:l}]}(isosceles) trapezoid; {it:l}
+    specifies the length of the upper parallel; default is .5
+    {p_end}
+{p2col:{cmd:v}}V symbol (line)
+    {p_end}
+{p2col:{cmdab:ast:erisk} [{it:k}]}asterisk (line) with {it:k} arms; default is 6
+    {p_end}
+{p2col:{cmdab:fast:erisk} [{it:k} {it:w}]}asterisk (area) with {it:k} arms of with
+    (thickness) {it:w}; default is 6 for {it:k} and .2 for {it:w}
     {p_end}
 {p2col:{cmdab:arr:ow} [{it:l} {it:w}]}arrow with open head; {it:l} specifies the
-    length and {it:w} the width of the arrowhead (in proportion to the length
-    of the arrow); defaults are 0.5 for {it:l} and two thirds for {it:w}
+    length and {it:w} the width of the arrowhead; defaults are 0.5 for {it:l}
+    and two thirds for {it:w}
+    {p_end}
+{p2col:{cmdab:barr:ow} [{it:l} {it:w}]}{cmd:arrow} with two heads;
+    defaults are .375 for {it:l} and 0.5 for {it:w}
     {p_end}
 {p2col:{cmdab:farr:ow} [{it:l} {it:w} {it:b}]}arrow with closed head; {it:l}
     specifies the length and {it:w} the width of the arrowhead,
-    {it:b} the with of the shaft (in proportion to the length
-    of the arrow); defaults are 0.5
-    for {it:l}, 0.5 for {it:w}, and 0.2 for {it:b}
+    {it:b} the with of the shaft; defaults are 0.5
+    for {it:l} and {it:w}, and 0.2 for {it:b}
+    {p_end}
+{p2col:{cmdab:fbarr:ow} [{it:l} {it:w} {it:b}]}{cmd:farrow} with two heads; defaults are one third
+    for {it:l} and {it:w}, and .125 for {it:b}
     {p_end}
 {p2col:{cmdab:star}}5-pointed star
     {p_end}
@@ -645,6 +664,8 @@ or
     {p_end}
 {p2col:{cmdab:pin2} [{it:headsize}]}alternative pin; {it:headsize} in [0,1] specifies
     the size of the head; default is 0.6
+    {p_end}
+{p2col:{cmdab:pin3} [{it:headsize}]}{cmd:pin2} without hole and default one third for {it:headsize}
     {p_end}
 {p2col:{it:{help numlist}}}manual shape coordinates
     {p_end}
@@ -741,6 +762,11 @@ or
 {phang}
     {opt ratio(#)} adjusts the ratio between the height and the width of the symbols. The default
     is {cmd:ratio(1)}. For example, type {cmd:ratio(2)} to double the height. {cmd:ratio()}
+    has no effect in case of {cmd:shape("}{it:text}{cmd:")}.
+
+{phang}
+    {opt slant(#)} slants the symbols in proportion to {it:#} (to the right if {it:#}>0,
+    to the left if {it:#}<0). The default is {cmd:slant(0)} (no slant). {cmd:slant()}
     has no effect in case of {cmd:shape("}{it:text}{cmd:")}.
 
 {phang}
