@@ -1,4 +1,4 @@
-*! version 1.2.9  01aug2024  Ben Jann
+*! version 1.3.0  19aug2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2297,16 +2297,20 @@ end
 
 program geoframe_bshare
     syntax namelist(id="newname" name=newnames max=2) [if] [in] [, noShp/*
-        */ NOT UNIQue ENDpoints noDOTs replace CURrent ]
+        */ NOT OUTline OUTline2(numlist max=1) UNIQue ENDpoints/*
+        */ noDOTs replace CURrent ]
     gettoken newname newnames : newnames
     gettoken newshpname : newnames
     if "`newshpname'"=="" local newshpname "`newname'_shp"
-    local rtype `not' `unique' `endpoints'
+    if "`outline2'"!="" local outline outline
+    local rtype `not' `outline' `unique' `endpoints'
     if `:list sizeof rtype'>1 {
-        di as err "only one of {bf:not}, {bf:unique}, and {bf:endpoints} allowed"
+        di as err "only one of {bf:not}, {bf:outline}, {bf:unique}, and"/*
+        */ " {bf:endpoints} allowed"
         exit 198
     }
     if "`not'"!=""            local rtype 2
+    else if "`outline'"!=""   local rtype 6
     else if "`unique'"!=""    local rtype 0
     else if "`endpoints'"!="" local rtype 3
     else                      local rtype 1
@@ -2332,9 +2336,11 @@ program geoframe_bshare
     // prepare new frame
     tempname newframe newshpframe
     frame create `newframe' double(_ID)
-    if `rtype'==0 local idvars _ID1 _ID2
-    frame create `newshpframe' double(_ID `idvars' _X _Y)
-    // obtain boxes/MECs
+    if `rtype'==0      local vars _ID _ID1 _ID2 _X _Y
+    else if `rtype'==6 local vars _ID _X _Y _PLEVEL
+    else               local vars _ID _X _Y
+    frame create `newshpframe' double(`vars')
+    // obtain borders
     frame `shpframe' {
         _get coordinates, local(XY) strict
         if `: list sizeof XY'==4 {
@@ -2346,8 +2352,18 @@ program geoframe_bshare
         _get id, local(ID)
         mata: _bshare("`newshpframe'", "`ID'", `"`XY'"', "`touse'",/*
             */ `rtype', "`dots'"!="")
-        qui compress _ID `idvars'
+        if `rtype'==0      qui compress _ID _ID1 _ID2
+        else if `rtype'==6 qui compress _ID _PLEVEL
+        else               qui compress _ID
         _set_type shape
+    }
+    if `rtype'==6 { // update ID if outline(#)
+        if "`outline2'"=="" local outline2 1
+        if `outline2'!=1 {
+            frame `newshpframe' {
+                qui replace _ID = `outline2'
+            }
+        }
     }
     frame `newframe' {
         qui geoframe append `newshpframe' _ID if _n==1 | _ID!=_ID[_n-1]
@@ -2372,6 +2388,106 @@ program geoframe_bshare
     }
     _di_frame "(frame " `newname' " created)"
     _di_frame "(frame " `newshpname' " created)"
+    _describe_and_make_current `newname' "`current'" nodescribe
+end
+
+program geoframe_raster
+    syntax namelist(id="newname" name=newnames max=2) [if] [in] [, noShp/*
+        */ Point /*Line*/ TRIangle CTRIangle SQuare CSQuare HEXagon/*
+        */ noCLip raw n(numlist int >0 max=1) ANGle(numlist max=1)/*
+        */ noDOTs replace CURrent ]
+    gettoken newname newnames : newnames
+    gettoken newshpname : newnames
+    if "`newshpname'"=="" local newshpname "`newname'_shp"
+    local rtype `point' /*`line'*/ `triangle' `ctriangle' `square' `csquare'/*
+        */ `hexagon'
+    if `:list sizeof rtype'>1 {
+        di as err "only one of {bf:point}, {bf:triangle}, {bf:ctriangle},"/*
+        */ " {bf:square}, {bf:csquare}, and {bf:hexagon} allowed"
+        exit 198
+    }
+    if      "`point'"!=""     local rtype 0
+    //else if "`line'"!=""      local rtype 1
+    else if "`triangle'"!=""  local rtype 2
+    else if "`ctriangle'"!="" local rtype 3
+    else if "`csquare'"!=""   local rtype 5
+    else if "`hexagon'"!=""   local rtype 6
+    else                      local rtype 4 // square is default
+    if      "`raw'"!=""  local mtype 2
+    else if "`clip'"!="" local mtype 1
+    else                 local mtype 0
+    if "`n'"==""     local n 50
+    if "`angle'"=="" local angle 0
+    if "`replace'"=="" {
+        confirm new frame `newname'
+        if `rtype'!=0 confirm new frame `newshpname'
+    }
+    // mark sample and find shapes
+    marksample touse
+    local cframe = c(frame)
+    if "`shp'"=="" {
+        _get shpframe, local(shpframe)
+        if `"`shpframe'"'=="" {
+            _get type, local(type)
+            if !inlist(`"`type'"',"shape","pc") {
+                di as txt "(shape frame not found;"/*
+                    */ " treating current frame as shape frame)"
+            }
+        }
+    }
+    if `"`shpframe'"'=="" local shpframe `"`cframe'"'
+    else _markshapes `shpframe' `touse' `touse'
+    frame `shpframe': _get plevel, local(PLEVEL)
+    // prepare new frame
+    tempname newframe
+    local vars _ID _CX _CY
+    if `mtype'==0 local vars `vars' ID
+    frame create `newframe' double(`vars')
+    if `rtype'!=0 {
+        tempname newshpframe
+        local vars _ID _X _Y
+        if `mtype'==0 & `"`PLEVEL'"'!="" local vars `vars' _PLEVEL
+        frame create `newshpframe' double(`vars')
+    }
+    else local newshpframe
+    // obtain borders
+    frame `shpframe' {
+        _get coordinates, local(XY) strict
+        if `: list sizeof XY'==4 {
+            di as err "four coordinate variables found in frame"/*
+                */ " {bf:`shpframe'}" _n "paired-coordinates data not"/*
+                */ " supported by {bf:geoframe raster}"
+            exit 499
+        }
+        _get id, local(ID)
+        mata: _raster("`newframe'", "`newshpframe'", "`ID'", `"`XY'"',/*
+            */ "`PLEVEL'", "`touse'", `rtype', `mtype', `n', `angle',/*
+            */ "`dots'"!="")
+    }
+    // cleanup
+    if "`newshpframe'"!="" {
+        frame `newshpframe' {
+            qui compress _ID
+            if `mtype'==0 & `"`PLEVEL'"'!="" qui compress _PLEVEL
+            _set_type shape
+            capt confirm new frame `newshpname'
+            if _rc==1 exit 1
+            if _rc frame drop `newshpname'
+            frame rename `newshpframe' `newshpname'
+        }
+    }
+    frame `newframe' {
+        qui compress _ID
+        if `mtype'==0 qui compress ID
+        _set_type attribute
+        capt confirm new frame `newname'
+        if _rc==1 exit 1
+        if _rc frame drop `newname'
+        frame rename `newframe' `newname'
+        if "`newshpframe'"!="" qui geoframe_link `newshpname'
+    }
+    _di_frame "(frame " `newname' " created)"
+    if "`newshpframe'"!="" _di_frame "(frame " `newshpname' " created)"
     _describe_and_make_current `newname' "`current'" nodescribe
 end
 
@@ -2978,7 +3094,7 @@ program geoframe_append
         gettoken V target : target
         if `"`V'"'=="" local V `v'
         // append to new variable
-        capt unab V : `V'
+        capt confirm variable `V', exact
         if _rc==1 exit _rc
         if _rc { 
             confirm name `V'
@@ -3157,14 +3273,16 @@ program geoframe_stack
     }
     tempname tmpframe tmpshpframe
     // stack frames
-    local n1 0
-    local s1 0
-    local idmax 0
     local first 1
     local firstshp 1
-    local hasshp 0
-    tempvar ID
+    local n1 0
+    local s1 0
+    local fid 0
+    local idnm
+    local shpidnm
+    tempvar ID IDmis FID
     foreach frame of local namelist {
+        local ++fid
         local n0 = `n1' + 1
         local s0 = `s1' + 1
         frame `frame' {
@@ -3180,16 +3298,22 @@ program geoframe_stack
             frame copy `frame' `tmpframe'
             frame `tmpframe' {
                 local n1 = _N
-                qui gen byte `ID' = .
-                if `"`id'"'!="" {
-                    qui replace `ID' = `id'
-                    if `"`id'"'!="_ID" drop `id'
-                }
-                else qui replace `ID' = _n
                 capt confirm new variable _FRAME
                 if _rc==1 exit 1
                 if _rc drop _FRAME
                 qui gen str _FRAME = "`frame'"
+                qui gen double `FID' = `fid'
+                qui gen double `ID' = .
+                if `"`id'"'!="" {
+                    qui replace `ID' = `id'
+                    drop `id'
+                    if "`idnm'"=="" local idnm `id'
+                    qui gen byte `IDmis' = 0
+                }
+                else {
+                    qui replace `ID' = _n
+                    qui gen byte `IDmis' = 1
+                }
             }
             local first 0
         }
@@ -3198,12 +3322,18 @@ program geoframe_stack
             frame `tmpframe' {
                 local n1 = _N
                 if `n1'>=`n0' {
-                    if `"`id'"'!="" {
-                        qui replace `ID' = `id' + `idmax' in `n0'/l
-                        if `"`id'"'!="_ID" drop `id'
-                    }
-                    else qui replace `ID' = _n - (`n0' + `idmax') in `n0'/l
                     qui replace _FRAME = "`frame'" in `n0'/l
+                    qui replace `FID' = `fid' in `n0'/l
+                    if `"`id'"'!="" {
+                        qui replace `ID' = `id' in `n0'/l
+                        drop `id'
+                        if "`idnm'"=="" local idnm `id'
+                        qui replace `IDmis' = 0 in `n0'/l
+                    }
+                    else {
+                        qui replace `ID' = _n in `n0'/l
+                        qui replace `IDmis' = 1 in `n0'/l
+                    }
                 }
             }
         }
@@ -3213,13 +3343,15 @@ program geoframe_stack
                 frame `shpframe': _get id, local(id) strict
                 frame `tmpshpframe' {
                     local s1 = _N
-                    qui gen byte `ID' = .
-                    qui replace `ID' = `id'
-                    if `"`id'"'!="_ID" drop `id'
                     capt confirm new variable _FRAME
                     if _rc==1 exit 1
                     if _rc drop _FRAME
                     qui gen str _FRAME = "`shpframe'"
+                    qui gen double `FID' = `fid'
+                    qui gen double `ID' = .
+                    qui replace `ID' = `id'
+                    if `"`id'"'!="_ID" drop `id'
+                    if "`shpidnm'"=="" local shpidnm `id'
                     capt drop _GEOFRAME_lnkvar_*
                 }
                 local firstshp 0
@@ -3231,64 +3363,85 @@ program geoframe_stack
                 frame `tmpshpframe' {
                     local s1 = _N
                     if `s1'>=`s0' {
-                        qui replace `ID' = `id' + `idmax' in `s0'/l
-                        if `"`id'"'!="_ID" drop `id'
                         qui replace _FRAME = "`shpframe'" in `s0'/l
+                        qui replace `FID' = `fid' in `s0'/l
+                        qui replace `ID' = `id' in `s0'/l
+                        drop `id'
+                        if "`shpidnm'"=="" local shpidnm `id'
                     }
                     capt drop _GEOFRAME_lnkvar_*
                 }
             }
         }
-        if `n1'>=`n0' {
-            frame `tmpframe' {
-                su `ID' in `n0'/l, meanonly
-                local idmax = max(`idmax', r(max))
-            }
-        }
-        if `hasshp' {
-            if `s1'>=`s0' {
-                frame `tmpshpframe' {
-                    su `ID' in `s0'/l, meanonly
-                    local idmax = max(`idmax', r(max))
-                }
-            }
+    }
+    // update ids
+    if "`idnm'"!="" {
+        tempvar ID0
+        frame `tmpframe': mata: _stack_id() // clears ID0 original IDs ok
+        if "`ID0'"!="" {
+            if "`idnm'"=="_ID0"    local idnm _ID
+            if "`shpidnm'"=="_ID0" local shpidnm _ID
+            di as txt "(new IDs generated; original IDs stored in {bf:_ID0})"
         }
     }
     // rename ID
     frame `tmpframe' {
-        capt confirm new variable _ID
-        if _rc==1 exit 1
-        if _rc drop _ID
-        rename `ID' _ID
-        order _FRAME _ID
-        geoframe_set id _ID
+        if "`ID0'"!="" {
+            capt confirm new variable _ID0
+            if _rc==1 exit 1
+            if _rc drop _ID0
+            rename `ID0' _ID0
+            qui compress _ID0
+            order _ID0
+        }
+        if "`idnm'"!="" {
+            capt confirm new variable `idnm'
+            if _rc==1 exit 1
+            if _rc drop `idnm'
+            rename `ID' `idnm'
+            qui compress `idnm'
+            geoframe_set id `idnm'
+        }
+        else geoframe_set id
         _set_shpframe
         _set_linkname
+        order _FRAME `idnm'
     }
     if `hasSHP' {
         frame `tmpshpframe' {
-            capt confirm new variable _ID
+            if "`ID0'"!="" {
+                capt confirm new variable _ID0
+                if _rc==1 exit 1
+                if _rc drop _ID0
+                rename `ID0' _ID0
+                qui compress _ID0
+                order _ID0
+            }
+            capt confirm new variable `shpidnm'
             if _rc==1 exit 1
-            if _rc drop _ID
-            rename `ID' _ID
-            order _FRAME _ID
-            geoframe_set id _ID
+            if _rc drop `shpidnm'
+            rename `ID' `shpidnm'
+            qui compress `shpidnm'
+            geoframe_set id `shpidnm'
+            order _FRAME `shpidnm'
         }
     }
     // rename frames and link
     nobreak {
-        capt confirm new frame `tgtframe'
-        if _rc frame drop `tgtframe'
-        if `hasSHP' {
-            capt confirm new frame `tgtshpframe'
-            if _rc frame drop `tgtshpframe'
+        frame `tmpframe' {
+            capt confirm new frame `tgtframe'
+            if _rc frame drop `tgtframe'
+            frame rename `tmpframe' `tgtframe'
+            _di_frame "(frame " `tgtframe' " created)"
         }
-        frame rename `tmpframe' `tgtframe'
-        _di_frame "(frame " `tgtframe' " created)"
         if `hasSHP' {
-            frame rename `tmpshpframe' `tgtshpframe'
-            _di_frame "(frame " `tgtshpframe' " created)"
-            frame `tgtframe': geoframe_link `tgtshpframe'
+            frame `tmpshpframe' {
+                capt confirm new frame `tgtshpframe'
+                if _rc frame drop `tgtshpframe'
+                frame rename `tmpshpframe' `tgtshpframe'
+                _di_frame "(frame " `tgtshpframe' " created)"
+                frame `tgtframe': geoframe_link `tgtshpframe'
+            }
         }
     }
     _describe_and_make_current `tgtframe' "`current'" nodescribe
@@ -3299,30 +3452,33 @@ program geoframe_stack
             local DROP
             local namelist: list uniq namelist
             foreach frame of local namelist {
-                if `hasSHP' {
-                    frame `frame': _get shpframe, local(shpframe)
+                if `hasSHP' frame `frame': _get shpframe, local(shpframe)
+                else local shpframe
+                if `"`frame'"'!="`tgtframe'" {
                     if `"`frame'"'=="`cframe'" {
                         di as txt "(frame {bf:`frame'} not dropped;"/*
                             */ " may not drop current frame)"
                     }
-                    else if `"`frame'"'!="`tgtframe'" {
+                    else {
                         capt frame drop `frame'
                         if _rc==0 local DROP `DROP' `frame'
                     }
-                    if `"`shpframe'"'!="" {
-                        if `"`shpframe'"'=="`cframe'" {
-                            di as txt "(frame {bf:`shpframe'} not dropped;"/*
-                                */ " may not drop current frame)"
-                        }
-                        else if `"`shpframe'"'!="`tgtshpframe'" {
-                            capt frame drop `shpframe'
-                            if _rc==0 local DROP `DROP' `shpframe'
-                        }
+                }
+                if `"`shpframe'"'=="" continue
+                if `"`shpframe'"'!="`tgtshpframe'" {
+                    if `"`shpframe'"'=="`cframe'" {
+                        di as txt "(frame {bf:`shpframe'} not dropped;"/*
+                            */ " may not drop current frame)"
                     }
-                    
+                    else {
+                        capt frame drop `shpframe'
+                        if _rc==0 local DROP `DROP' `shpframe'
+                    }
                 }
             }
-            di as txt "(dropped frames: {bf:`DROP'})"
+            if `: list sizeof DROP' {
+                di as txt "(dropped frames: {bf:`DROP'})"
+            }
         }
     }
 end
@@ -4835,8 +4991,46 @@ void _bshare(string scalar frame, string scalar id, string scalar xy,
     if (rtype==3) R = mm_uniqrows(select((ID,XY),R))
     st_framecurrent(frame)
     st_addobs(rows(R))
-    if (rtype==0) st_store(.,tokens("_ID _ID1 _ID2 _X _Y"), R)
-    else          st_store(.,tokens("_ID _X _Y"), R)
+    if (rtype==0)      st_store(.,tokens("_ID _ID1 _ID2 _X _Y"), R)
+    else if (rtype==6) st_store(.,tokens("_ID _X _Y _PLEVEL"), R)
+    else               st_store(.,tokens("_ID _X _Y"), R)
+}
+
+void _raster(string scalar frame, string scalar shpframe, string scalar id,
+    string scalar xy, string scalar pl, string scalar touse,
+    real scalar rtype, real scalar mtype, real scalar n, real scalar angle,
+    real scalar nodots)
+{
+    real colvector ID, XY, PL
+    real matrix    R
+    
+    // generate raster data
+    if (id!="") st_view(ID=., ., id, touse)
+    else        ID = 1
+    st_view(XY=., ., xy, touse)
+    if (pl!="") st_view(PL=., ., pl, touse)
+    else        PL = J(0,1,.)
+    R = geo_raster(rtype, n, angle, XY, ID, PL, mtype, nodots)
+    // write data to frame
+    // - point raster: write attribute frame only
+    if (rtype==0) {
+        st_framecurrent(frame)
+        st_addobs(rows(R))
+        st_store(.,tokens("_ID _CX _CY"), R[,(1,2,3)])
+        if (mtype==0) st_store(., "ID", R[,4])
+        return
+    }
+    // - write shape frame
+    st_framecurrent(shpframe)
+    st_addobs(rows(R))
+    st_store(., tokens("_ID _X _Y"), R[,(1,2,3)])
+    if (mtype==0 & pl!="") st_store(., "_PLEVEL", R[,7])
+    // - write attribute frame
+    R = select(R, _mm_unique_tag(R[,1])) // select one obs per item
+    st_framecurrent(frame)
+    st_addobs(rows(R))
+    st_store(., tokens("_ID _CX _CY"), R[,(1,4,5)])
+    if (mtype==0) st_store(., "ID", R[,6])
 }
 
 void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
@@ -4854,7 +5048,7 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
     st_framecurrent(frame)
     stata("*") // fixes an issue with frames and views; may become redundant
     st_view(XY1=., ., xy1, touse1)
-    st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots))
+    st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots)[,1])
 }
 
 void _append(string scalar frame, string scalar touse, string rowvector vars,
@@ -4931,6 +5125,84 @@ void _append_labels(string scalar frame, string rowvector vars,
             p = selectindex(LBL:=="")
             if (length(p)) st_vlmodify(LNM, val[p], lbl[p])
             st_varvaluelabel(v, LNM)
+        }
+    }
+}
+
+void _stack_id()
+{
+    real scalar    hasshp, i, a, b,
+                   i0, i1, j, fid,
+                   si0, si1, sj, sfid
+    real colvector FID, ID, P, sFID, sID, sP, p, id, from, to
+    real matrix    IDs
+    
+    // collect IDs
+    hasshp = st_local("hasSHP")=="1"
+    st_view(ID=., ., st_local("ID"))
+    st_view(FID=., ., st_local("FID"))
+    IDs = mm_uniqrows((FID,ID))
+    if (hasshp) {
+        st_framecurrent(st_local("tmpshpframe"))
+        st_view(sID=., ., st_local("ID"))
+        st_view(sFID=., ., st_local("FID"))
+        IDs = mm_uniqrows(IDs \ _mm_uniqrows((sFID,sID)))
+        st_framecurrent(st_local("tmpframe"))
+    }
+    // check for duplicates
+    if (mm_nunique(IDs[,2])==rows(IDs)) {
+        st_local("ID0", "") // no duplicates; clear ID0
+        return
+    }
+    // backup original IDs
+    (void) st_addvar("double", st_local("ID0"))
+    stata("qui replace "+st_local("ID0")+" = "+st_local("ID")+" if "+
+        st_local("IDmis")+"!=1")
+    if (hasshp) {
+        st_framecurrent(st_local("tmpshpframe"))
+        (void) st_addvar("double", st_local("ID0"))
+        stata("qui replace "+st_local("ID0")+" = "+st_local("ID"))
+        st_framecurrent(st_local("tmpframe"))
+    }
+    // generate new IDs
+    P = selectindex(_mm_unique_tag(FID))
+    j = rows(P)
+    if (j) fid = FID[P[j]]
+    else   fid = 0
+    i0 = rows(FID) + 1
+    if (hasshp) {
+        sP = selectindex(_mm_unique_tag(sFID))
+        sj = rows(sP)
+        if (sj) sfid = sFID[sP[sj]]
+        else    sfid = 0
+        si0 = rows(sFID) + 1
+    }
+    p = selectindex(_mm_unique_tag(IDs[,1]))
+    a = rows(IDs) + 1
+    for (i=rows(p);i;i--) {
+        b = a - 1
+        a = p[i]
+        from = IDs[|a,2 \ b,2|]
+        to   = a::b
+        if (IDs[a,1]==fid) {
+            i1 = i0 - 1
+            i0 = P[j]
+            id = ID[|i0 \ i1|]
+            ID[|i0 \ i1|] = mm_crosswalk(id, from, to, id)
+            j--
+            if (j) fid = FID[P[j]]
+            else   fid = 0
+        }
+        if (hasshp) {
+            if (IDs[a,1]==sfid) {
+                si1 = si0 - 1
+                si0 = sP[sj]
+                id = sID[|si0 \ si1|]
+                sID[|si0 \ si1|] = mm_crosswalk(id, from, to, id)
+                sj--
+                if (sj) sfid = sFID[sP[sj]]
+                else    sfid = 0
+            }
         }
     }
 }

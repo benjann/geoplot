@@ -1,5 +1,5 @@
 {smcl}
-{* 01aug2024}{...}
+{* 29aug2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -65,13 +65,15 @@
     {p_end}
 
 {syntab :Generate shapes}
+{p2col :{helpb geoframe##raster:raster}}generate raster and store in new frame
+    {p_end}
 {p2col :{helpb geoframe##grid:grid}}store grid lines in new frame
     {p_end}
 {p2col :{helpb geoframe##tissot:tissot}}store Tissot's indicatrices in new frame
     {p_end}
 {p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box, enclosing circle, or convex hull in new frame
     {p_end}
-{p2col :{helpb geoframe##bshare:bshare}}store shared borders in new frame
+{p2col :{helpb geoframe##bshare:bshare}}store shared borders or outlines in new frame
     {p_end}
 {p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
     {p_end}
@@ -1273,6 +1275,78 @@
 {pstd}
     {cmd:geoframe refine} cannot be used with paired-coordinates data.
 
+{marker raster}{...}
+{dlgtab:geoframe raster}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:raster} {it:newname} [{it:newshpname}]
+    {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    generates a raster covering the selected shapes
+    and stores it in a new frame called {it:newname} and an associated
+    shape frame called {it:newshpname}; {it:newname}{cmd:_shp} is used as name for the shape
+    frame if {it:newshpname} is omitted. The current frame may be a shape frame
+    or an attribute frame that is linked to a shape frame. {it:options} are as follows.
+
+{phang}
+    {opt sq:uare} (squares), {opt csq:square} (squares with gaps, like a
+    checkerboard), {opt hex:agon} (hexagons), {opt tri:angle} (triangles),
+    {opt ctri:angle} (triangles with gaps), or {opt p:oint} (points) selects
+    the type of raster to be generated. The default is {cmd:square}. In case of
+    {cmd:point} only an attribute frame is generated. In all other cases an attribute
+    frame and an associated shape frame will be created.
+
+{phang}
+    {cmd:n(#)} sets the number of raster cells in horizontal direction (before
+    rotating); default is {cmd:n(50)}.
+
+{phang}
+    {opt ang:le(angle)} rotates the raster by {it:angle} degrees
+    (counterclockwise).
+
+{phang}
+    {opt nocl:ip} omits merging and clipping of raster cells by the shapes in
+    the current frame. By default, raster cells are mapped to the shapes
+    in the current frame, which means that the cells will be clipped, if
+    necessary, and for each cell the ID of the
+    corresponding shape will be stored in variable {cmd:ID} in the generated
+    attribute frame (not to be confused with variable {cmd:_ID} which contains
+    the cell's own ID). Cells that have an overlap with multiple shapes will be
+    cut into pieces; cells that have no overlap with any of the shapes (or
+    cells that have an area of zero after clipping) will be dropped. The algorithm
+    used for the merging and clipping assumes
+    that the shapes in the current frame are non-overlapping or, if the current
+    frame contains enclaves/exclaves, that 
+    {helpb geoframe##g_plevel:geoframe generate plevel} has been applied.
+
+{phang}
+    If {cmd:noclip} is specified, no merging and clipping will be applied and variable
+    {cmd:ID} will not be generated, but cells will still be selected depending 
+    on whether they overlap with any of the shapes. That is,
+    only cells that overlap at least partially with (or touch) one of the shapes will
+    be kept.
+
+{phang}
+    {cmd:raw} generates a full (rectangular) raster grid without applying any
+    clipping or selection. {cmd:raw} implies {cmd:noclip}.
+
+{phang}
+    {opt nodot:s} suppresses the progress dots that are displayed by default.
+
+{phang}
+    {opt nos:hp} uses information on coordinates from the current frame even if
+    the current frame is linked to a shape frame.
+
+{phang}
+    {opt replace} allows overwriting existing frames.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame.
+
+{pstd}
+    {cmd:geoframe raster} cannot be used with paired-coordinates data.
+
 {marker grid}{...}
 {dlgtab:geoframe grid}
 
@@ -1485,19 +1559,27 @@
     {opt uniq:ue} omits duplicates. By default, each shared border is included
     twice (possibly with different orientation), once for each of the two shape
     items that share the border. Specify {cmd:unique} to keep only one of the two
-    copies. Only one of {cmd:unique}, {cmd:endpoints}, and
-    {cmd:not} is allowed.
+    copies. Only one of {cmd:unique}, {cmd:endpoints}, {cmd:not}, and {cmd:outline}
+    is allowed.
 
 {phang}
     {opt end:points} extracts start and end points of shared
-    borders only. Only one of {cmd:unique}, {cmd:endpoints}, and
-    {cmd:not} is allowed.
+    borders only. Only one of {cmd:unique}, {cmd:endpoints}, {cmd:not},
+    and {cmd:outline} is allowed.
 
 {phang}
     {cmd:not} extracts non-shared borders rather than shared borders. That is,
     from each shape item all sequences of vertices are extracted that do not
-    exist in any other item. Only one of {cmd:unique}, {cmd:endpoints}, and
-    {cmd:not} is allowed.
+    exist in any other item. Only one of {cmd:unique}, {cmd:endpoints}, {cmd:not},
+    and {cmd:outline} is allowed.
+
+{phang}
+    {opt out:line}[{cmd:(}{it:id}{cmd:)}] is like {cmd:not} but connects the
+    extracted line segments such that they form one or seveal outline
+    (and, possibly, enclave) polygons (assuming that the input shapes are
+    polygons). Optional argument {it:id} assignes a custom ID to the resulting
+    shape unit; the default ID is {cmd:1}. Only one of {cmd:unique},
+    {cmd:endpoints}, {cmd:not}, and {cmd:outline} is allowed.
 
 {phang}
     {opt nodot:s} suppresses the progress dots that are displayed by default.
@@ -1832,11 +1914,10 @@
 {pstd}
     stacks the data of the specified frames and also creates
     a stacked shape frame if any of the specified frames is linked to a
-    shape frame. {it:framelist} must contain at least two names. A new
-    {cmd:_ID} variable will be generated to identify the units in the stacked frame
-    (replacing the existing IDs; other geoframe settings will be taken from
-    the first frame). Furthermore, variable {cmd:_FRAME} will be
-    added, containing the name of the source frame for each
+    shape frame. {it:framelist} must contain at least two names. Geoframe
+    settings will be taken from the first frame. If necessary, new IDs will
+    be generated to identify the units in the stacked frame. Variable
+    {cmd:_FRAME} will be added, containing the name of the source frame for each
     observation. {it:options} are as follows.
 
 {phang}

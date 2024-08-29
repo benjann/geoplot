@@ -169,6 +169,29 @@ Inset.
 
 Main changes:
 
+    29aug2024
+    geoplot
+    - option inset() did not display anything if the included coordinates had a
+      range of zero; this is fixed
+    geoframe
+    - command -geoframe raster- added
+    - geoframe bshare now has option -outline-
+    - geoframe stack revised
+      o new IDs are now only generated if necessary (i.e., if there are duplicate
+        IDs between frames)
+      o new IDs are now generated in a different way; the old approach did not
+        always generate unique IDs
+      o the name of the ID variable in the first frame is now used as name for the
+        ID variable in the stacked frame 
+    - geoframe append now always matches variables based on exact name
+    mata library:
+    - new geo_rater() function
+    - geo_plevel() now updates the progress bar more often
+    - geo_rotate() no longer checks the number of columns in the input and now
+      returns the input as is if angle==0
+    - geo_spjoin() now returns flag for whether point has been matched in 2nd column
+    - geo_area() and geo_centroid() now using quad precision
+
     31jul2024
     geoplot
     - layertype symbol:

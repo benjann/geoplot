@@ -1,4 +1,4 @@
-*! version 1.3.3  30jul2024  Ben Jann
+*! version 1.3.4  18aug2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -3878,8 +3878,11 @@ void _inset(real scalar a, real scalar b, real scalar s,
     else                      st_view(X=., (a,b), "X")
     // determine scale
     yminmax = minmax(Y); xminmax = minmax(X)
-    if (refdim=="y") s = s<. ? refsize / (yminmax[2]-yminmax[1]) * (s/100) : 1
-    else             s = s<. ? refsize / (xminmax[2]-xminmax[1]) * (s/100) : 1
+    if (s<.) {
+        if (refdim=="y") s = refsize / (yminmax[2]-yminmax[1]) * (s/100)
+        else             s = refsize / (xminmax[2]-xminmax[1]) * (s/100)
+    }
+    if (s>=.) s = 1
     // add inner margin and fill in box
     yminmax[1] = yminmax[1] - refsize/s * (mrg[3]/100)
     yminmax[2] = yminmax[2] + refsize/s * (mrg[4]/100)
