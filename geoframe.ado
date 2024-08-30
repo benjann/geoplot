@@ -1,4 +1,4 @@
-*! version 1.3.0  19aug2024  Ben Jann
+*! version 1.3.1  30aug2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2352,9 +2352,15 @@ program geoframe_bshare
         _get id, local(ID)
         mata: _bshare("`newshpframe'", "`ID'", `"`XY'"', "`touse'",/*
             */ `rtype', "`dots'"!="")
-        if `rtype'==0      qui compress _ID _ID1 _ID2
-        else if `rtype'==6 qui compress _ID _PLEVEL
-        else               qui compress _ID
+        if `rtype'==0 qui compress _ID _ID1 _ID2
+        else if `rtype'==6 {
+            qui compress _ID
+            capt assert _PLEVEL==0
+            if _rc==1 exit 1
+            if _rc qui compress _PLEVEL
+            else   drop _PLEVEL // remove _PLEVEL if all zero
+        }
+        else qui compress _ID
         _set_type shape
     }
     if `rtype'==6 { // update ID if outline(#)
@@ -2468,7 +2474,12 @@ program geoframe_raster
     if "`newshpframe'"!="" {
         frame `newshpframe' {
             qui compress _ID
-            if `mtype'==0 & `"`PLEVEL'"'!="" qui compress _PLEVEL
+            if `mtype'==0 & `"`PLEVEL'"'!="" {
+                capt assert _PLEVEL==0
+                if _rc==1 exit 1
+                if _rc qui compress _PLEVEL
+                else   drop _PLEVEL // remove _PLEVEL if all zero
+            }
             _set_type shape
             capt confirm new frame `newshpname'
             if _rc==1 exit 1

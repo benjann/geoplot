@@ -1,5 +1,5 @@
 {smcl}
-{* 29aug2024}{...}
+{* 30aug2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -1315,12 +1315,11 @@
     the cell's own ID). Cells that have an overlap with multiple shapes will be
     cut into pieces; cells that have no overlap with any of the shapes (or
     cells that have an area of zero after clipping) will be dropped. The algorithm
-    used for the merging and clipping assumes
-    that the shapes in the current frame are non-overlapping or, if the current
-    frame contains enclaves/exclaves, that 
-    {helpb geoframe##g_plevel:geoframe generate plevel} has been applied.
+    used for the merging and clipping assumes that the shapes in the current
+    frame are non-overlapping and that nested shapes, if present, have been tagged
+    using {helpb geoframe##g_plevel:geoframe generate plevel}.
 
-{phang}
+{pmore}
     If {cmd:noclip} is specified, no merging and clipping will be applied and variable
     {cmd:ID} will not be generated, but cells will still be selected depending 
     on whether they overlap with any of the shapes. That is,

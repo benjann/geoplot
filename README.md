@@ -169,6 +169,14 @@ Inset.
 
 Main changes:
 
+    30aug2024
+    geoframe:
+    - -geoframe bshare, outline- now creates variable _PLEVEL only if relevant
+    - -geoframe raster- now creates variable _PLEVEL only if relevant
+    mata library:
+    - geo_raster(): some technical changes to clipping algorithm; original
+      coordinates are now returned for cells that lie completely within a shape
+
     29aug2024
     geoplot
     - option inset() did not display anything if the included coordinates had a
@@ -185,7 +193,7 @@ Main changes:
         ID variable in the stacked frame 
     - geoframe append now always matches variables based on exact name
     mata library:
-    - new geo_rater() function
+    - new geo_raster() function
     - geo_plevel() now updates the progress bar more often
     - geo_rotate() no longer checks the number of columns in the input and now
       returns the input as is if angle==0

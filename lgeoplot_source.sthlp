@@ -3482,7 +3482,7 @@ end
 
 *! {smcl}
 *! {marker geo_raster}{bf:geo_raster()}{asis}
-*! version 1.0.0  29aug2024  Ben Jann
+*! version 1.0.1  30aug2024  Ben Jann
 *!
 *! Generate a raster covering the provided shape units.
 *!
@@ -3943,11 +3943,11 @@ void __geo_raster_select(`BoolC' P, `pItems' R, `pItems' S, `Bool' odd, `Int' d)
             jj = mod(j + off, r) + 1
             o = __geo_raster_select_i(*S[jj], *R[i], A0, a, b)
             if (!o) continue
-            if (odd) { // if enclave: exclude inside raster item
-                if (o==2) P[i] = 0 
+            if (odd) {
+                if (o==2) P[i] = 0 // exclude cell if fully inside enclave
             }
-            else P[i] = 1 // else: include overlapping raster item
-            off = jj - 2  // start over at same position
+            else P[i] = 1
+            off = jj - 2  // continue with next cell in same position
             break
         }
     }
@@ -4059,10 +4059,11 @@ void __geo_raster_select(`BoolC' P, `pItems' R, `pItems' S, `Bool' odd, `Int' d)
 `PC' __geo_raster_clip(`BoolC' P, `pItems' R, `pItems' S, `Bool' odd, `RM' E,
     `Int' pl, `Int' d)
 {
-    `Int' i, n, j, jj, r, l, off
-    `RS'  A, AA, A0, a, b
-    `RM'  xy
-    `PC'  I
+    `Bool' inside
+    `Int'  i, n, j, jj, r, off
+    `RS'   A, AA, A0, a, b
+    `RM'   xy
+    `PC'   I
     
     n = rows(P)
     if (n) A0 = _geo_raster_A0(R[1]->XY, a=., b=.)
@@ -4076,29 +4077,40 @@ void __geo_raster_select(`BoolC' P, `pItems' R, `pItems' S, `Bool' odd, `Int' d)
         for (j=r;j;j--) {
             jj = mod(j + off, r) + 1
             xy = __geo_raster_clip_i(*S[jj], *R[i])
-            l = rows(xy)
-            if (!l) continue
+            if (!rows(xy)) continue
             A = __geo_area((xy :- a) / b)
             if (!A) continue
+            inside = reldif(A,A0)<1e-13 // cell is fully inside shape item
             if (odd) { // enclave
-                if (reldif(A,A0)<1e-13) { // fully inside
+                if (inside) {
                     P[i] = 1
-                    off = jj - 2  // start over at same position
+                    off = jj - 2 // continue with next cell in same position
                     break
                 }
+                __geo_raster_clip_save(I, i, xy, *S[jj], *R[i])
+                continue
             }
-            else xy = (.,.) \ xy[l::2,] // make counterclockwise
-            if (I[i]==NULL) I[i] = &(xy, J(l,1,(R[i]->xy, S[jj]->id)))
-            else I[i] = &(*I[i] \ (xy, J(l,1,(R[i]->xy, S[jj]->id))))
+            if (inside) {
+                __geo_raster_clip_save(I, i, R[i]->XY, *S[jj], *R[i])
+                off = jj - 2 // continue with next cell in same position
+                break
+            }
+            __geo_raster_clip_save(I, i, (.,.)\xy[rows(xy)::2,], *S[jj], *R[i])
             AA = quadsum((AA, A))
-            if (reldif(AA,A0)<1e-13) { // raster item complete
-                off = jj - 2  // start over at same position
+            if (reldif(AA,A0)<1e-13) { // cell is complete
+                off = jj - 2 // continue with next cell in same position
                 break
             }
         }
     }
-    if (odd) _geo_raster_clip_E(E, S, pl) // collect enclaved
+    if (odd) _geo_raster_clip_E(E, S, pl) // collect enclaves
     return(I)
+}
+
+void __geo_raster_clip_save(`PC' I, `Int' i, `RM' xy, `Item' p, `Item' p0)
+{
+    if (I[i]==NULL) I[i] =          &(xy, J(rows(xy),1,(p0.xy, p.id)))
+    else            I[i] = &(*I[i] \ (xy, J(rows(xy),1,(p0.xy, p.id))))
 }
 
 `RM' __geo_raster_clip_i(`Item' p, `Item' p0)
