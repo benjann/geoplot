@@ -1,4 +1,4 @@
-*! version 1.3.1  30aug2024  Ben Jann
+*! version 1.3.2  05sep2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -8,7 +8,7 @@ program geoframe, rclass
     if `"`local'"'!="" { // pass through returns (geoframe_get, geoframe_flip)
         c_local `local' `"`value'"'
     }
-    if inlist("`subcmd'","query","copy") return add
+    if inlist("`subcmd'","query","copy","spsmooth") return add
 end
 
 program _parse_subcmd
@@ -2803,6 +2803,122 @@ program geoframe_spjoin
     }
 end
 
+program geoframe_spsmooth, rclass
+    // syntax
+    syntax varname(numeric) [if] [in] [iw/] [,/*
+        */ replace Generate(name) BWidth(str) Kernel(name) ll/*
+        */ COordinates(varlist min=2 max=2) Target(str) noDOTs/*
+        */ naive ] // undocumented
+    local zvar `varlist'
+    if "`generate'"=="" local generate `zvar'
+    capt mata: st_local("kernel", _mm_unabkern(`"`kernel'"'))
+    if _rc==1 exit 1
+    if _rc {
+        di as err "kernel(): {bf:`kernel'} not allowed"
+        exit 198
+    }
+    if substr(`"`bwidth'"',1,1)=="*" {
+        local bwadj = substr(`"`bwidth'"',2,.)
+        capt n numlist `"`bwadj'"', min(1) max(1) range(>0)
+        if _rc==1 exit _rc
+        if _rc {
+            di as err "error in option {bf:bwidth()}"
+            exit _rc
+        }
+        local bwidth .
+    }
+    else {
+        if `"`bwidth'"'!="" {
+            capt n numlist `"`bwidth'"', min(1) max(1) range(>0)
+            if _rc==1 exit _rc
+            if _rc {
+                di as err "error in option {bf:bwidth()}"
+                exit _rc
+            }
+        }
+        else local bwidth .
+        local bwadj 1
+    }
+    if `"`coordinates'"'!="" local XY `coordinates'
+    else {
+        _get coordinates, local(XY) strict
+        if `: list sizeof XY'==4 {
+            di as err "four coordinate variables found in frame"/*
+                */ " {bf:`c(frame)'}" _n "paired-coordinates data not"/*
+                */ " supported by {bf:geoframe spsmooth}"
+            exit 499
+        }
+    }
+    marksample touse
+    if "`weight'"!="" {
+        tempvar wvar
+        qui gen double `wvar' = (`exp') if `touse'
+    }
+    tempvar tgtvar
+    if `"`target'"'!="" {
+        gettoken frame1 0 : target
+        frame `frame1' {
+            syntax [if] [in] [, COordinates(varlist min=2 max=2) ]
+            if `"`coordinates'"'!="" local XY1 `coordinates'
+            else {
+                _get coordinates, local(XY1) strict
+                if `: list sizeof XY1'==4 {
+                    di as err "four coordinate variables found in frame"/*
+                        */ " {bf:`frame1'}" _n "paired-coordinates data not"/*
+                        */ " supported by {bf:geoframe spsmooth}"
+                    exit 499
+                }
+            }
+            if "`replace'"=="" {
+                confirm new variable `generate'
+            }
+            marksample touse1
+            qui gen double `tgtvar' = .
+        }
+    }
+    else {
+        local frame1
+        if "`replace'"=="" {
+            confirm new variable `generate'
+        }
+        qui gen double `tgtvar' = .
+        local tgt 0
+    }
+    // apply smoothing
+    tempname BWIDTH
+    mata: st_numscalar("`BWIDTH'", _spsmooth("`tgtvar'", "`zvar'", "`wvar'",/*
+        */ "`XY'", "`touse'", "`frame1'",  "`XY1'", "`touse1'", `bwidth',/*
+        */ `bwadj', "`kernel'", "`ll'"!="", "`dots'"!="", "`naive'"!=""))
+    // cleanup and returns
+    if "`frame1'"!="" {
+        frame `frame1' {
+            capt confirm new variable `generate'
+            if _rc==1 exit _rc
+            if _rc {
+                local msg replaced
+                drop `generate'
+            }
+            else local msg added
+            rename `tgtvar' `generate'
+            _di_frame "(variable {bf:`generate'} `msg' in frame " `frame1' ")"
+        }
+    }
+    else {
+        capt confirm new variable `generate'
+        if _rc==1 exit _rc
+        if _rc {
+            local msg replaced
+            drop `generate'
+        }
+        else local msg added
+        rename `tgtvar' `generate'
+        _di_frame "(variable {bf:`generate'} `msg' in frame " `c(frame)' ")"
+    }
+    return scalar bwidth = `BWIDTH' 
+    return local kernel "`kernel'"
+    return local ll "`ll'"
+end
+
 program geoframe_copy, rclass
     // syntax
     gettoken frame2 0 : 0, parse(" ,")
@@ -5060,6 +5176,40 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
     stata("*") // fixes an issue with frames and views; may become redundant
     st_view(XY1=., ., xy1, touse1)
     st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots)[,1])
+}
+
+real scalar _spsmooth(string scalar tgtvar, string scalar zvar,
+    string scalar wvar, string scalar xy, string scalar touse,
+    string scalar frame1, string scalar xy1, string scalar touse1,
+    real scalar bw, real scalar bwadj, string scalar kernel, real scalar ll,
+    real scalar nodots, real scalar naive)
+{
+    string scalar  cframe
+    real colvector S, Z, w
+    real matrix    XY, XY1
+    
+    st_view(Z=., ., zvar, touse)
+    st_view(XY=., ., xy, touse)
+    if (wvar!="") st_view(w=., ., wvar, touse)
+    else          w = 1
+    if (frame1=="") st_view(S=., ., tgtvar, touse)
+    else {
+        cframe = st_framecurrent()
+        st_framecurrent(frame1)
+        st_view(XY1=., ., xy1, touse1)
+        st_view(S=., ., tgtvar, touse1)
+        st_framecurrent(cframe)
+    }
+    if (bw>=.) {
+        bw = sqrt(sum(mm_coldiff(colminmax(XY)):^2)) / 50
+        bw = bw * mm_kdel0(kernel) * bwadj
+        if (bw<=0|bw>=.) bw = 1
+        displayas("txt")
+        printf("(bandwidth set to {res:%g})\n", bw)
+    }
+    S[.] = geo_ksmooth(Z, w, XY, frame1=="" ? XY : XY1,
+        bw, kernel, ll, nodots, naive)
+    return(bw)
 }
 
 void _append(string scalar frame, string scalar touse, string rowvector vars,

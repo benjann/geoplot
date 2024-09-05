@@ -1,5 +1,5 @@
 {smcl}
-{* 30aug2024}{...}
+{* 05sep2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -86,6 +86,10 @@
 {p2col :{helpb geoframe##contract:contract}}contract points from other frame into current frame
     {p_end}
 {p2col :{helpb geoframe##spjoin:spjoin}}match points in current frame to shapes from other frame
+    {p_end}
+
+{syntab :Spatial smoothing}
+{p2col :{helpb geoframe##spsmooth:spsmooth}}apply spatial smoothing to an attribute
     {p_end}
 
 {syntab :Merge and append}
@@ -1784,6 +1788,82 @@
 
 {pstd}
     {cmd:geoframe spjoin} cannot be used with paired-coordinates data.
+
+{marker spsmooth}{...}
+{dlgtab:geoframe spsmooth}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:spsmooth} {varname}
+    {ifin} {weight} [{cmd:,} {it:options} ]
+
+{pstd}
+    generates a variable containing smoothed values of {it:varname} based on
+    kernel-weighted local average or local linear fit using euclidean
+    distances between coordinates. The current frame is typically an attribute
+    frame and the coordinates are the centroids of the shape units represented
+    in the frame. {cmd:iweight}s are allowed; see {help weight}. {it:options}
+    are as follows.
+
+{phang}
+    {opt bw:idth}{cmd:(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the kernel
+    bandwidth. The default is to set the bandwidth to two percent of the length
+    of the diagonal of the bounding box of the input coordinates, multiplied
+    by the canonical bandwidth of the chosen kernel. Specify
+    {cmd:bwidth(*}{it:#}{cmd:)} to multiply this default bandwidth by {it:#}. For
+    example, type {cmd:bwidth(*0.5)} to use half the default bandwidth. Alternatively, type
+    {cmd:bwidth(}{it:#}{cmd:)} to set the bandwidth to a specific value. The larger
+    the bandwidth, the stronger the smoothing. 
+
+{phang}
+    {opt k:ernel(kernel)} selects the kernel function. {it:kernel} can be one of
+    {cmdab:e:panechnikov}, {cmd:epan2}, {cmdab:b:iweight}, {cmdab:t:riweight},
+    {cmdab:c:osine}, {cmdab:g:aussian} (clipped at +/- 4), {cmdab:p:arzen},
+    {cmdab:r:ectangle}, or {cmdab:tria:ngle}. Default is {cmd:epan2}.
+
+{phang}
+    {opt ll} applies local linear smoothing. The default is to apply local average
+    smoothing.
+
+{phang}
+    {opt co:ordinates(X Y)} specifies custom coordinate variables
+    (in the current frame). The default is to use the variables returned by
+    {helpb geoframe##set:geoframe get coordinates}.
+
+{phang}
+    {opt t:arget(spec)} specifies a target frame for the smoothed values. By
+    default, the smoothing process operates within the current frame. That is,
+    smoothed values of {it:varname} will be obtained at the selected coordinates
+    of the input data and stored in a variable in the current frame (i.e., the 
+    target coordinates are the same as the input coordinates). Use option
+    {cmd:target()} to obtain smoothed values at alternative target
+    coordinates. The syntax of {it:spec} is
+
+            {it:tgtframe} {ifin} [, {opt co:ordinates(X Y)} ]
+
+{pmore}
+    where {it:tgtframe} is the frame containing the target coordinates. Smoothed
+    values of {it:varname} will then be obtained at these coordinates (based on
+    distances to the input coordinates) and stored
+    in this frame. Option {cmd:coordinates()} is as described above
+    but applies to {it:tgtframe}. Note that {it:tgtframe} is allowed to be the same
+    as the current frame.
+
+{phang}
+    {opth g:enerate(newvar)} specifies a custom name for the generated
+    variable. The default is to use the same name as for the input variable. This
+    implies that option {cmd:replace} is required if {cmd:generate()} is omitted (unless
+    {cmd:target()} is specified and the target frame does not yet contain a variable
+    with that name).
+
+{phang}
+    {cmd:replace} allows overwriting an existing variable. {cmd:replace} is required
+    unless {cmd:generate()} is specified.
+
+{phang}
+    {opt nodot:s} suppresses the progress dots that are displayed by default.
+
+{pstd}
+    {cmd:geoframe spsmooth} cannot be used with paired-coordinates data.
 
 {marker copy}{...}
 {dlgtab:geoframe copy}

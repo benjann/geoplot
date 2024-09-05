@@ -1,4 +1,4 @@
-*! version 1.2.5  29jul2024  Ben Jann
+*! version 1.2.6  01sep2024  Ben Jann
 
 /*
     Syntax:
@@ -877,8 +877,10 @@ program _z_colors
     local 0 `", `0'"'
     syntax [, `nm'(str asis) ]
     mata: _z_color_parselastcomma("`nm'") // returns color and 0
-    syntax [, class(passthru) n(passthru) IPolate(passthru) * ]
-    if `"`n'`ipolate'"'=="" local n n(`k')
+    syntax [, class(passthru) n(passthru) Select(passthru) drop(passthru)/*
+        */ IPolate(passthru) * ]
+    if `"`n'`select'`drop'`ipolate'"'=="" local n n(`k')
+    local options `n' `select' `drop' `ipolate' `options'
     if `discrete' local default_palette st
     else          local default_palette viridis
     local l: list sizeof color
@@ -893,7 +895,7 @@ program _z_colors
         }
     }
     if `"`class'"'=="" & `discrete' local class class(categorical)
-    colorpalette `color', nograph `class' `n' `ipolate' `options'
+    colorpalette `color', nograph `class' `options'
     local color `"`r(p)'"'
     local l: list sizeof color
     if `l'==0 {

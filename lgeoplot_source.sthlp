@@ -9,6 +9,7 @@
 *!     {helpb lgeoplot_source##geo_gtype:geo_gtype()}
 *!     {helpb lgeoplot_source##geo_hull:geo_hull()}
 *!     {helpb lgeoplot_source##geo_json:geo_json_import() and geo_json2xy()}
+*!     {helpb lgeoplot_source##geo_ksmooth:geo_ksmooth()}
 *!     {helpb lgeoplot_source##geo_orientation:geo_orientation()}
 *!     {helpb lgeoplot_source##geo_pid:geo_pid()}
 *!     {helpb lgeoplot_source##geo_plevel:geo_plevel()}
@@ -2464,6 +2465,188 @@ void _geo_json_features_properties(`T' t0, `Int' i, `T' F, `T' V, `SM' S,
         return(s)
     }
     return(substr(s,2,strlen(s)-2))
+}
+
+end
+
+*! {smcl}
+*! {marker geo_ksmooth}{bf:geo_ksmooth()}{asis}
+*! version 1.0.0  05sep2024  Ben Jann
+*!
+*! Function to obtain spatially smoothed values based on kernel-weighted local
+*! average or local linear fit using euclidean distances.
+*!
+*! Syntax:
+*!
+*!      result = geo_ksmooth(Z, w, XY, XY1, bwidth [, kernel, ll, nodots])
+*!
+*!  result  r x 1 colvector containing smoothed values of Z
+*!  Z       n x 1 colvector containing input values to be smoothed
+*!  w       n x 1 colvector containing weights; specify 1 to omit weights
+*!  XY      n x 2 matrix containing the origin coordinates associated with Z
+*!  XY1     r x 2 matrix containing the target coordinates at which the smooth
+*!          be evaluated; can be the same as XY
+*!  bwidth  real scalar setting the kernel bandwidth
+*!  kernel  string scalar selecting the kernel function; can be "epanechnikov",
+*!          "epan2", "biweight", "triweight", "cosine", "gaussian" (clipped
+*!           at +/- 4), "parzen", "rectangle", or "triangle"; default is "epan2"
+*!  ll      ll!=0 applies local linear smoothing; default is to apply local
+*!          average smoothing
+*!  nodots  nodots!=0 suppresses progress dots
+*!
+
+local Bool real scalar
+local Int  real scalar
+local IntC real colvector
+local RS   real scalar
+local SS   string scalar
+local RC   real colvector
+local RM   real matrix
+local PS   pointer scalar
+
+mata:
+
+`RM' geo_ksmooth(`RC' Z, `RC' w, `RM' XY, `RM' XY1, `RS' bw,
+    | `SS' kernel, `Bool' ll, `Bool' nodots, `Bool' naive)
+{
+    `SS' k
+    
+    if (args()<7) ll = 0
+    if (args()<8) nodots = 0
+    if (args()<9) naive = 0
+    if (cols(XY)!=2) {
+        errprintf("{it:XY} must have two columns\n")
+        exit(3200)
+    }
+    if (cols(XY1)!=2) {
+        errprintf("{it:XY1} must have two columns\n")
+        exit(3200)
+    }
+    k = _mm_unabkern(kernel) // default is epan2
+    if (naive) return(_geo_ksmooth_naive(Z, w, XY, XY1, bw, k, ll, nodots))
+    return(_geo_ksmooth(Z, w, XY, XY1, bw, k, ll, nodots))
+}
+
+`RC' _geo_ksmooth_naive(`RC' Z, `RC' w, `RM' XY, `RM' XY1,
+    `RS' bw, `SS' kernel, `Bool' ll, `Bool' nodots)
+{
+    `Int' i, d, dn
+    `RC'  S
+    `PS'  k
+
+    if (kernel=="gaussian") k = &_geo_ksmooth_gaussian()
+    else                    k = _mm_findkern(kernel)
+    i = rows(XY1)
+    if (!nodots) {
+        displayas("txt")
+        d = _geo_progress_init("(")
+        dn = i
+    }
+    S = J(i,1,.)
+    for (;i;i--) {
+        if (!nodots) _geo_progress(d, 1-i/dn)
+        S[i] = _geo_ksmooth_fit(Z, w, XY:-XY1[i,], bw, k, ll)
+    }
+    if (!nodots) _geo_progress_end(d, ")")
+    return(S)
+}
+
+`RC' _geo_ksmooth(`RC' Z, `RC' w, `RM' XY, `RM' XY1,
+    `RS' bw, `SS' kernel, `Bool' ll, `Bool' nodots)
+{   // algorithm using search window based on sum score
+    `Bool' hasW
+    `Int'  i, j, a, b, d, dn
+    `RS'   h, c
+    `IntC' p, p1, pi
+    `RC'   D, D1, S
+    `PS'   k
+    
+    // kernel
+    if (kernel=="gaussian") {
+        k = &_geo_ksmooth_gaussian()
+        h = 4
+    }
+    else {
+        k = _mm_findkern(kernel)
+        if (kernel=="epanechnikov") h = sqrt(5)
+        else if (kernel=="cosine")  h = .5
+        else                        h = 1
+    }
+    h = sqrt(2 * (h * bw)^2)
+    // sum scores
+    b = rows(XY)
+    if (!b) return(J(rows(XY1),1,.)) // no data
+    D = rowsum(XY)
+    p = order(D, 1)
+    if ((D[p[b]]-D[p[1]]) < 10*h) { // use naive algorithm if bwidth is large
+        return(_geo_ksmooth_naive(Z, w, XY, XY1, bw, kernel, ll, nodots))
+    }
+    if (XY!=XY1) {
+        i  = rows(XY1)
+        D1 = rowsum(XY1)
+        p1 = order(D1, 1)
+    }
+    else {; i = b; D1 = D; p1 = p; }
+    // run algorithm
+    hasW = rows(w)!=1
+    if (!nodots) {
+        displayas("txt")
+        d = _geo_progress_init("(")
+        dn = i
+    }
+    S = J(i,1,.)
+    for (;i;i--) {
+        if (!nodots) _geo_progress(d, 1-i/dn)
+        j = p1[i]
+        c = D1[j] + h
+        for (;b;b--) {
+            if (D[p[b]]<=c) break
+        }
+        if (!b) break // reached bottom; no more data
+        a = b
+        c = D1[j] - h
+        for (;a;a--) {
+            if (D[p[a]]<c) {; a++ ; break; }
+            if (a==1) break // reached bottom
+        }
+        if (a>b) continue // no data within range
+        pi = p[|a\b|]
+        S[j] = _geo_ksmooth_fit(Z[pi], hasW ? w[pi] : w, XY[pi,]:-XY1[j,],
+            bw, k, ll)
+    }
+    if (!nodots) _geo_progress_end(d, ")")
+    return(S)
+}
+
+`RS' _geo_ksmooth_fit(`RC' Z, `RC' w, `RM' XY, `RS' bw, `PS' k, `Bool' ll)
+{
+    `IntC' p
+    `RC'   kw
+    
+    kw = (*k)(sqrt(rowsum(XY:^2)) :/ bw) :* w
+    p = selectindex(kw)
+    if (!length(p)) return(.)
+    if (rows(p)==rows(kw)) {
+        if (ll) return(_geo_ksmooth_ll(Z, XY, kw))
+        return(_geo_ksmooth_mean(Z, kw))
+    }
+    if (ll) return(_geo_ksmooth_ll(Z[p], XY[p,], kw[p]))
+    return(_geo_ksmooth_mean(Z[p], kw[p]))
+}
+
+`RS' _geo_ksmooth_mean(`RC' y, `RC' w)
+{
+    return(quadsum(w :* y) / quadsum(w)) // faster than mean(y, w)
+}
+
+`RS' _geo_ksmooth_ll(`RC' y, `RM' XY, `RC' w)
+{
+    return(mm_lsfit(y, XY, w, 1, 1, 0)[3]) // (quad precision, but no demeaning)
+}
+
+`RM' _geo_ksmooth_gaussian(`RM' x)
+{
+    return(normalden(x):*(x:>=-4 :& x:<=4)) // gaussian kernel clipped at +/- 4
 }
 
 end

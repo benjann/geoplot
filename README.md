@@ -169,6 +169,16 @@ Inset.
 
 Main changes:
 
+    05sep2024
+    geoplot:
+    - zvar option color(): automatic application of palette option n() was
+      suppressed if the user specified ipolate(); it is now suppressed if the
+      user specifies ipolate(), select(), or drop()
+    geoframe:
+    - command -geoframe spsmooth- added
+    mata library:
+    - function -geo_ksmooth()- added
+
     30aug2024
     geoframe:
     - -geoframe bshare, outline- now creates variable _PLEVEL only if relevant
