@@ -1,5 +1,5 @@
 {smcl}
-{* 01aug2024}{...}
+{* 08sep2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -1277,10 +1277,15 @@ or
 
 {marker levels}{...}
 {phang}
-    {cmd:levels(}[{it:#}][{cmd:,} {it:method} {opth w:eight(varname)}]{cmd:)} specifies the number of
-    levels to be formed by {help geoplot##zvar:{it:zvar}}. By default, a regular grid
-    (equidistant cuts) of 5 intervals from the observed minimum to the observed
-    maximum of {help geoplot##zvar:{it:zvar}} will be used (first interval closed, remaining intervals
+    {cmd:levels(}[{it:#}][{cmd:,} {it:method} {opth w:eight(varname)}
+    {opt min(#)} {opt max(#)}]{cmd:)} specifies the number of
+    levels to be formed by {help geoplot##zvar:{it:zvar}}. Option
+    {cmd:levels()} has no effect if {cmd:i.}{it:zvar} or
+    {helpb geoplot##discrete:discrete} is specified, or if {it:zvar} is a string variable.
+
+{pmore}
+    By default, a regular grid (equidistant cuts) of 5 intervals from the observed minimum to the observed
+    maximum of {help geoplot##zvar:{it:zvar}} will be applied (first interval closed, remaining intervals
     left-open). Specify {opt levels(#)} to create {it:#} intervals. Specify suboption {it:method}
     to use a non-regular grid, where {it:method} can be one of the following.
 
@@ -1292,19 +1297,28 @@ or
 
 {pmore}
     The number of resulting levels may be less than {it:#} with these methods, depending on the
-    distribution of {help geoplot##zvar:{it:zvar}}. In case of {cmdab:quantile}, weights to be taken
-    into account when computing the quantiles can be specified in suboption {cmd:weight()}. Option
-    {cmd:levels()} has no effect if {cmd:i.}{it:zvar} or
-    {helpb geoplot##discrete:discrete} is specified, or if {it:zvar} is a string variable.
+    distribution of {help geoplot##zvar:{it:zvar}}. In case of {cmdab:quantile}, specify 
+    suboption {cmd:weight()} to take weights into account when computing the quantiles.
+
+{pmore}
+    Specify suboptions {cmd:min()} and {cmd:max()} to impose custom values for
+    the minimum and the maximum of the range of intervals formed by
+    {cmd:levels()}. If the observed minimum (maximum) of {help geoplot##zvar:{it:zvar}}
+    is larger (smaller) than the specified value, the specified
+    value will be used as the the minimum (maximum).
 
 {marker cuts}{...}
 {phang}
     {opth cuts(numlist)} is an alternative to {cmd:levels()} and
     provides custom breaks for the levels to be formed by
-    {help geoplot##zvar:{it:zvar}}. For continuous {help geoplot##zvar:{it:zvar}},
+    {help geoplot##zvar:{it:zvar}}. Missing values are allowed in
+    {it:numlist}.
+
+{pmore}
+    For continuous {help geoplot##zvar:{it:zvar}},
     specify {it:#}+1 breaks to form {it:#} intervals (first interval closed, remaining
     intervals left-open). Observations with values below the first break or above
-    the last break will be ignored.
+    the last break will be ignored. 
 
 {pmore}
     If {cmd:i.}{it:zvar} or {helpb geoplot##discrete:discrete}
@@ -1314,6 +1328,11 @@ or
     is similar if {it:zvar} is a string variable, except that the
     values in {it:numlist} are interpreted as indices of alphabetically sorted
     values.
+
+{pmore}
+    You may also type {opt cuts(matname)}, where {it:matname} is
+    the name of a {helpb matrix} containing the values of the breaks. {cmd:cuts()}
+    takes precedence over {cmd:levels()}.
 
 {marker colorvar}{...}
 {phang}

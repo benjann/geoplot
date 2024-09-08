@@ -1,4 +1,4 @@
-*! version 1.3.2  05sep2024  Ben Jann
+*! version 1.3.3  08sep2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2807,16 +2807,25 @@ program geoframe_spsmooth, rclass
     // syntax
     syntax varname(numeric) [if] [in] [iw/] [,/*
         */ replace Generate(name) BWidth(str) Kernel(name) ll/*
-        */ COordinates(varlist min=2 max=2) Target(str) noDOTs/*
+        */ COordinates(varlist min=2 max=2) at(str) noDOTs/*
         */ naive ] // undocumented
+    // - input and output variable names
     local zvar `varlist'
-    if "`generate'"=="" local generate `zvar'
-    capt mata: st_local("kernel", _mm_unabkern(`"`kernel'"'))
-    if _rc==1 exit 1
-    if _rc {
-        di as err "kernel(): {bf:`kernel'} not allowed"
-        exit 198
+    if "`generate'"=="" local newvar `zvar'
+    else                local newvar `generate'
+    // - kernel
+    if `"`kernel'"'==substr("Gaussian", 1, max(1,strlen(`"`kernel'"'))) {
+        local kernel Gaussian
     }
+    else {
+        capt mata: st_local("kernel", _mm_unabkern(`"`kernel'"'))
+        if _rc==1 exit 1
+        if _rc {
+            di as err "kernel(): {bf:`kernel'} not allowed"
+            exit 198
+        }
+    }
+    // - bandwidth
     if substr(`"`bwidth'"',1,1)=="*" {
         local bwadj = substr(`"`bwidth'"',2,.)
         capt n numlist `"`bwadj'"', min(1) max(1) range(>0)
@@ -2839,6 +2848,8 @@ program geoframe_spsmooth, rclass
         else local bwidth .
         local bwadj 1
     }
+    // main sample
+    local frame = c(frame)
     if `"`coordinates'"'!="" local XY `coordinates'
     else {
         _get coordinates, local(XY) strict
@@ -2854,65 +2865,84 @@ program geoframe_spsmooth, rclass
         tempvar wvar
         qui gen double `wvar' = (`exp') if `touse'
     }
-    tempvar tgtvar
-    if `"`target'"'!="" {
-        gettoken frame1 0 : target
-        frame `frame1' {
-            syntax [if] [in] [, COordinates(varlist min=2 max=2) ]
-            if `"`coordinates'"'!="" local XY1 `coordinates'
-            else {
-                _get coordinates, local(XY1) strict
-                if `: list sizeof XY1'==4 {
+    // secondary sample
+    if `"`at'"'!="" {
+        local 0: copy local at
+        gettoken frame2 : 0, parse(", ")
+        if inlist(`"`frame2'"',"if","in") local frame2
+        else {
+            capt confirm name `frame2'
+            if _rc==1 exit 1
+            if _rc    local frame2
+        }
+        if "`frame2'"!="" gettoken frame2 0 : 0, parse(", ")
+        else              local frame2 `frame'
+        frame `frame2' {
+            syntax [if] [in] [, COordinates(varlist min=2 max=2) fill ]
+            if `"`coordinates'"'!=""      local XY2 `coordinates'
+            else if "`frame'"=="`frame2'" local XY2 `"`XY'"'
+            else { 
+                _get coordinates, local(XY2) strict
+                if `: list sizeof XY2'==4 {
                     di as err "four coordinate variables found in frame"/*
-                        */ " {bf:`frame1'}" _n "paired-coordinates data not"/*
+                        */ " {bf:`frame2'}" _n "paired-coordinates data not"/*
                         */ " supported by {bf:geoframe spsmooth}"
                     exit 499
                 }
             }
-            if "`replace'"=="" {
-                confirm new variable `generate'
+            marksample touse2
+            if "`frame'"=="`frame2'" {
+                if `"`XY'"'==`"`XY2'"' {
+                    capt assert (`touse'==`touse2')
+                    if _rc exit 1
+                    if !_rc {
+                        local XY2
+                        local fill
+                    }
+                }
             }
-            marksample touse1
-            qui gen double `tgtvar' = .
         }
     }
     else {
-        local frame1
+        local frame2 `frame'
+        local touse2 `touse'
+    }
+    // prepare output variable
+    frame `frame2' {
         if "`replace'"=="" {
-            confirm new variable `generate'
+            capt n confirm new variable `newvar'
+            if _rc==1 exit 1
+            if _rc {
+                if _rc==110 {
+                    di as err "must specify {bf:replace} or "/*
+                        */ "{bf:generate(}{it:newvar}{cmd:}{bf:)}"
+                }
+                exit _rc
+            }
         }
-        qui gen double `tgtvar' = .
-        local tgt 0
+        tempvar zvar2
+        qui gen double `zvar2' = .
     }
     // apply smoothing
     tempname BWIDTH
-    mata: st_numscalar("`BWIDTH'", _spsmooth("`tgtvar'", "`zvar'", "`wvar'",/*
-        */ "`XY'", "`touse'", "`frame1'",  "`XY1'", "`touse1'", `bwidth',/*
-        */ `bwadj', "`kernel'", "`ll'"!="", "`dots'"!="", "`naive'"!=""))
-    // cleanup and returns
-    if "`frame1'"!="" {
-        frame `frame1' {
-            capt confirm new variable `generate'
-            if _rc==1 exit _rc
-            if _rc {
-                local msg replaced
-                drop `generate'
-            }
-            else local msg added
-            rename `tgtvar' `generate'
-            _di_frame "(variable {bf:`generate'} `msg' in frame " `frame1' ")"
-        }
+    frame `frame' {
+        mata: st_numscalar("`BWIDTH'", _spsmooth(/* (may change the frame!)
+            */ "`frame'", "`zvar'", "`wvar'", "`XY'",  "`touse'",/*
+            */ "`frame2'", "`zvar2'", "`XY2'", "`touse2'", `bwidth',/*
+            */ `bwadj', "`kernel'", "`ll'"!="", "`fill'"!="",/*
+            */ "`dots'"!="", "`naive'"!=""))
     }
-    else {
-        capt confirm new variable `generate'
+    // cleanup/returns
+    frame `frame2' {
+        capt confirm new variable `newvar'
         if _rc==1 exit _rc
         if _rc {
             local msg replaced
-            drop `generate'
+            drop `newvar'
         }
         else local msg added
-        rename `tgtvar' `generate'
-        _di_frame "(variable {bf:`generate'} `msg' in frame " `c(frame)' ")"
+        rename `zvar2' `newvar'
+        _di_frame "(variable {bf:`newvar'} `msg' in frame " `frame2' ")"
     }
     return scalar bwidth = `BWIDTH' 
     return local kernel "`kernel'"
@@ -5178,37 +5208,32 @@ void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
     st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots)[,1])
 }
 
-real scalar _spsmooth(string scalar tgtvar, string scalar zvar,
+real scalar _spsmooth(string scalar frame, string scalar zvar,
     string scalar wvar, string scalar xy, string scalar touse,
-    string scalar frame1, string scalar xy1, string scalar touse1,
-    real scalar bw, real scalar bwadj, string scalar kernel, real scalar ll,
+    string scalar frame2, string scalar zvar2, string scalar xy2,
+    string scalar touse2, real scalar bw, real scalar bwadj,
+    string scalar kernel, real scalar ll, real scalar fill,
     real scalar nodots, real scalar naive)
 {
-    string scalar  cframe
     real colvector S, Z, w
-    real matrix    XY, XY1
+    real matrix    XY, XY2
     
     st_view(Z=., ., zvar, touse)
     st_view(XY=., ., xy, touse)
     if (wvar!="") st_view(w=., ., wvar, touse)
     else          w = 1
-    if (frame1=="") st_view(S=., ., tgtvar, touse)
-    else {
-        cframe = st_framecurrent()
-        st_framecurrent(frame1)
-        st_view(XY1=., ., xy1, touse1)
-        st_view(S=., ., tgtvar, touse1)
-        st_framecurrent(cframe)
-    }
+    if (frame!=frame2) st_framecurrent(frame2)
+    st_view(S=., ., zvar2, touse2)
+    if (xy2!="") st_view(XY2=., ., xy2, touse2)
     if (bw>=.) {
         bw = sqrt(sum(mm_coldiff(colminmax(XY)):^2)) / 50
-        bw = bw * mm_kdel0(kernel) * bwadj
+        bw = bw * mm_kdel0(strlower(kernel)) * bwadj
         if (bw<=0|bw>=.) bw = 1
         displayas("txt")
         printf("(bandwidth set to {res:%g})\n", bw)
     }
-    S[.] = geo_ksmooth(Z, w, XY, frame1=="" ? XY : XY1,
-        bw, kernel, ll, nodots, naive)
+    S[.] = geo_ksmooth(Z, w, XY, xy2!="" ? XY2 : XY, bw, kernel, ll,
+        fill, nodots, naive)
     return(bw)
 }
 

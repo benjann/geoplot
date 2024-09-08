@@ -1,5 +1,5 @@
 {smcl}
-{* 05sep2024}{...}
+{* 08sep2024}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -1797,17 +1797,17 @@
     {ifin} {weight} [{cmd:,} {it:options} ]
 
 {pstd}
-    generates a variable containing smoothed values of {it:varname} based on
-    kernel-weighted local average or local linear fit using euclidean
-    distances between coordinates. The current frame is typically an attribute
-    frame and the coordinates are the centroids of the shape units represented
-    in the frame. {cmd:iweight}s are allowed; see {help weight}. {it:options}
-    are as follows.
+    generates a variable containing smoothed values of {it:varname} using a
+    kernel-weighted local average or local linear fit based on euclidean
+    distances between origin and destination coordinates. The current frame is
+    typically an attribute frame and the coordinates are the centroids of the
+    shape units represented in the frame. {cmd:iweight}s are allowed; see
+    {help weight}. {it:options} are as follows.
 
 {phang}
     {opt bw:idth}{cmd:(}[{cmd:*}]{it:#}{cmd:)} sets or adjusts the kernel
     bandwidth. The default is to set the bandwidth to two percent of the length
-    of the diagonal of the bounding box of the input coordinates, multiplied
+    of the diagonal of the bounding box of the origin coordinates, multiplied
     by the canonical bandwidth of the chosen kernel. Specify
     {cmd:bwidth(*}{it:#}{cmd:)} to multiply this default bandwidth by {it:#}. For
     example, type {cmd:bwidth(*0.5)} to use half the default bandwidth. Alternatively, type
@@ -1817,47 +1817,55 @@
 {phang}
     {opt k:ernel(kernel)} selects the kernel function. {it:kernel} can be one of
     {cmdab:e:panechnikov}, {cmd:epan2}, {cmdab:b:iweight}, {cmdab:t:riweight},
-    {cmdab:c:osine}, {cmdab:g:aussian} (clipped at +/- 4), {cmdab:p:arzen},
-    {cmdab:r:ectangle}, or {cmdab:tria:ngle}. Default is {cmd:epan2}.
+    {cmdab:c:osine}, {cmdab:g:aussian} (gaussian kernel clipped at +/- 4), {cmdab:G:aussian}
+    (unclipped gaussian kernel), {cmdab:p:arzen}, {cmdab:r:ectangle}, or
+    {cmdab:tria:ngle}. Default is {cmd:epan2}.
 
 {phang}
     {opt ll} applies local linear smoothing. The default is to apply local average
     smoothing.
 
 {phang}
-    {opt co:ordinates(X Y)} specifies custom coordinate variables
-    (in the current frame). The default is to use the variables returned by
-    {helpb geoframe##set:geoframe get coordinates}.
+    {opt co:ordinates(X Y)} specifies custom origin coordinate variables. The
+    default is to use the variables returned by
+    {helpb geoframe##set:geoframe get coordinates} in the current frame.
 
 {phang}
-    {opt t:arget(spec)} specifies a target frame for the smoothed values. By
-    default, the smoothing process operates within the current frame. That is,
-    smoothed values of {it:varname} will be obtained at the selected coordinates
-    of the input data and stored in a variable in the current frame (i.e., the 
-    target coordinates are the same as the input coordinates). Use option
-    {cmd:target()} to obtain smoothed values at alternative target
-    coordinates. The syntax of {it:spec} is
+    {opt at(spec)} specifies alternative destination coordinates. By default,
+    the destination coordinates are
+    the same as the origin coordinates. That is, smoothed values of {it:varname}
+    will be obtained at the selected coordinates of the input data and stored
+    in the current frame. Specify option {cmd:at()} to obtain smoothed values
+    at alternative destination coordinates, either in the current frame or in
+    an alternative frame. The syntax of {it:spec} is
 
-            {it:tgtframe} {ifin} [, {opt co:ordinates(X Y)} ]
+            [{it:frame2}] {ifin} [, {opt co:ordinates(X Y)} {opt fill} ]
 
 {pmore}
-    where {it:tgtframe} is the frame containing the target coordinates. Smoothed
-    values of {it:varname} will then be obtained at these coordinates (based on
-    distances to the input coordinates) and stored
-    in this frame. Option {cmd:coordinates()} is as described above
-    but applies to {it:tgtframe}. Note that {it:tgtframe} is allowed to be the same
-    as the current frame.
+    where {it:frame2} is the frame containing the destination coordinates
+    (default is the current frame), {it:if} and {it:in} select the relevant
+    observations, and {cmd:coordinates()} specifies custom destination coordinate
+    variables (default is to use the variables returned by
+    {helpb geoframe##set:geoframe get coordinates} in {it:frame2}). The smoothed
+    values of {it:varname} will be stored in {it:frame2}.
+
+{pmore}
+    Suboption {cmd:fill} applies an unrestricted gaussian kernel as fallback to fill in
+    smoothed values for destination coordinates for which no origin
+    coordinates are within the range of the kernel window. {cmd:fill} has no
+    effect if {cmd:kernel()} is {cmd:Gaussian}.
 
 {phang}
     {opth g:enerate(newvar)} specifies a custom name for the generated
     variable. The default is to use the same name as for the input variable. This
-    implies that option {cmd:replace} is required if {cmd:generate()} is omitted (unless
-    {cmd:target()} is specified and the target frame does not yet contain a variable
-    with that name).
+    implies that option {cmd:replace} is required if {cmd:generate()} is omitted, 
+    unless {cmd:at()} specifies an alternative destination frame does not yet
+    contain a variable with that name.
 
 {phang}
-    {cmd:replace} allows overwriting an existing variable. {cmd:replace} is required
-    unless {cmd:generate()} is specified.
+    {cmd:replace} allows overwriting an existing variable. {cmd:replace} is
+    required unless {cmd:generate()} is specified or {cmd:at()} is used to 
+    select an alternative destination frame.
 
 {phang}
     {opt nodot:s} suppresses the progress dots that are displayed by default.

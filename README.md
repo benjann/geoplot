@@ -169,6 +169,19 @@ Inset.
 
 Main changes:
 
+    08sep2024
+    geoplot:
+    - values provided in cuts() will now be sorted if zvar is continuous
+    - cuts() now supports (extended) missing values
+    - cuts(matname) now supported
+    - levels() now has suboptions min() and max()
+    geoframe:
+    - geoframe spsmooth: option target() renamed to at(); suboption -fill- added in
+      at(); new kernel(Gaussian) (with capital "G") to use an unclipped gaussian
+      kernel 
+    mata library:
+    - geo_ksmooth(): support for kernel "Gaussian" added; argument -fill- added
+
     05sep2024
     geoplot:
     - zvar option color(): automatic application of palette option n() was
