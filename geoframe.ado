@@ -1,4 +1,4 @@
-*! version 1.3.3  08sep2024  Ben Jann
+*! version 1.3.4  09sep2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2894,7 +2894,7 @@ program geoframe_spsmooth, rclass
             if "`frame'"=="`frame2'" {
                 if `"`XY'"'==`"`XY2'"' {
                     capt assert (`touse'==`touse2')
-                    if _rc exit 1
+                    if _rc==1 exit 1
                     if !_rc {
                         local XY2
                         local fill
