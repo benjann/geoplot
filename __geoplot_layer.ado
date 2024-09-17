@@ -1,4 +1,4 @@
-*! version 1.2.7  08sep2024  Ben Jann
+*! version 1.2.8  17sep2024  Ben Jann
 
 /*
     Syntax:
@@ -110,7 +110,7 @@ program __geoplot_layer
         local hasZ = `"`zvar'"'!=""
         _parse_levels `levels' // => levels, method, l_wvar, l_min, l_max
         _parse_cuts `cuts' // => cuts, cutsismat
-        _parse_label `label' // => label, nolabel, format, reverse
+        _parse_label `label' // => label, nolabel, format, reverse, labdrop, labkeep
         // varia
         if `"`box2'"'!="" local box box
         local hasMLAB = (`"`mlabi'"'!="") + ("`mlabz'"!="") + ("`mlabel'"!="")
@@ -634,6 +634,9 @@ program __geoplot_layer
                 local labels `"`labels'`space'`"`lbl'"'"'
                 local space " "
             }
+            if "`labdrop'`labkeep'"!="" {
+                mata: _set_labdrop(st_matrix("`CUTS'"), "`labdrop'", "`labkeep'")
+            }
         }
         else {
             if `"`label'"'=="" local label 1 "[@lb,@ub]"
@@ -654,6 +657,9 @@ program __geoplot_layer
                 local labels `"`labels'`space'`"`lbl'"'"'
                 local space " "
             }
+            if "`labdrop'`labkeep'"!="" {
+                mata: _set_labdrop(1..`levels', "`labdrop'", "`labkeep'")
+            }
         }
     }
     else {
@@ -664,6 +670,7 @@ program __geoplot_layer
         _add_quotes label `label'
         if `:list sizeof label'>1 local label `"`"`label'"'"'
         local labels `"`label'"'
+        local labdrop
     }
     // mlabi()/mlabz
     local mlabels
@@ -726,6 +733,7 @@ program __geoplot_layer
             char LAYER[z_colors_`layer'] `"`color'"'
             char LAYER[z_discrete_`layer'] `discrete'
             char LAYER[z_reverse_`layer'] `reverse'
+            char LAYER[z_labdrop_`layer'] "`labdrop'"
             char LAYER[z_format_`layer'] `zfmt'
             local TMP: char LAYER[CUTS]
             char LAYER[CUTS] // clear
@@ -1021,11 +1029,13 @@ end
 
 program _parse_label
     _parse comma label 0 : 0
-    syntax [, NOLabel Format(str) Reverse ]
+    syntax [, NOLabel Format(str) Reverse drop(numlist) keep(numlist) ]
     c_local label `"`label'"'
     c_local nolabel `nolabel'
     c_local format `format'
     c_local reverse = "`reverse'"!=""
+    c_local labdrop `"`drop'"'
+    c_local labkeep `"`keep'"'
 end
 
 program _label_separate
@@ -1463,6 +1473,28 @@ void  _get_lbl(string scalar key, string scalar keys, string scalar lbls,
     }
     if (i>n) st_local("lbl", def)
     else st_local("lbl", tokens(st_local(lbls))[i])
+}
+
+void _set_labdrop(real rowvector L, string scalar drop, string scalar keep)
+{
+    real scalar    i
+    real rowvector DROP, KEEP, p
+    
+    KEEP = strtoreal(tokens(keep))
+    if (length(KEEP)) {
+        p = J(1, i=length(L), 1)
+        for (;i;i--) {
+            if (anyof(KEEP,L[i])) p[i] = 0
+        }
+    }
+    else p = J(1, length(L), 0)
+    DROP = strtoreal(tokens(drop))
+    if (length(DROP)) {
+        for (i=length(L);i;i--) {
+            if (anyof(DROP,L[i])) p[i] = 1
+        }
+    }
+    st_local("labdrop", invtokens(strofreal(selectindex(p))))
 }
 
 void _box_copy_XY(string scalar frame, real scalar n0, real scalar n1,

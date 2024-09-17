@@ -1,5 +1,5 @@
 {smcl}
-{* 08sep2024}{...}
+{* 17sep2024}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -675,7 +675,11 @@ or
     {p_end}
 {p2col:{cmd:"}{help graph_text:{it:text}}{cmd:"}}print the specified text rather
     than a geometric shape; {it:text} may contain Unicode characters and SMCL
-    tags; weights are not allowed with {cmd:shape("}{it:text}{cmd:")}
+    tags; instead of typing Unicode characters directly, you may also
+    type {cmd:`=uchar(}{it:#}{cmd:)'} where {it:#} is the decimal value or
+    {cmd:`=ustrunescape(\u}{it:#}{cmd:)'} where {it:#} is the
+    hex value of the Unicode code point (see {helpb uchar()}); weights
+    are not allowed with {cmd:shape("}{it:text}{cmd:")}
     {p_end}
 
 {pmore}
@@ -1468,6 +1472,19 @@ or
 {phang2}
     {opth f:ormat(%fmt)} selects the display format to be applied to numeric
     values. The default is to use the display format of {help geoplot##zvar:{it:zvar}}.
+
+{phang2}
+    {opth keep(numlist)} selects the levels to be included in
+    {helpb geoplot##legend:legend()} or {helpb geoplot##glegend:glegend()}. Default
+    is to print a legend key for each level. If {opth keep(numlist)} is specified,
+    legend keys will only be printed for the levels selected by {it:numlist}
+    (where {it:numlist} contains indices in case of continuous or string
+    {it:zvar}, and values in case of categorical {it:zvar}). {cmd:keep()} does {it:not}
+    affect the order of the keys; use option {helpb geoplot##cuts:cuts()} to
+    change the order in case of categorical {it:zvar}.
+
+{phang2}
+    {opth drop(numlist)} is like {cmd:keep()} but deselects levels.
 
 {phang2}
     {opt r:everse} reverses the order of the legend keys.

@@ -1,4 +1,4 @@
-*! version 1.3.4  18aug2024  Ben Jann
+*! version 1.3.5  17sep2024  Ben Jann
 
 capt which colorpalette
 if _rc==1 exit _rc
@@ -1627,6 +1627,8 @@ program _legend
                     }
                 }
                 else local mleg_`l'
+                local labdrop: char LAYER[z_labdrop_`l']
+                local lsize_`l' = `lsize_`l'' - `:list sizeof labdrop'
                 if `lsize_`l''<=0 continue
                 local nkeys = `nkeys' + `lsize_`l''
                 local LAYOUT `LAYOUT' `l'
@@ -1692,9 +1694,16 @@ program _legend
                 if `revrs' local revrs 0
                 else       local revrs 1
             }
+            local labdrop: char LAYER[z_labdrop_`l']
+            gettoken ldrop labdrop : labdrop
             local KEYS
+            local i 0
             foreach key of local keys {
                 gettoken lbl lbls : lbls
+                if "`++i'"==`"`ldrop'"' {
+                    gettoken ldrop labdrop : labdrop
+                    continue
+                }
                 gettoken tmp : lbl, qed(hasquote)
                 if !`hasquote' local lbl `"`"`lbl'"'"'
                 local labels `labels' label(`key' `lbl')
@@ -2443,6 +2452,13 @@ program _glegend_plot_keys // plot legend keys (possibly with stacked symbols)
             // use settings from last layer that has missing
             gettoken mlbl LBLS : LBLS, quotes
             local mleg: char LAYER[z_mleg_`l']
+        }
+        local labdrop: char LAYER[z_labdrop_`l']
+        if `"`labdrop'"'!="" {
+            mata: _glegend_labdrop("KEYS_`j'", "labdrop")
+            mata: _glegend_labdrop("LBLS", "labdrop")
+            mata: _glegend_labdrop("MLBLS_`j'", "labdrop")
+            mata: _glegend_labdrop("OPTS_`j'", "labdrop")
         }
         if (`"`:char LAYER[z_reverse_`l']'"'=="1")==`reverse' {
            mata: _glegend_reverse("KEYS_`j'")
@@ -3953,6 +3969,22 @@ void _glegend_reverse(string scalar nm)
     S = tokengetall(t)
     if (length(S)>1) st_local(nm, invtokens(S[length(S)..1]))
     else             st_local(nm, invtokens(S))
+}
+
+void _glegend_labdrop(string scalar nm, string scalar drop)
+{
+    real   rowvector d, p
+    string rowvector S
+    transmorphic     t
+    
+    t = tokeninit(" ", "", (`""""', `"`""'"',"()"))
+    tokenset(t, st_local(nm))
+    S = tokengetall(t)
+    if (!length(S)) return
+    d = strtoreal(tokens(st_local(drop)))
+    p = J(1, length(S), 1)
+    p[d] = J(1, length(d), 0)
+    st_local(nm, invtokens(select(S, p)))
 }
 
 void _slegend_symbol_update_tfpos(real scalar tfirst, real scalar tfpos0)

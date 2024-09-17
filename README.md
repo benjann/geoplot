@@ -169,6 +169,10 @@ Inset.
 
 Main changes:
 
+    17sep2024
+    geoplot:
+    - new suboptions keep() and drop() to select legend keys in option label()
+
     08sep2024
     geoplot:
     - values provided in cuts() will now be sorted if zvar is continuous
