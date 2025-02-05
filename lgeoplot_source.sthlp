@@ -1103,7 +1103,7 @@ end
 
 *! {smcl}
 *! {marker geo_clip}{bf:geo_clip()}{asis}
-*! version 1.0.4  16jul2024  Ben Jann
+*! version 1.0.5  05feb2025  Ben Jann
 *!
 *! Clips or selects shape items by a convex mask; a modified Sutherland–Hodgman
 *! algorithm is used for clipping (returning divided polygons if appropriate);
@@ -1282,8 +1282,9 @@ mata set matastrict on
 {   // first row in XY assumed missing
     `BoolC' I
 
-    if (cols(mask)==1) I = __geo_rclip_point(XY[|a+1,1\b,.|], mask)
-    else               I =  __geo_clip_point(XY[|a+1,1\b,.|], mask)
+    if (b<=a)               I = J(0,1,.) // empty shape
+    else if (cols(mask)==1) I = __geo_rclip_point(XY[|a+1,1\b,.|], mask)
+    else                    I =  __geo_clip_point(XY[|a+1,1\b,.|], mask)
     if (method==2) {
         if (any(I)) return(J(b-a+1,1,1)) // at least one point inside
         else        return(J(b-a+1,1,0)) // else drop all
@@ -1339,10 +1340,11 @@ mata set matastrict on
     `Int'  r, i, n
     `RM'   xy
     `PS'   f
-    
+
     r = b - a + 1
     // point item
     if (r<=2) {
+        if (r<2) return(J(0,2,.)) // empty shape itsm
         xy = _geo_clip_point(XY[|a+1,1 \ b,.|], mask, 0)
         if (rows(xy)) return(XY[a,] \ xy)
         return(J(0,2,.))
@@ -1360,7 +1362,6 @@ mata set matastrict on
         else {
             f = &_geo_clip_area()
             flip = geo_orientation(xy)==1        // is counterclockwise
-            //flip = geo_orientation(xy)==1        // is counterclockwise
             if (flip) xy = J(1,2,.) \ xy[r::2,.] // flip orientation
         }
     }
@@ -2471,7 +2472,7 @@ end
 
 *! {smcl}
 *! {marker geo_ksmooth}{bf:geo_ksmooth()}{asis}
-*! version 1.0.1  08sep2024  Ben Jann
+*! version 1.0.2  20sep2024  Ben Jann
 *!
 *! Function to obtain spatially smoothed values using a kernel-weighted local
 *! average or local linear fit based on euclidean distances.
@@ -2593,12 +2594,12 @@ mata:
 
 `RC' _geo_ksmooth(`RC' Z, `RC' w, `RM' XY, `RM' XY1,
     `RS' bw, `RS' bw2, `SS' kernel, `Bool' ll, `Bool' nodots)
-{   // algorithm using search window based on sum score
+{   // algorithm using search window
     `Bool' hasW
-    `Int'  i, j, a, b, d, dn
+    `Int'  i, j, q, a, b, d, dn
     `RS'   h, c
     `IntC' p, p1, pi
-    `RC'   D, D1, S
+    `RC'   S
     `PS'   k
     
     // kernel
@@ -2613,20 +2614,17 @@ mata:
         else                        h = 1
     }
     h = sqrt(2 * (h * bw)^2)
-    // sum scores
+    // determine direction of search window
     b = rows(XY)
     if (!b) return(J(rows(XY1),1,.)) // no data
-    D = rowsum(XY)
-    p = order(D, 1)
-    if ((D[p[b]]-D[p[1]]) < 10*h) { // use naive algorithm if bwidth is large
+    if (mm_diff(minmax(XY[,1])) > mm_diff(minmax(XY[,2]))) q = 1 // vertical
+    else                                                   q = 2 // horizontal
+    p = order(XY[,q], 1)
+    if ((XY[p[b],q]-XY[p[1],q]) < 10*h) { // use naive algorithm if bw is large
         return(_geo_ksmooth_naive(Z, w, XY, XY1, bw, bw2, kernel, ll, nodots))
     }
-    if (XY!=XY1) {
-        i  = rows(XY1)
-        D1 = rowsum(XY1)
-        p1 = order(D1, 1)
-    }
-    else {; i = b; D1 = D; p1 = p; }
+    if (XY!=XY1) {; i = rows(XY1); p1 = order(XY1[,q], 1); }
+    else         {; i = b;         p1 = p; }
     // run algorithm
     hasW = rows(w)!=1
     if (!nodots) {
@@ -2638,9 +2636,9 @@ mata:
     for (;i;i--) {
         if (!nodots) _geo_progress(d, 1-i/dn)
         j = p1[i]
-        c = D1[j] + h
+        c = XY1[j,q] + h
         for (;b;b--) {
-            if (D[p[b]]<=c) break
+            if (XY[p[b],q]<=c) break
         }
         if (!b) { // reached bottom; no more data
             if (bw2<.) {
@@ -2652,9 +2650,9 @@ mata:
             break 
         }
         a = b
-        c = D1[j] - h
+        c = XY1[j,q] - h
         for (;a;a--) {
-            if (D[p[a]]<c) {; a++ ; break; }
+            if (XY[p[a],q]<c) {; a++ ; break; }
             if (a==1) break // reached bottom
         }
         if (a>b) { // no data within range

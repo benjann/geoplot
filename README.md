@@ -169,6 +169,16 @@ Inset.
 
 Main changes:
 
+    05feb2025
+    geoframe:
+    - geoframe translate esri failed if command import_shp did not create variable
+      shape_order; this is fixed
+    mata library:
+    - geo_clip() could break if the specified coordinates contained empty shape
+      items; this is fixed
+    - geo_ksmooth() now uses a vertical or horizontal search window, rather than
+      a diagonal one; this should be somewhat more efficient in most situations
+
     17sep2024
     geoplot:
     - new suboptions keep() and drop() to select legend keys in option label()

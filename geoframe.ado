@@ -1,4 +1,4 @@
-*! version 1.3.4  09sep2024  Ben Jann
+*! version 1.3.5  12oct2024  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -4275,7 +4275,10 @@ program __translate_esri
         di as txt "(importing shp file) " _c
         import_shp using `"`using'"'
         capt drop rec_header
-        sort _ID shape_order
+        capt confirm variable shape_order, exact
+        if _rc==1 exit 1
+        if _rc sort _ID // shape_order does not exist
+        else   sort _ID shape_order
         lab var _ID "Spatial-unit ID"
     }
     frame create `frame'
