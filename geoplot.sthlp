@@ -1,5 +1,5 @@
 {smcl}
-{* 17sep2024}{...}
+{* 03aug2025}{...}
 {vieweralsosee "geoframe" "help geoframe"}{...}
 {vieweralsosee "colorpalette" "help colorpalette"}{...}
 {vieweralsosee "[G-2] graph" "help graph"}{...}
@@ -206,7 +206,7 @@ or
 {synopt :{helpb geoplot##zoom:zoom({it:spec})}}zoom in on specific layers
     (can be repeated)
     {p_end}
-{synopt :{helpb geoplot##inset:inset({it:spec})}}create inset from additional map
+{synopt :{helpb geoplot##inset:inset({it:spec})}}create inset containing additional map
     (can be repeated)
     {p_end}
 

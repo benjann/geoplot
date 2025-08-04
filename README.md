@@ -169,6 +169,21 @@ Inset.
 
 Main changes:
 
+    03aug2025
+    geoframe:
+    - -geoframe spjoin- is now much faster, allows multiple matches (option
+      -expand-), and has options to select the types of matches (-inside-, -edge-,
+      -vertex-)
+    - -geoframe collapse- and -geoframe collapse- are now much faster; furthermore
+       multiple matches are now taken into account (specify option -unique- for
+       old behavior); option -generate()- is no longer available
+    - -geoframe raster, point- is now much faster
+    - in some situations, -geoframe simplify, jointly- left behind polygons that were
+      not closed; this is fixed
+    mata library:
+    - function geo_inpoly() added; geo_inpoly() is based on geoinpoly.ado by Robert
+      Picard (see -ssc describe geoinpoly-)
+
     05feb2025
     geoframe:
     - geoframe translate esri failed if command import_shp did not create variable

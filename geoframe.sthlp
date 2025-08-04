@@ -1,5 +1,5 @@
 {smcl}
-{* 08sep2024}{...}
+{* 03aug2025}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -39,7 +39,7 @@
     {p_end}
 {synopt :{helpb geoframe##set:set}}update geoframe settings of current frame
     {p_end}
-{synopt :{helpb geoframe##get:get}}retrieve geoframe settings from current frame
+{synopt :{helpb geoframe##get:get}}retrieve geoframe settings of current frame
     {p_end}
 
 {syntab :Manage shapes}
@@ -73,7 +73,7 @@
     {p_end}
 {p2col :{helpb geoframe##bbox:{ul:bb}ox}}store bounding box, enclosing circle, or convex hull in new frame
     {p_end}
-{p2col :{helpb geoframe##bshare:bshare}}store shared borders or outlines in new frame
+{p2col :{helpb geoframe##bshare:bshare}}store shared borders or merged shapes in new frame
     {p_end}
 {p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
     {p_end}
@@ -1089,11 +1089,11 @@
     follows.
 
 {phang}
-    {opt l:ine} enforces line clipping for polygons. By default,
-    a polygon is clipped in such a way that the result is a
-    polygon (or a set of polygons). Specify {cmd:line}, to clip a polygon in
-    such a way that the result is a line (or a set of lines), unless the
-    polygon lies entirely within the clipping window. {cmd:line} has no effect
+    {opt l:ine} enforces line clipping for polygons. By default, clipped
+    polygons will be returned as intersections with the clipping mask, that is, the resulting
+    shapes will be closed along the mask's outline. Specify
+    {cmd:line} to leave clipped polygons open. The resulting shapes will then be
+    lines that start and end at the edge of the clipping mask. {cmd:line} has no effect
     if {cmd:noclip} is specified.
 
 {phang}
@@ -1578,9 +1578,10 @@
 
 {phang}
     {opt out:line}[{cmd:(}{it:id}{cmd:)}] is like {cmd:not} but connects the
-    extracted line segments such that they form one or seveal outline
+    extracted line segments such that they form one or several outline
     (and, possibly, enclave) polygons (assuming that the input shapes are
-    polygons). Optional argument {it:id} assignes a custom ID to the resulting
+    polygons). This is equivalent to merging adjacent polygons. Optional
+    argument {it:id} assigns a custom ID to the resulting
     shape unit; the default ID is {cmd:1}. Only one of {cmd:unique},
     {cmd:endpoints}, {cmd:not}, and {cmd:outline} is allowed.
 
@@ -1675,7 +1676,7 @@
     {help collapse:{it:clist}} {ifin} {weight} [{cmd:,} {it:options} ]
 
 {pstd}
-    finds the positions of the points provided by {it:frame2} in the shapes
+    locates the points provided by {it:frame2} in the shapes
     defined by the current frame using {helpb geoframe##spjoin:geoframe spjoin},
     computes summary statistics such as means,
     sums, or counts by units using {helpb collapse}, and then adds the results
@@ -1693,37 +1694,31 @@
 
 {phang}
     {opth sel:ect(exp)} restricts the data from the current frame to be
-    considered. The default is to use all data. Specify
+    considered when performing the spatial join. The default is to use all data. Specify
     {opt select(exp)} to consider only data for which {it:exp} is unequal 0.
 
 {phang}
     {opt co:ordinates(X Y)} specifies custom coordinate variables
-    in {it:frame2}. The default is to use the variables returned by
+    in {it:frame2} for the spatial join. The default is to use the variables returned by
     {helpb geoframe##set:geoframe get coordinates}.
 
 {phang}
-    {opt gen:erate}[{cmd:(}{it:spec}{cmd:)}] causes the unit IDs of the matched
-    shapes to be left behind as a new variable in {it:frame2}. {it:spec} is
-
-            [{help newvar:{it:ID}}] [{cmd:,} {cmd:nosort} {cmd:noset} {cmd:replace} ]
-
-{pmore}
-    where {it:ID} is the variable name to be used, {cmd:nosort} omits sorting the data in
-    {it:frame2} by the generated ID variable, {cmd:noset} omits registering the
-    generated ID variable in {it:frame2} using {helpb geoframe##set:geoframe set id}, and
-    {cmd:replace} allows overwriting an existing variable. The default for {it:ID} is {cmd:_ID}.
+    {opt uniq:ue} causes the spacial join to match each point from {it:frame2} to at most
+    one unit in the current frame. By default, if a point matches multiple units,
+    all matches will be considered (this means that a single point may be included in 
+    the statistics of multiple units). Specify {cmd:unique} to consider only the first
+    match.
 
 {phang}
     {opt nodot:s} suppresses the progress dots of the spatial join that are displayed by default.
 
 {phang}
     {cmd:id(}{help varname:{it:ID}}{cmd:)} indicates that an ID variable matching the points in
-    {it:frame2} to the shapes in the current frame already exists, e.g. from an
-    earlier call to {cmd:geoframe collapse} with option {cmd:generate()} or from
+    {it:frame2} to the shapes in the current frame already exists, e.g. from
     a call to {helpb geoframe##spjoin:geoframe spjoin}. In this case,
     {cmd:geoframe collapse} will base its computations on existing variable
     {it:ID} rather than computing a new ID variable. Options {cmd:select()},
-    {cmd:coordinates()}, and {cmd:generate()} are not allowed if {cmd:id()} is specified.
+    {cmd:coordinates()}, and {cmd:unique} are not allowed if {cmd:id()} is specified.
 
 {marker contract}{...}
 {dlgtab:geoframe contract}
@@ -1747,18 +1742,14 @@
     {ifin} [{cmd:,} {it:options} ]
 
 {pstd}
-    finds the positions of the points provided by the current frame in the shapes
+    locates the points provided by the current frame in the shapes
     defined by {it:frame2} (note the reverse logic of the syntax compared to
     {helpb geoframe##collapse:geoframe collapse}) and stores the unit IDs of the matched shapes
     in variable {it:ID} in the current frame; {cmd:_ID} is used as default
-    variable name. Only points satisfying the {it:if} and {it:in}
-    qualifiers will be considered; for all other points {it:ID} will be set to
-    missing. {it:frame2} can be a shape frame or an attribute frame
-    that is linked to a shape frame. The spacial join algorithm assumes that
-    shapes do not overlap (no crossings). It also assumes that nested shapes in
-    {it:frame2} (or its linked shape frame) have been tagged using
-    {helpb geoframe##gen_plevel:geoframe generate plevel}
-    (if there are nested shapes). {it:options} are as follows.
+    variable name. Only points from the current frame that satisfy the {it:if} and {it:in}
+    qualifiers will be considered; {it:ID} will be set to
+    missing for all other points. {it:frame2} can be a shape frame or an attribute frame
+    that is linked to a shape frame. {it:options} are as follows.
 
 {phang}
     {opth sel:ect(exp)} restricts the data from {it:frame2} that will be
@@ -1771,7 +1762,29 @@
     {helpb geoframe##set:geoframe get coordinates}.
 
 {phang}
-    {cmd:nosort} does not sort the data. The default is to sort the data in the
+    {opt inside}, {opt edge}, or {opt vertex} restricts the types of matches
+    to be considered. {cmd:inside} only matches points that are located strictly
+    inside of a shape (i.e. not on the border); {cmd:edge} only matches
+    points that are exactly on the border of a shape (i.e. on a vertex or on a
+    side between two vertices); {opt vertex} only matches
+    points that are equal to a vertex of a shape (subset of
+    the points matched by {cmd:edge}). The default is to match points both if 
+    they are inside or on the border of a shape.
+
+{phang}
+    {opt expand} adds extra observations to the current frame if there are points
+    that match multiple shapes. By default, only the first match (in the order
+    of the shapes in {it:frame2}) is considered if a point has multiple
+    matches. Specify, {opt expand} to consider all matches and expand the data
+    accordingly.
+
+{phang}
+    {opt alt} uses an alternative spacial-join algorithm that is much
+    slower (not recommended). Options {cmd:inside}, {cmd:edge}, {cmd:vertex}, and
+    {cmd:expand} are not allowed if {cmd:alt} is specified.
+
+{phang}
+    {cmd:nosort} does not sort the resulting data by ID. The default is to sort the data in the
     current frame by the created ID variable (preserving the original sort order
     within ID).
 

@@ -1,4 +1,4 @@
-*! version 1.3.5  12oct2024  Ben Jann
+*! version 1.3.6  03aug2025  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -1372,7 +1372,7 @@ program geoframe_select
                 frame `t`shp'name' {
                     qui keep if ``shp'touse'
                     local N`shp'drop = r(N_drop)
-                    local msg `: di %9.0gc `N`shp'drop''
+                    local msg `: di %18.0gc `N`shp'drop''
                     if `N`shp'drop'==1 local msg "`msg' observation"
                     else               local msg "`msg' observations"
                 }
@@ -1701,14 +1701,14 @@ program _manipulate
         if `N`shp'drop' {
             if `N`shp'drop'==1 local msg observation
             else               local msg observations
-            local tmp `: di %9.0gc `N`shp'drop''
+            local tmp `: di %18.0gc `N`shp'drop''
             local dmsg`shp' "`tmp' `msg'"
         }
     }
     if `Nadd' {
         if `Nadd'==1 local msg observation
         else         local msg observations
-        local tmp `: di %9.0gc `Nadd''
+        local tmp `: di %18.0gc `Nadd''
         if "`shpframe'"!="" local shp shp
         else                local shp
         local amsg`shp' "`tmp' `msg'"
@@ -2587,7 +2587,7 @@ program _collapse
     tempname frame1
     frame `frame' {
         local opts COordinates(passthru) SELect(passthru) id(varname)/*
-            */ GENerate GENerate2(str) noDOTs relax
+            */ UNIQue noDOTs relax
         if `contract' {
             syntax [if] [in] [fw] [, `opts' * ]
         }
@@ -2595,12 +2595,7 @@ program _collapse
             syntax anything(equalok id="clist") [if] [in] [aw fw iw pw] [,/*
                 */ `opts' cw ]
         }
-        if `"`generate2'"'!="" local generate generate
         if "`id'"!="" { // ID already exists
-            if `"`generate'"'!="" {
-                di as err "generate() and id() not both allowed"
-                exit 198
-            }
             if `"`select'"'!="" {
                 di as err "select() not allowed together with id()"
                 exit 198
@@ -2610,8 +2605,10 @@ program _collapse
                 exit 198
             }
             local ID `id'
+            frame copy `frame' `frame1'
         }
         else { // create ID using spjoin
+            tempname ID
             // check coordinates
             if `"`coordinates'"'=="" {
                 capt geoframe_get coordinates, strict
@@ -2622,29 +2619,6 @@ program _collapse
                         */ "; specify option {bf:coordinates()}"
                     exit 111
                 }
-            }
-            // generate option
-            if `"`generate'"'!="" {
-                _collapse_parse_gen `generate2' /*
-                    returns generate, replace, set, sort*/
-                local ID `generate'
-                local novarnote
-                if "`replace'"=="" {
-                    capt confirm new variable `ID'
-                    if _rc==1 exit 1
-                    if _rc {
-                        di as err "variable {bf:`ID'} already defined in"/*
-                            */ " frame {bf:`frame'}"
-                        exit 110
-                    }
-                }
-            }
-            else {
-                tempname ID
-                local replace
-                local set noset
-                local sort nosort
-                local novarnote novarnote
             }
             // check for potential errors after spatial join
             frame put in 1, into(`frame1')
@@ -2673,11 +2647,15 @@ program _collapse
             }
             frame drop `frame1'
             // now run spatial join
-            geoframe_spjoin `cframe' `ID' `if' `in', `dots' `select'/*
-                */ `coordinates' `replace' `set' `sort' `novarnote'
+            if "`unique'"=="" local expand expand
+            else              local expand
+            frame copy `frame' `frame1'
+            frame `frame1' {
+                geoframe_spjoin `cframe' `ID' `if' `in', `dots' `select'/*
+                    */ `coordinates' `expand' noset nosort novarnote
+            }
         }
     }
-    frame copy `frame' `frame1'
     frame `frame1' {
         marksample touse
         qui keep if `touse' & `ID'<.
@@ -2701,19 +2679,30 @@ program _collapse
     _di_frame " added to frame " `cframe' ")"
 end
 
-program _collapse_parse_gen
-    syntax [name] [, replace noset nosort ]
-    if "`namelist'"=="" local namelist _ID // default
-    c_local generate `namelist'
-    c_local replace `replace'
-    c_local set `set'
-    c_local sort `sort'
-end
-
 program geoframe_spjoin
     syntax [namelist(min=1 max=2)] [if] [in] [, SELect(str asis) /*
         */ COordinates(varlist min=2 max=2) replace nosort noset/*
+        */ alt inside edge vertex expand /*
         */ NOVARNOTE noDOTs ]
+    if "`alt'"!="" {
+        if "`inside'`edge'`vertex'`expand'"!="" {
+            local opt: word 1 of `inside' `edge' `vertex' `expand'
+            di as err "option {bf:`opt'} not allowed with {bf:alt}"
+            exit 198
+        }
+        local mtype 0
+    }
+    else {
+        local mtype `inside' `edge' `vertex'
+        if `:list sizeof mtype'>1 {
+            di as err "only one of {bf:inside}, {bf:edge}, and {bf:vertex} allowed"
+            exit 198
+        }
+        if      "`mtype'"=="inside" local mtype 1
+        else if "`mtype'"=="edge"   local mtype 2
+        else if "`mtype'"=="vertex" local mtype 3
+        else                        local mtype 0
+    }
     marksample touse
     gettoken shpframe namelist : namelist
     gettoken id       namelist : namelist
@@ -2762,21 +2751,24 @@ program geoframe_spjoin
                 */ " supported by {bf:geoframe spjoin}"
             exit 499
         }
-        _get pid, local(PID)
-        if "`PID'"=="" {
-            tempvar PID
-            qui geoframe_generate pid `PID', noset
-        }
-        _get pl, local(PL)
-        if "`PL'"=="" {
-            di as txt "({helpb geoframe##gen_plevel:plevel} not set;"/*
-                */ " assuming that there are no nested items)"
+        if "`alt'"!="" {
+            _get pid, local(PID)
+            if "`PID'"=="" {
+                tempvar PID
+                qui geoframe_generate pid `PID', noset
+            }
+            _get pl, local(PL)
+            if "`PL'"=="" {
+                di as txt "({helpb geoframe##gen_plevel:plevel} not set;"/*
+                    */ " assuming that there are no nested items)"
+            }
         }
     }
     tempvar Id
     qui gen `type' `Id' = .
     frame `shpframe': mata: _spjoin("`frame'", "`Id'", "`xy'", "`touse'",/*
-        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'", "`dots'"!="")
+        */ "`ID'", "`PID'", "`XY'", "`PL'", "`TOUSE'", "`dots'"!="", /*
+        */ "`alt'"!="", `mtype', "`expand'"!="")
     qui count if `Id'>=. & `touse'
     if `r(N)' {
         if r(N)==1 local msg point
@@ -2796,6 +2788,11 @@ program geoframe_spjoin
         geoframe_set id `id'
     }
     if "`novarnote'"=="" {
+        if "`expand'"!="" {
+            if `Nadd'==1 local msg observation
+            else         local msg observations
+            di as txt "({bf:`Nadd'} `msg' added)"
+        }
         _di_frame "(variable {bf:`id'} added to frame " `frame' ")"
         if "`sort'"=="" {
             _di_frame "(data in frame " `frame' " sorted by {bf:`id'})"
@@ -3904,7 +3901,7 @@ program geoframe_clean
                 if r(N_drop) {
                     if r(N_drop)==1 local msg observation
                     else            local msg observations
-                    local Ndrop `: di %9.0gc `r(N_drop)''
+                    local Ndrop `: di %18.0gc `r(N_drop)''
                     _di_frame "(dropped `Ndrop' unmatched `msg' in frame "/*
                         */ `shpframe' ")"
                 }
@@ -3921,7 +3918,7 @@ program geoframe_clean
                 local lnkupdate 1
                 if r(N_drop)==1 local msg observation
                 else            local msg observations
-                local Ndrop `: di %9.0gc `r(N_drop)''
+                local Ndrop `: di %18.0gc `r(N_drop)''
                 _di_frame "(dropped `Ndrop' unmatched `msg' in frame "/*
                     */ `frame' ")"
             }
@@ -3946,7 +3943,7 @@ program geoframe_clean
                     qui drop if `empty'==1
                     if r(N_drop)==1 local msg unit
                     else            local msg units
-                    local Ndrop `: di %9.0gc `r(N_drop)''
+                    local Ndrop `: di %18.0gc `r(N_drop)''
                     _di_frame "(dropped `Ndrop' empty-shape `msg' in frame "/*
                         */ `frame' ")"
                 }
@@ -4883,9 +4880,13 @@ void _simplify(string scalar id, string scalar out, string rowvector xy,
         d = c - 1; c = q[j]; b0 = a - 1
         for (i=d; i>=c; i--) {
             b = a - 1; a = p[i]
-            OUT[|a\b|] = jointly ?
-                !geo_simplify(XY[|a,1\b,2|], delta, B[|a\b|]) :
-                !geo_simplify(XY[|a,1\b,2|], delta)
+            if (jointly) {
+                OUT[|a\b|] = !geo_simplify(XY[|a,1\b,2|], delta, B[|a\b|])
+                // fix problem that first and last point may be dropped, which
+                // would open the polygon
+                _simplify_fixpolygon(OUT, XY, a, b)
+            }
+            else OUT[|a\b|] = !geo_simplify(XY[|a,1\b,2|], delta)
             if (dots) _geo_progress(d0, 1-(i-1)/dn)
         }
         if (nodrop) {
@@ -4896,6 +4897,25 @@ void _simplify(string scalar id, string scalar out, string rowvector xy,
         }
     }
     if (dots) _geo_progress_end(d0, ")")
+}
+
+void _simplify_fixpolygon(real colvector OUT, real matrix XY, real scalar a, 
+    real scalar b)
+{
+    real scalar i
+    
+    i = a + 1
+    if (i>=b)            return // point
+    if (XY[i,]!=XY[b,])  return // not a polygon
+    if (!OUT[b])         return // last point not dropped
+    if (all(OUT[|i\b|])) return // all points are dropped
+    // find first point that is not dropped
+    for (++i;i<b;i++) {
+        if (!OUT[i]) break
+    }
+    // update last point
+    XY[b,] = XY[i,]
+    OUT[b] = 0
 }
 
 void _refine(string scalar id, string rowvector xy,
@@ -5195,20 +5215,55 @@ void _raster(string scalar frame, string scalar shpframe, string scalar id,
 
 void _spjoin(string scalar frame, string scalar id1, string scalar xy1,
     string scalar touse1, string scalar id, string scalar pid, string scalar xy,
-    string scalar pl, string scalar touse, real scalar nodots)
+    string scalar pl, string scalar touse, real scalar nodots, real scalar alt,
+    real scalar mtype, real scalar expand)
 {
     real colvector ID, PID, PL
     real matrix    XY, XY1
     
     st_view(ID=.,  ., id, touse)
-    st_view(PID=., ., pid, touse)
     st_view(XY=.,  ., xy, touse)
-    if (pl!="") st_view(PL=., ., pl, touse)
-    else        PL = J(0,1,.)
+    if (alt) {
+        st_view(PID=., ., pid, touse)
+        if (pl!="") st_view(PL=., ., pl, touse)
+        else        PL = J(0,1,.)
+    }
     st_framecurrent(frame)
     stata("*") // fixes an issue with frames and views; may become redundant
     st_view(XY1=., ., xy1, touse1)
-    st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots)[,1])
+    if (alt) {
+        st_store(., id1, touse1, geo_spjoin(XY1, ID, PID, XY, PL, nodots)[,1])
+    }
+    else if (!expand) {
+        st_store(., id1, touse1, geo_inpoly(XY1, ID, XY, mtype, nodots)[,1])
+    }
+    else {
+        _spjoin_expand(id1, touse1, XY1, ID, XY, mtype, nodots)
+    }
+}
+
+void _spjoin_expand(string scalar id1, string scalar touse1, real matrix XY1,
+    real colvector ID, real matrix XY, real scalar mtype, real scalar nodots)
+{
+    string scalar  s, p
+    real scalar    nadd
+    real colvector ID1, P
+    
+    ID1 = geo_inpoly(XY1, ID, XY, mtype, nodots, P=.)[,1]
+    nadd = sum(P) - rows(P)
+    st_local("Nadd", strofreal(nadd, "%18.0g"))
+    if (!nadd) {
+        st_store(., id1, touse1, ID1)
+        return
+    }
+    s = st_tempname()
+    stata("generate double " + s + " = _n") // sort index
+    p = st_tempname()
+    stata("generate double " + p + " = 1") // count variable for expand
+    st_store(., p, touse1, P)
+    stata("qui expand  " + p)
+    stata("sort " + s)
+    st_store(., id1, touse1, ID1)
 }
 
 real scalar _spsmooth(string scalar frame, string scalar zvar,
