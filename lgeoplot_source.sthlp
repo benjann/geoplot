@@ -2206,9 +2206,9 @@ void _geo_inpoly_stack_append(`Stack' stack, `PSlice' s)
     return(select((GT, ID,
         rowminmax((XY0[,1],XY[,1])), rowminmax((XY0[,2],XY[,2])),
         (XY[,1] - XY0[,1]) :/ (XY[,2] - XY0[,2]),
-        XY0, _geo_inpoly_edgelist_xmm(ID, PID, XY)), p))
-        /* gtype ID xlo xup ylo yup slope x0 y0 xmin xmax
-            1   2   3   4   5   6    7   8   9  10   11  */
+        XY, _geo_inpoly_edgelist_xmm(ID, PID, XY)), p))
+        /* gtype ID xlo xup ylo yup slope x1 y1 xmin xmax
+             1   2   3   4   5   6    7   8   9  10   11  */
 }
 
 `BoolC' _geo_inpoly_edgelist_tagfirst(`IntM' ID)
@@ -2257,8 +2257,8 @@ local xup   4  // upper x-coordinate of edge
 local ylo   5  // lower y-coordinate of edge
 local yup   6  // upper y-coordinate of edge
 local slope 7  // slope of edge (missing if infinity or undetermined)
-local x0    8  // x-coordinate of starting point of edge
-local y0    9  // y-coordinate of starting point of edge
+local x1    8  // x-coordinate of end point of edge
+local y1    9  // y-coordinate of end point of edge
 local xmin  10 // minimum x-coordinate of shape item
 local xmax  11 // maximum y-coordinate of shape item
 mata:
@@ -2299,9 +2299,9 @@ void _geo_inpoly_process(`PC' R, `RM' xy, `RM' E)
     
     r = J(0,2,.)
     if (!rows(E)) return(NULL)
-    x = E[,`x0'] :+ (xy[2] :- E[,`y0']) :* E[,`slope'] // where ray hits edge
+    x = E[,`x1'] :+ (xy[2] :- E[,`y1']) :* E[,`slope'] // where ray hits edge
     p = selectindex(_mm_unique_tag(E[,`ID']))
-    onvertex = (xy[1]:==E[,`xup'] :& xy[2]:==E[,`yup'])
+    onvertex = (xy[1]:==E[,`x1'] :& xy[2]:==E[,`y1'])
     onedge   = (x:==xy[1] :|
                (x:>=. :& xy[1]:>=E[,`xlo'] :& xy[1]:<=E[,`xup'])) // flat edge
     i = rows(p)

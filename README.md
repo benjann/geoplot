@@ -169,6 +169,11 @@ Inset.
 
 Main changes:
 
+    05aug2025
+    mata library:
+    - geo_inpoly(): the code to identify points that lie exactly on a vertex used
+      wrong coordinates in some situations; this is fixed
+
     03aug2025
     geoframe:
     - -geoframe spjoin- is now much faster, allows multiple matches (option
