@@ -169,6 +169,14 @@ Inset.
 
 Main changes:
 
+    13aug2025
+    mata library:
+    - geo_inpoly() is now more efficient when there are duplicate points
+    - geo_inpoly() now sets the orientation of the ray-casting algorithm depending
+      on context (vertical rays if the vertical overall range of the shapes is
+      smaller than the horizontal overall range; else horizontal rays; the earlier
+      version always used horizontal rays)
+
     05aug2025
     mata library:
     - geo_inpoly(): the code to identify points that lie exactly on a vertex used

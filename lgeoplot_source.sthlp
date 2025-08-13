@@ -1949,7 +1949,7 @@ end
 
 *! {smcl}
 *! {marker geo_inpoly}{bf:geo_inpoly()}{asis}
-*! version 1.0.0  03aug2025  Ben Jann
+*! version 1.0.1  13aug2025  Ben Jann
 *!
 *! Spatially joins the points in xy to the shapes in XY. Results are equivalent
 *! to the ones from geo_spjoin(), but geo_inpoly() is much more efficient.
@@ -2118,20 +2118,19 @@ void _geo_inpoly_stack_append(`Stack' stack, `PSlice' s)
     if (!rows(xy)) return(J(0,1,NULL))
     if (!rows(XY)) return(J(rows(xy),1,NULL))
     if (!nodots) di = 0
-    // sort xy by y and tag unique points
-    p = order(xy,2)
-    t = _mm_uniqrows_tag(xy[p,], 1) // (tag last)
-    // initialize stack
-    s = &(`SLICE'())
-    stack.n = stack.N = 0
-    s->xy = _geo_inpoly_dropoutside(select((xy, (1::rows(xy)))[p,], t), XY)
-    _geo_inpoly_setslice(stack, s, _geo_inpoly_edgelist(ID, XY), di)
-    // recursively slice and process data
+    // initialize data
     if (!nodots) {
         displayas("txt")
-        dj = _geo_progress_init("(")
-        dn = rows(s->xy)
+        printf("(preparing data ...")
+        displayflush()
     }
+    stack = _geo_inpoly_init(xy, ID, XY, di, p=., t=.)
+    if (!nodots) {
+        printf(" done)\n")
+        dj = _geo_progress_init("(")
+        dn = rows(stack.S[1]->xy)
+    }
+    // recursively slice and process data
     R = J(rows(xy), 1, NULL)
     while (stack.n) {
         s = _geo_inpoly_stack_pop(stack)
@@ -2168,19 +2167,42 @@ void _geo_inpoly_stack_append(`Stack' stack, `PSlice' s)
     return(R)
 }
 
-`RM' _geo_inpoly_dropoutside(`RM' xy, `RM' XY)
-{   // drop points that are outside the global bounds of XY
-    `RR' xmm, ymm
+`Stack' _geo_inpoly_init(`RM' xy, `RC' ID, `RM' XY,
+    `Int' di, `IntC' p, `BoolC' t) // di, p, t will be modified
+{
+    `Bool'   vert
+    `RR'     Xmm, Ymm
+    `PSlice' s
+    `Stack'  stack
     
-    if (!rows(XY)) return
-    xmm = minmax(XY[,1])
-    ymm = minmax(XY[,2])
-    return(select(xy, xy[,1]:>=xmm[1] :& xy[,1]:<=xmm[2] :&
-                      xy[,2]:>=ymm[1] :& xy[,2]:<=ymm[2]))
+    // horizontal or vertical rays?
+    Xmm = minmax(XY[,1])
+    Ymm = minmax(XY[,2])
+    vert = (Ymm[2]-Ymm[1]) < (Xmm[2]-Xmm[1])
+    // sort order
+    if (vert) p = order(xy,(1,2))   // vertical rays; sort points by x
+    else      p = order(xy,(2,1))   // horizontal rays; sort points by y
+    t = _mm_uniqrows_tag(xy[p,], 1) // (tag last)
+    // initialize stack
+    s = &(`SLICE'())
+    stack.n = stack.N = 0
+    if (vert) s->xy = _geo_inpoly_dropoutside( // use flipped coordinates
+        select((xy[,(2,1)], (1::rows(xy)))[p,], t), Ymm, Xmm)
+    else      s->xy = _geo_inpoly_dropoutside(
+        select((xy, (1::rows(xy)))[p,], t), Xmm, Ymm)
+    _geo_inpoly_setslice(stack, s, _geo_inpoly_edgelist(ID, XY, vert), di)
+    return(stack)
 }
 
-`RM' _geo_inpoly_edgelist(ID, XY)
+`RM' _geo_inpoly_dropoutside(`RM' xy, `RR' Xmm, `RR' Ymm)
+{   // drop points that are outside the global bounds of XY
+    return(select(xy, xy[,1]:>=Xmm[1] :& xy[,1]:<=Xmm[2] :&
+                      xy[,2]:>=Ymm[1] :& xy[,2]:<=Ymm[2]))
+}
+
+`RM' _geo_inpoly_edgelist(`RC' ID, `RM' XY, `Bool' vert)
 {
+    `Int'  cx, cy
     `IntC' PID
     `IntC' GT, p
     `RM'   XY0
@@ -2203,10 +2225,12 @@ void _geo_inpoly_stack_append(`Stack' stack, `PSlice' s)
     p = !rowmissing((XY,XY0))
     p = _mm_uniqrows_tag((ID, PID, XY, p)) :& p
     // return edgelist
+    if (vert) {; cx = 2; cy = 1; } // (use flipped coordinates)
+    else      {; cx = 1; cy = 2; }
     return(select((GT, ID,
-        rowminmax((XY0[,1],XY[,1])), rowminmax((XY0[,2],XY[,2])),
-        (XY[,1] - XY0[,1]) :/ (XY[,2] - XY0[,2]),
-        XY, _geo_inpoly_edgelist_xmm(ID, PID, XY)), p))
+        rowminmax((XY0[,cx],XY[,cx])), rowminmax((XY0[,cy],XY[,cy])),
+        (XY[,cx] - XY0[,cx]) :/ (XY[,cy] - XY0[,cy]),
+        XY[,cx], XY[,cy], _geo_inpoly_edgelist_xmm(ID, PID, XY, vert)), p))
         /* gtype ID xlo xup ylo yup slope x1 y1 xmin xmax
              1   2   3   4   5   6    7   8   9  10   11  */
 }
@@ -2232,19 +2256,20 @@ void _geo_inpoly_stack_append(`Stack' stack, `PSlice' s)
     return(p)
 }
 
-`RM' _geo_inpoly_edgelist_xmm(`IntC' ID, `IntC' PID, `RM' XY)
+`RM' _geo_inpoly_edgelist_xmm(`IntC' ID, `IntC' PID, `RM' XY, `Bool' vert)
 {    // minimum and maximum x-coordinate of shape item
-    `Int'  i, a, b
+    `Int'  i, a, b, cx
     `IntC' p
     `RM'   xmm
     
-    p = selectindex(_mm_uniqrows_tag((ID, PID)))
-    i = rows(p)
-    a = rows(XY) + 1
+    cx = vert ? 2 : 1
+    p  = selectindex(_mm_uniqrows_tag((ID, PID)))
+    i  = rows(p)
+    a  = rows(XY) + 1
     xmm = J(a-1, 2, .)
     for (;i;i--) {
         b = a - 1; a = p[i]
-        xmm[|a,1 \ b,2|] = J(b-a+1, 1, minmax(XY[|a,1 \ b,1|]))
+        xmm[|a,1 \ b,2|] = J(b-a+1, 1, minmax(XY[|a,cx \ b,cx|]))
     }
     return(xmm)
 }
@@ -2291,35 +2316,36 @@ void _geo_inpoly_process(`PC' R, `RM' xy, `RM' E)
 
 `PS' __geo_inpoly_process(`RR' xy, `RM' E)
 {
-    `Int'   i, a, b
+    `Int'   i, j, k, a, b
     `IntC'  p
     `RC'    x
     `BoolC' onvertex, onedge
     `RM'    r
     
-    r = J(0,2,.)
     if (!rows(E)) return(NULL)
     x = E[,`x1'] :+ (xy[2] :- E[,`y1']) :* E[,`slope'] // where ray hits edge
     p = selectindex(_mm_unique_tag(E[,`ID']))
     onvertex = (xy[1]:==E[,`x1'] :& xy[2]:==E[,`y1'])
     onedge   = (x:==xy[1] :|
                (x:>=. :& xy[1]:>=E[,`xlo'] :& xy[1]:<=E[,`xup'])) // flat edge
-    i = rows(p)
+    i = j = k = rows(p)
+    r = J(k,2,.)
     a = rows(E) + 1
     for (;i;i--) {
         b = a - 1; a = p[i]
-        if      (any(onvertex[|a \ b|])) r = (E[a,`ID'], 3) \ r
-        else if (any(onedge[|a \ b|]))   r = (E[a,`ID'], 2) \ r
+        if      (any(onvertex[|a \ b|])) r[j--,] = (E[a,`ID'], 3)
+        else if (any(onedge[|a \ b|]))   r[j--,] = (E[a,`ID'], 2)
         else if (E[a,`gt']==3) {
             if (mod(sum(
                 // number of edges hit by y-ray
                 xy[1]:<x[|a \ b|] :&
                 // ignore if at bottom (avoid double counting)
                 xy[2]:!=E[|a,`ylo' \ b,`ylo'|]
-                ),2)) r = (E[a,`ID'], 1) \ r
+                ),2)) r[j--,] = (E[a,`ID'], 1)
         }
     }
-    if (!rows(r)) return(NULL)
+    if (j==k) return(NULL)
+    if (j)    r = r[|j+1,1 \ .,.|]
     return(&r)
 }
 
