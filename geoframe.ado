@@ -1,4 +1,4 @@
-*! version 1.3.6  03aug2025  Ben Jann
+*! version 1.3.7  24jan2026  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -4050,7 +4050,7 @@ program geoframe_translate
     else if `"`subcmd'"'=="geojson" local subcmd json
     else if `"`subcmd'"'=="wkt"     local subcmd wkt
     else                            local subcmd
-    if "`subcmd'"!="" gettoken subcmd 0 : 0, parse(" ,")
+    if "`subcmd'"!="" gettoken junk 0 : 0, parse(" ,")
     // wkt
     if "`subcmd'"=="wkt" {
         __translate_`subcmd' `macval(0)'

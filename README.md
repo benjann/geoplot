@@ -169,6 +169,10 @@ Inset.
 
 Main changes:
 
+    24jan2026
+    geograme:
+    - dtype(shp) and dtype(geojson) caused error in geoframe create; this is fixed
+
     13aug2025
     mata library:
     - geo_inpoly() is now more efficient when there are duplicate points
