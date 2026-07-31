@@ -169,6 +169,11 @@ Inset.
 
 Main changes:
 
+    31jul2026
+    mata library:
+    - geo_json_import() failed if the imported features had no properties; this is
+      fixed
+
     24jan2026
     geograme:
     - dtype(shp) and dtype(geojson) caused error in geoframe create; this is fixed

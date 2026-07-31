@@ -2353,7 +2353,7 @@ end
 
 *! {smcl}
 *! {marker geo_json}{bf:geo_json_import() and geo_json2xy()}{asis}
-*! version 1.0.1  19dec2023  Ben Jann
+*! version 1.0.2  31jul2026  Ben Jann
 *!
 *! geo_json_import() imports a GeoJSON FeatureCollection from a source file
 *! (see https://en.wikipedia.org/wiki/GeoJSON and https://geojson.org/). The
@@ -2526,7 +2526,7 @@ void _geo_json_features_properties(`T' t0, `Int' i, `T' F, `T' V, `SM' S,
     L = J(2,cols(S),"")
     L[1,1] = "_GEOMETRY"
     L[2,1] = "string"
-    L[1,2] = "id"
+    /*L[1,2] = "id"*/
     keys = asarray_keys(V)
     for (j=rows(keys);j;j--) {
         key = keys[j]
