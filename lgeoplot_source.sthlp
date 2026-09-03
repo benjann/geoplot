@@ -6,6 +6,7 @@
 *!     {helpb lgeoplot_source##geo_centroid:geo_centroid()}
 *!     {helpb lgeoplot_source##geo_circle_tangents:geo_circle_tangents()}
 *!     {helpb lgeoplot_source##geo_clip:geo_clip()}
+*!     {helpb lgeoplot_source##geo_gcpath:geo_gcpath()}
 *!     {helpb lgeoplot_source##geo_gtype:geo_gtype()}
 *!     {helpb lgeoplot_source##geo_hull:geo_hull()}
 *!     {helpb lgeoplot_source##geo_inpoly:geo_inpoly()}
@@ -1714,6 +1715,120 @@ void _geo_clip_area_arrange(`RM' XY, `IntC' out)
     // rotate system
     r = atan2(c[2,2]-c[1,2], c[2,1]-c[1,1]) - pi()
     return(p[1]*sin(r) + p[2]*cos(r))
+}
+
+end
+
+*! {smcl}
+*! {marker geo_gcpath}{bf:geo_gcpath()}{asis}
+*! version 1.0.0  01sep2026  Ben Jann
+*!
+*! Function returning coordinates of the shortest path between two points on a
+*! sphere (great-circle arc); the path will be broken into two segments if it
+*! crosses the date line.
+*!
+*! Syntax:
+*!
+*!      XY = geo_gcpath(xy0, xy1, n [, dmin, d, rad])
+*!
+*!  XY    resulting matrix of the path's (X,Y) coordinates; the first row is
+*!        set to (.,.); likewise, if the path crosses the date line, the two
+*!        segments are separated by (.,.)
+*!  xy0   (X,Y) coordinate of start point in degrees
+*!  xy1   (X,Y) coordinate of end point in degrees
+*!  n     number of path segments to be created
+*!        - if n>=0: max(1,n) segments will be created
+*!        - if n<0: ceil(abs(n) * l) segments will be created, where l is the
+*!          length of the path relative to the full 180-degree arch; this
+*!          sets the length of path segments to (at most) 180/n degrees; for
+*!          example, use n=-90 to create 2-degree segments
+*!  dmin  sets a minimum path length in degrees; (.,.) will be returned
+*!        if the distance between xy0 and xy1 is zero or smaller than dmin;
+*!        default is dmin=0
+*!  d     will be set to the length of the path in degrees
+*!  rad   rad!=0 specifies that units in XY, xy0, xy1, dmin, and d are radians,
+*!        not degrees
+*!
+
+mata:
+
+real matrix geo_gcpath(real rowvector xy0, real rowvector xy1, real scalar n,
+    | real scalar dmin, real scalar d, real scalar rad)
+{
+    real scalar r
+    real matrix XY
+    
+    if (args()<4) dmin = 0
+    if (args()<6) rad = 0
+    if (rad) return(_geo_gcpath(xy0, xy1, n, dmin, d))
+    XY = _geo_gcpath(xy0 * (pi()/180), xy1 * (pi()/180), n,
+        dmin * (pi()/180), d) * (180/pi())
+    d = d * (180/pi())
+    if ((r=rows(XY)) < 3) return(XY)
+    XY[(2\r),] = xy0 \ xy1 // reset start and end for sake of precision
+    return(XY)
+}
+
+real matrix _geo_gcpath(real rowvector xy0, real rowvector xy1,
+    real scalar n0, real scalar dmin, real scalar d)
+{
+    real scalar    n, i
+    real colvector a, b, r
+    real matrix    XY
+    
+    if (xy0==xy1) { // start is equal to end
+        d = 0
+        return((.,.))
+    }
+    a = _geo_xy_to_vec(xy0)
+    b = _geo_xy_to_vec(xy1)
+    d = atan2(a'*b, sqrt((a'*a) * (b'*b) - (a'*b)^2)) // = acos(a'*b)
+    if (d<dmin) return((.,.)) // distance too small
+    if (n0<0) n = ceil(abs(n0) * d / pi()) + 1
+    else      n = n0
+    if (n<=2 | n>=.) return((.,.) \ xy0 \ xy1) // no intermediate points
+    r = rangen(0, 1, n)
+    XY = (sin((1 :- r) * d), sin(r * d)) / sin(d)
+    for (i=2;i<n;i++) XY[i,] = _geo_vec_to_xy(XY[i,1] * a + XY[i,2] * b)
+    XY[(1,n),] = xy0 \ xy1 // set first and last point
+    _geo_gcpath_split(XY)  // split path if it crosses the date line
+    return((.,.) \ XY)
+}
+
+void _geo_gcpath_split(real matrix XY)
+{
+    real colvector i
+    
+    i = abs(mm_diff(XY[,1])) :> pi()
+    if (!any(i)) return
+    i = selectindex(i)
+    if (length(i)!=1) return // should never happen
+    XY = XY[|1,1\i,.|] \ __geo_gcpath_split(XY[i,], XY[i+1,]) \ XY[|i+1,1\.,.|]
+}
+
+real matrix __geo_gcpath_split(real rowvector xy0, real rowvector xy1)
+{   // xy0 is last point before date line; xy1 is first point after date line
+    real scalar x, y
+    
+    // case 1: xy0 is on dateline
+    if (abs(xy0[1])==pi()) return((.,.) \ (-xy0[1],xy0[2]))
+    // case 2: xy1 is on dateline
+    if (abs(xy1[1])==pi()) return((-xy1[1],xy1[2]) \ (.,.))
+    // case 3: extend splits to dateline using linear interpolation
+    if (xy0[1]>=0) x =  pi()
+    else           x = -pi()
+    y = xy0[2] + (xy1[2] - xy0[2]) * ((x - xy0[1]) / (xy1[1] + 2*x - xy0[1]))
+    return((x,y) \ (.,.) \ (-x, y))
+}
+
+real colvector _geo_xy_to_vec(real rowvector xy)
+{
+    return(cos(xy[2]) * cos(xy[1]) \ cos(xy[2]) * sin(xy[1]) \ sin(xy[2]))
+}
+
+real rowvector _geo_vec_to_xy(real colvector p)
+{
+    return((atan2(p[1], p[2]), atan2(sqrt(p[1]^2 + p[2]^2), p[3])))
 }
 
 end

@@ -1,4 +1,4 @@
-*! version 1.2.2  01aug2024  Ben Jann
+*! version 1.2.3  03sep2026  Ben Jann
 
 program _geoplot_symbol
     version 16.1
@@ -210,6 +210,7 @@ program __geoplot_symbol
                 exit 498
             }
         }
+        else local coord: copy local coordinates
         local ORG `ORG' `coord'
         local TGT `TGT' _CX _CY
         // parse size()

@@ -1,4 +1,4 @@
-*! version 1.3.7  24jan2026  Ben Jann
+*! version 1.3.8  03sep2026  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -2456,7 +2456,7 @@ program geoframe_raster
         frame create `newshpframe' double(`vars')
     }
     else local newshpframe
-    // obtain borders
+    // generate raster
     frame `shpframe' {
         _get coordinates, local(XY) strict
         if `: list sizeof XY'==4 {
@@ -2569,6 +2569,122 @@ program _symbol
     }
     _di_frame "(frame " `newname' " created)"
     _di_frame "(frame " `newshpname' " created)"
+    _describe_and_make_current `newname' "`current'" nodescribe
+end
+
+program geoframe_pcpath
+    syntax namelist(id="newname" name=newnames max=2) [if] [in] [,/*
+        */ COordinates(varlist numeric min=4 max=4) id(varname numeric)/*
+        */ n(numlist int >0 max=1) nabs dmin(real 0)/*
+        */ SHORTen(numlist int >=0 max=2) nodrop RADian/*
+        */ replace CURrent ]
+    if "`n'"==""    local n 90
+    if "`nabs'"=="" local n -`n'
+    if "`shorten'"=="" local shorten 0
+    if `:list sizeof shorten'==1 local shorten `shorten' `shorten'
+    gettoken short_l shorten : shorten
+    gettoken short_r         : shorten
+    gettoken newname newnames : newnames
+    gettoken newshpname : newnames
+    if "`newshpname'"=="" local newshpname "`newname'_shp"
+    if "`replace'"=="" {
+        confirm new frame `newname'
+        confirm new frame `newshpname'
+    }
+    // obtain variable names and mark sample
+    if `"`id'"'=="" {
+        geoframe get id, local(id)
+    }
+    if "`coordinates'"=="" {
+        geoframe get coordinates, strict local(coordinates)
+        if `:list sizeof coordinates'!=4 {
+            di as err "wrong number of coordinate variables"
+            exit 498
+        }
+    }
+    marksample touse
+    // create paths
+    tempname newframe newshpframe
+    frame create `newframe' double(_ID _D)
+    frame create `newshpframe' double(_ID _X _Y)
+    frame `c(frame)' {
+        mata: _pcpath("`newframe'", "`newshpframe'", "`id'",/*
+            */ `"`coordinates'"', "`touse'", `n', `dmin',/*
+            */ `short_l', `short_r', "`radian'"!="", "`drop'"!="")
+    }
+    // cleanup
+    frame `newshpframe' {
+        _set_type shape
+        capt confirm new frame `newshpname'
+        if _rc==1 exit 1
+        if _rc frame drop `newshpname'
+        frame rename `newshpframe' `newshpname'
+    }
+    frame `newframe' {
+        _set_type attribute
+        capt confirm new frame `newname'
+        if _rc==1 exit 1
+        if _rc frame drop `newname'
+        frame rename `newframe' `newname'
+        qui geoframe_link `newshpname'
+    }
+    _di_frame "(frame " `newname' " created)"
+    _di_frame "(frame " `newshpname' " created)"
+    _describe_and_make_current `newname' "`current'" nodescribe
+end
+
+program geoframe_makepc
+    syntax name(id="newname" name=newname) [if] [in] [, noShp/*
+        */ First Last MIDdle odd even EVery(numlist int max=2)/*
+        */ replace CURrent ]
+    if "`replace'"=="" {
+        confirm new frame `newname'
+    }
+    gettoken step   every : every
+    gettoken offset every : every
+    if "`step'"==""   local step 0
+    if "`offset'"=="" local offset 0
+    // mark sample and find shapes
+    marksample touse
+    local cframe = c(frame)
+    if "`shp'"=="" {
+        _get shpframe, local(shpframe)
+        if `"`shpframe'"'=="" {
+            _get type, local(type)
+            if `"`type'"'!="shape" {
+                di as txt "(shape frame not found;"/*
+                    */ " treating current frame as shape frame)"
+            }
+        }
+    }
+    if `"`shpframe'"'=="" local shpframe `"`cframe'"'
+    else _markshapes `shpframe' `touse' `touse'
+    // generate paired coordinates
+    tempname newframe
+    frame create `newframe' double(_ID _X1 _Y1 _X2 _Y2)
+    frame `shpframe' {
+        _get coordinates, local(XY) strict
+        if `: list sizeof XY'==4 {
+            di as err "four coordinate variables found in frame"/*
+                */ " {bf:`shpframe'}" _n "paired-coordinates data not"/*
+                */ " supported by {bf:geoframe makepc}"
+            exit 499
+        }
+        _get id, local(ID)
+        mata: _makepc("`newframe'", "`ID'", `"`XY'"', "`touse'",/*
+            */ "`first'"!="", "`last'"!="", "`middle'"!="", "`odd'"!="",/*
+            */ "`even'"!="", `step', `offset')
+    }
+    // cleanup
+    frame `newframe' {
+        qui compress _ID
+        _set_type pc
+        capt confirm new frame `newname'
+        if _rc==1 exit 1
+        if _rc frame drop `newname'
+        frame rename `newframe' `newname'
+    }
+    _di_frame "(frame " `newname' " created)"
     _describe_and_make_current `newname' "`current'" nodescribe
 end
 
@@ -5211,6 +5327,142 @@ void _raster(string scalar frame, string scalar shpframe, string scalar id,
     st_addobs(rows(R))
     st_store(., tokens("_ID _CX _CY"), R[,(1,4,5)])
     if (mtype==0) st_store(., "ID", R[,6])
+}
+
+void _pcpath(string scalar frame, string scalar shpframe, string scalar id,
+    string scalar xy, string scalar touse, real scalar nseg, real scalar dmin,
+    real scalar short_l, real scalar short_r, real scalar rad,
+    real scalar nodrop)
+{
+    real scalar    i, n, d, a, b
+    real colvector ID, D, L, p
+    real matrix    XY
+    pointer (real matrix) colvector R
+    pragma unset d
+
+    // input data
+    st_view(XY=., ., xy, touse)
+    n = rows(XY)
+    if (id!="") st_view(ID=., ., id, touse)
+    else        ID = 1::n
+    // compute paths
+    R = J(n, 1, NULL)
+    D = L = J(n,1,.)
+    for (i=1;i<=n;i++) {
+        if (hasmissing(XY[i,])) {
+            R[i] = &(.,.)
+            D[i] = .
+            L[i] = 1
+            continue
+        }
+        R[i] = &geo_gcpath(XY[i,(1,2)], XY[i,(3,4)], nseg, dmin, d, rad)
+        D[i] = d
+        L[i] = rows(*R[i])
+        if (!short_l & !short_r) continue
+        a = 2    + short_l
+        b = L[i] - short_r
+        if (a>=b) { 
+            R[i] = &(.,.)
+            L[i] = 1
+            continue
+        }
+        R[i] = &((.,.) \ (*R[i])[|a,1 \ b,.|])
+        L[i] = rows(*R[i])
+    }
+    // drop empty paths
+    if (!nodrop) {
+        p = selectindex(L:!=1)
+        n = length(p)
+        ID = ID[p]; R = R[p]; D = D[p]; L = L[p]
+    }
+    if (!n) return
+    // attribute frame
+    st_framecurrent(frame)
+    st_addobs(n)
+    st_store(., (1,2), (ID, D))
+    // shape frame
+    st_framecurrent(shpframe)
+    if (n) st_addobs(sum(L))
+    b = 0
+    for (i=1; i<=n; i++) {
+        a = b + 1
+        b = b + L[i]
+        st_store((a,b), 1, J(L[i], 1, ID[i]))
+        st_store((a,b), (2,3), *R[i])
+    }
+}
+
+void _makepc(string scalar frame, string scalar id,
+    string scalar xy, string scalar touse, real scalar first,
+    real scalar last, real scalar mid, real scalar odd,
+    real scalar even, real scalar step, real scalar offset)
+{
+    real scalar    i, n, a, b, r, all
+    real colvector ID, p, L
+    real matrix    XY
+    pointer (real matrix) colvector R
+
+    // generate paired coordinates
+    st_view(XY=., ., xy, touse)
+    if (id!="") st_view(ID=., ., id, touse)
+    else        ID = J(rows(XY), 1, 1)
+    p = selectindex(_mm_uniqrows_tag((ID, geo_pid(ID,XY))))
+    n = rows(p)
+    R = J(n, 1, NULL)
+    L = J(n, 1, .)
+    a = rows(ID) + 1
+    all = (abs(step)==1) | (odd & even) |
+          !(first | last | mid | odd | even | step)
+    for (i=n;i;i--) {
+        b = a - 1; a = p[i]
+        R[i] = &__makepc(XY[|a,1 \ b,2|], all, first, last, mid, odd, even,
+            step, offset)
+        L[i] = rows(*R[i])
+    }
+    // store
+    st_framecurrent(frame)
+    st_addobs(sum(L))
+    b = 0
+    for (i=1; i<=n; i++) {
+        r = L[i]
+        if (!r) continue
+        a = b + 1
+        b = b + r
+        st_store((a,b), 1, J(r, 1, ID[i]))
+        st_store((a,b), (2,3,4,5), *R[i])
+    }
+}
+
+real matrix __makepc(real matrix XY, real scalar all, real scalar first,
+    real scalar last, real scalar mid, real scalar odd, real scalar even,
+    real scalar step, real scalar offset)
+{
+    real scalar    i, j, n
+    real colvector p
+    real matrix    R
+    
+    n = rows(XY)
+    R = J(n, 4, .)
+    j = n + 1
+    for (i=n-1;i;i--) {
+        R[--j,] = (XY[i,], XY[i+1,])
+        if (hasmissing(R[j,])) j++
+    }
+    if (j>n) return(J(0,4,.)) // empty
+    if (j>1) R = R[|j,1 \ .,.|]
+    if (all) return(R)
+    j = rows(R)
+    p = J(j, 1, 0)
+    if (first) p[1] = 1
+    if (last)  p[j] = 1
+    if (mid)   p[ceil(j/2)] = 1
+    if (odd)   p = p + mod(1::j,2)
+    if (even)  p = p + mod(0::j-1,2)
+    if (step) {
+        if (step<0) p = p + !mod(1-offset::j-offset,-step)[j::1] // reverse
+        else        p = p + !mod(1-offset::j-offset, step)
+    }
+    return(select(R,p))
 }
 
 void _spjoin(string scalar frame, string scalar id1, string scalar xy1,

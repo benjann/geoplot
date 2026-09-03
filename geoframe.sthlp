@@ -1,5 +1,5 @@
 {smcl}
-{* 03aug2025}{...}
+{* 03sep2026}{...}
 {vieweralsosee "geoplot" "help geoplot"}{...}
 {vieweralsosee "[D] frames" "help frames"}{...}
 {vieweralsosee "[SP] spshape2dta" "help spshape2dta"}{...}
@@ -78,6 +78,11 @@
 {p2col :{helpb geoframe##symbol:{ul:sym}bol}}generate symbol shapes and store in new frame
     {p_end}
 {p2col :{helpb geoframe##symboli:symboli}}{cmd:symbol} with immediate arguments
+    {p_end}
+{p2col :{helpb geoframe##pcpath:pcpath}}connect paired coordinates and store the paths in new frame
+    {p_end}
+{p2col :{helpb geoframe##makepc:makepc}}store segments of polygons or lines as
+    paired coordinates in new frame
     {p_end}
 
 {syntab :Spatial join}
@@ -1325,7 +1330,7 @@
 
 {pmore}
     If {cmd:noclip} is specified, no merging and clipping will be applied and variable
-    {cmd:ID} will not be generated, but cells will still be selected depending 
+    {cmd:ID} will not be generated, but cells will still be selected depending
     on whether they overlap with any of the shapes. That is,
     only cells that overlap at least partially with (or touch) one of the shapes will
     be kept.
@@ -1668,6 +1673,117 @@
 {phang}
     {opt cur:rent} makes the created frame the current frame.
 
+{marker pcpath}{...}
+{dlgtab:geoframe pcpath}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:pcpath} {it:newname} [{it:newshpname}]
+    {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    generates for each selected paired-coordinate item a line item connecting the
+    two points along the shortest path on the sphere (great-circle arc) and
+    stores the created paths in a new frame called
+    {it:newname} and an associated shape frame called {it:newshpname};
+    {it:newname}{cmd:_shp} is used as name for the shape frame if
+    {it:newshpname} is omitted. The current frame is expected to contain
+    paired coordinates in degrees. {it:options} are as follows.
+
+{phang}
+    {opt n(#)} sets the number of equally-spaced points used to create a full
+    arc of 180 degrees (in addition to the starting point). Shorter paths will
+    contain proportionally fewer points. The default is {cmd:n(90)}, which
+    implies a spacing of about 2 degrees between points.
+
+{phang}
+    {opt nabs} changes the interpretation of {cmd:n()}. If {cmd:nabs} is
+    specified, each path will have {cmd:n()} points (in addition to the
+    starting point), irrespective of its length.
+
+{phang}
+    {opt short:en(# [#])} removes points at the start and end of a path. If only
+    one argument is provided, the same number of points is removed at
+    both ends. If two arguments are provided, the first (second) argument
+    specifies the points to be removed at the start (end). For example, type
+    {cmd:shorten(0 1)} to keep all points at the start and remove one point
+    at the end.
+
+{phang}
+    {cmd:dmin(#)} sets the minimum length of a path in degrees. No path will be
+    created if the paired-coordinate distance is smaller than {cmd:dmin()}. The
+    default is to create a path for each non-zero distance.
+
+{phang}
+    {opt rad:ian} indicates that the coordinates and {cmd:dmin()} are in
+    radians, not in degrees.
+
+{phang}
+    {opt id(ID)} specifies a custom ID variable. The default is to use the
+    variable returned by {helpb geoframe##get:geoframe get id}.
+
+{phang}
+    {opt co:ordinates(X1 Y1 X2 Y2)} specifies custom coordinate variables. The
+    default is to use the variables returned by
+    {helpb geoframe##get:geoframe get coordinates}.
+
+{phang}
+    {opt nodrop} retains all selected units in the data. The default is to keep
+    only units for which a path has been created.
+
+{phang}
+    {opt replace} allows overwriting existing frames.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame.
+
+{marker makepc}{...}
+{dlgtab:geoframe makepc}
+
+{p 8 15 2}
+    [{cmd:frame} {it:frame}{cmd::}] {cmd:geoframe} {cmd:makepc} {it:newname}
+    {ifin} [{cmd:,} {it:options} ]
+
+{pstd}
+    extracts segments from the selected polygon or line items and stores them
+    as paired coordinates in a new frame called {it:newname}. {it:options} are
+    as follows.
+
+{phang}
+    {opt f:irst} extracts the first segment (first two points) from each item.
+    By default, unless at least one of {cmd:first}, {cmd:last}, {cmd:middle},
+    {cmd:odd}, {cmd:even}, or {cmd:every()} is specified, all segments are
+    extracted.
+
+{phang}
+    {opt l:ast} extracts the last segment (last two points) from each item.
+
+{phang}
+    {opt mid:dle} extracts the segment that is in the middle (using the segment
+    closer to the start if an items has an even number of segments).
+
+{phang}
+    {opt odd} extracts all odd segments.
+
+{phang}
+    {opt even} extracts all even segments.
+
+{phang}
+    {opt ev:ery(# [offset])} extracts every #th segment. The second argument
+    offsets the counting; the default offset is {cmd:0}. For example,
+    {cmd:every(3)} extracts segments 3, 6, 9, etc., {cmd:every(3 1)} extracts
+    segments 1, 4, 7, etc., and {cmd:every(3 -1)} extracts
+    segments 2, 5, 8, etc. If # is negative, counting starts from the end.
+
+{phang}
+    {opt nos:hp} uses information on coordinates from the current frame even if
+    the current frame is linked to a shape frame.
+
+{phang}
+    {opt replace} allows overwriting existing frames.
+
+{phang}
+    {opt cur:rent} makes the created frame the current frame.
+
 {marker collapse}{...}
 {dlgtab:geoframe collapse}
 
@@ -1705,7 +1821,7 @@
 {phang}
     {opt uniq:ue} causes the spacial join to match each point from {it:frame2} to at most
     one unit in the current frame. By default, if a point matches multiple units,
-    all matches will be considered (this means that a single point may be included in 
+    all matches will be considered (this means that a single point may be included in
     the statistics of multiple units). Specify {cmd:unique} to consider only the first
     match.
 
@@ -1768,7 +1884,7 @@
     points that are exactly on the border of a shape (i.e. on a vertex or on a
     side between two vertices); {opt vertex} only matches
     points that are equal to a vertex of a shape (subset of
-    the points matched by {cmd:edge}). The default is to match points both if 
+    the points matched by {cmd:edge}). The default is to match points both if
     they are inside or on the border of a shape.
 
 {phang}
@@ -1825,7 +1941,7 @@
     {cmd:bwidth(*}{it:#}{cmd:)} to multiply this default bandwidth by {it:#}. For
     example, type {cmd:bwidth(*0.5)} to use half the default bandwidth. Alternatively, type
     {cmd:bwidth(}{it:#}{cmd:)} to set the bandwidth to a specific value. The larger
-    the bandwidth, the stronger the smoothing. 
+    the bandwidth, the stronger the smoothing.
 
 {phang}
     {opt k:ernel(kernel)} selects the kernel function. {it:kernel} can be one of
@@ -1871,13 +1987,13 @@
 {phang}
     {opth g:enerate(newvar)} specifies a custom name for the generated
     variable. The default is to use the same name as for the input variable. This
-    implies that option {cmd:replace} is required if {cmd:generate()} is omitted, 
+    implies that option {cmd:replace} is required if {cmd:generate()} is omitted,
     unless {cmd:at()} specifies an alternative destination frame does not yet
     contain a variable with that name.
 
 {phang}
     {cmd:replace} allows overwriting an existing variable. {cmd:replace} is
-    required unless {cmd:generate()} is specified or {cmd:at()} is used to 
+    required unless {cmd:generate()} is specified or {cmd:at()} is used to
     select an alternative destination frame.
 
 {phang}

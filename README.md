@@ -169,6 +169,16 @@ Inset.
 
 Main changes:
 
+    03sep2026
+    geoplot:
+    - option -coordinates()- in layer type -symbol- caused error; this is fixed
+    geograme:
+    - -geoframe pcpath- added
+    - -geoframe makepc- added
+    - option -coordinates()- in -geoframe symbol- caused error; this is fixed
+    mata library:
+    - geo_gcpath() added
+
     31jul2026
     mata library:
     - geo_json_import() failed if the imported features had no properties; this is
