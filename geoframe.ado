@@ -1,4 +1,4 @@
-*! version 1.3.8  03sep2026  Ben Jann
+*! version 1.3.9  08sep2026  Ben Jann
 
 program geoframe, rclass
     version 16.1
@@ -1932,7 +1932,7 @@ program _grid
     syntax namelist(id="newname" name=newnames max=2) [if] [in] [,/*
         */ x(str) y(str) `opts' tight PADding(str)/*
         */ RADian n(numlist int max=1 >0)/*
-        */ coordinates(namelist) /* undocumented
+        */ coordinates(passthru) /* undocumented
         */ noShp replace CURrent ]
     if "`n'"=="" local n 100
     if `"`padding'"'!="" local tight tight
@@ -1966,81 +1966,27 @@ program _grid
         tempname `x'LIST
         mata: st_matrix("``x'LIST'", strtoreal(tokens(st_local("`x'list")))')
     }
-    // get data range if needed
+    // get range of coordinates
     if "`XLIST'"=="" | "`YLIST'"=="" | "`extend'"=="" {
-        marksample touse
-        // find shapes
-        local cframe = c(frame)
-        if "`shp'"=="" {
-            _get shpframe, local(shpframe)
-            if `"`shpframe'"'=="" {
-                _get type, local(type)
-                if !inlist(`"`type'"',"shape","pc") {
-                    di as txt "(shape frame not found;"/*
-                        */ " treating current frame as shape frame)"
-                }
-            }
-        }
-        if `"`shpframe'"'=="" {
-            if `"`coordinates'"'!="" local XY `coordinates'
-            else _get coordinates, local(XY) strict
-            markout `touse' `XY'
-            local shpframe `"`cframe'"'
-        }
-        else {
-            _markshapes `shpframe' `touse' `touse'
-            frame `shpframe' {
-                if `"`coordinates'"'!="" local XY `coordinates'
-                else _get coordinates, local(XY) strict
-                markout `touse' `XY'
-            }
-        }
-        // obtain data range
-        frame `shpframe' {
-            gettoken X XY : XY
-            gettoken Y XY : XY
-            local PAD: copy local padding
-            foreach x in X Y {
-                tempname `x'min `x'max
-                su ``x'' if `touse', meanonly
-                gettoken pad PAD : PAD
-                scalar ``x'min' = r(min) - (r(max)-r(min))*(`pad'/100)
-                gettoken pad PAD : PAD
-                scalar ``x'max' = r(max) + (r(max)-r(min))*(`pad'/100)
-            }
-            if `"`XY'"'!="" { // pc-data
-                gettoken X XY : XY
-                gettoken Y XY : XY
-                local PAD: copy local padding
-                foreach x in X Y {
-                    su ``x'' if `touse', meanonly
-                    gettoken pad PAD : PAD
-                    scalar ``x'min' = min(``x'min',/*
-                        */ r(min) - (r(max)-r(min))*(`pad'/100))
-                    gettoken pad PAD : PAD
-                    scalar ``x'max' = max(``x'max',/*
-                        */ r(max) + (r(max)-r(min))*(`pad'/100))
-                }
-            }
-            if `tissot' { // restrict Y
-                if "`radian'"!="" {
-                    local tl (_pi/2)
-                    local msg radians
+        _grid_getdims `tissot' `if' `in', padding(`padding') /*
+            */ `radian' `coordinates' `shp' // => Xmin Xmax Ymin Ymax
+        foreach x in X Y {
+            if "`x'"=="X" local y Y
+            else          local y X
+            if "``x'min'``x'max'"=="" {
+                if "``x'LIST'"!="" {
+                    local `x'min = ``x'LIST'[1,1]
+                    local `x'max = ``x'LIST'[``x'_n',1]
                 }
                 else {
-                    local tl 90
-                    local msg degrees
+                    local `x'max = cond("`radian'"!="", _pi, 180)
+                    if "`x'"=="Y" local `x'max = ``x'max' / 2
+                    local `x'min = -``x'max'
                 }
-                if `Ymax'<-`tl' | `Ymin'>`tl' {
-                    di as error "coordinates do not seem to be in `msg'"/*
-                        */"; cannot compute Tissot's indicatrices"
-                    exit 499
-                }
-                scalar `Ymin' = max(`Ymin', -`tl')
-                scalar `Ymax' = min(`Ymax',  `tl')
             }
         }
     }
+    
     // determine grid points if not provided
     local ndef = 7 - 2*`tissot' // default
     if "`X_n'"=="" & "`Y_n'"=="" local Y_n `ndef'
@@ -2070,8 +2016,7 @@ program _grid
         if ``x'_n'<1 continue
         tempname `x'LIST
         mata: _grid_pos("``x'LIST'", ``x'_n', `tissot',/*
-            */ "`tight'"!="", "`radian'"!="", st_numscalar("``x'min'"),/*
-            */ st_numscalar("``x'max'"))
+            */ "`tight'"!="", "`radian'"!="", ``x'min', ``x'max')
         // display info
         di as txt "(``x'_n' position" _c
         if ``x'_n'>1 di "s at " ``x'LIST'[1,1]/*
@@ -2105,13 +2050,12 @@ program _grid
                 tempname `x'LIST
             }
             else if "`extend'"=="" {
-                scalar ``x'min' = min(``x'min',``x'LIST'[1,1])
-                scalar ``x'max' = max(``x'max',``x'LIST'[``x'_n',1])
+                local `x'min = min(``x'min',``x'LIST'[1,1])
+                local `x'max = max(``x'max',``x'LIST'[``x'_n',1])
             }
             else {
-                tempname `x'min `x'max
-                scalar ``x'min' = ``x'LIST'[1,1]
-                scalar ``x'max' = ``x'LIST'[``x'_n',1]
+                local `x'min = ``x'LIST'[1,1]
+                local `x'max = ``x'LIST'[``x'_n',1]
             }
             if "`mesh'"!="" & ``x'_n'>2 {
                 matrix ``x'LIST' = ``x'LIST'[2..``x'_n'-1,1]
@@ -2191,6 +2135,90 @@ program _grid_parse
     }
     c_local `nm'_n `n'
     c_local `nm'list `x'
+end
+
+program _grid_getdims
+    gettoken tissot 0 : 0
+    syntax [if] [in] [, padding(str) radian coordinates(namelist) noshp ]
+    marksample touse
+    
+    // find shapes
+    local cframe = c(frame)
+    if "`shp'"=="" {
+        _get shpframe, local(shpframe)
+        if `"`shpframe'"'=="" {
+            _get type, local(type)
+            if !inlist(`"`type'"',"shape","pc") {
+                di as txt "(shape frame not found;"/*
+                    */ " treating current frame as shape frame)"
+            }
+        }
+    }
+    if `"`shpframe'"'=="" {
+        if `"`coordinates'"'!="" local XY `coordinates'
+        else _get coordinates, local(XY)
+        if `"`XY'"'=="" exit // no info in coordinates
+        markout `touse' `XY'
+        local shpframe `"`cframe'"'
+    }
+    else {
+        _markshapes `shpframe' `touse' `touse'
+        frame `shpframe' {
+            if `"`coordinates'"'!="" local XY `coordinates'
+            else _get coordinates, local(XY)
+            if `"`XY'"'=="" exit // no info in coordinates
+            markout `touse' `XY'
+        }
+    }
+    
+    // obtain data range
+    frame `shpframe' {
+        gettoken X XY : XY
+        gettoken Y XY : XY
+        local PAD: copy local padding
+        foreach x in X Y {
+            su ``x'' if `touse', meanonly
+            gettoken pad PAD : PAD
+            local `x'min = r(min) - (r(max)-r(min))*(`pad'/100)
+            gettoken pad PAD : PAD
+            local `x'max = r(max) + (r(max)-r(min))*(`pad'/100)
+        }
+        if `"`XY'"'!="" { // pc-data
+            gettoken X XY : XY
+            gettoken Y XY : XY
+            local PAD: copy local padding
+            foreach x in X Y {
+                su ``x'' if `touse', meanonly
+                gettoken pad PAD : PAD
+                local `x'min = min(``x'min',/*
+                    */ r(min) - (r(max)-r(min))*(`pad'/100))
+                gettoken pad PAD : PAD
+                local `x'max = max(``x'max',/*
+                    */ r(max) + (r(max)-r(min))*(`pad'/100))
+            }
+        }
+        if `tissot' { // restrict Y
+            if "`radian'"!="" {
+                local tl (_pi/2)
+                local msg radians
+            }
+            else {
+                local tl 90
+                local msg degrees
+            }
+            if `Ymax'<-`tl' | `Ymin'>`tl' {
+                di as error "coordinates do not seem to be in `msg'"/*
+                    */"; cannot compute Tissot's indicatrices"
+                exit 499
+            }
+            local Ymin = max(`Ymin', -`tl')
+            local Ymax = min(`Ymax',  `tl')
+        }
+    }
+    foreach x in X Y {
+        c_local `x'min `: di %10.0g ``x'min'' // (apply some rounding)
+        c_local `x'max `: di %10.0g ``x'max''
+    }
 end
 
 program geoframe_bbox
@@ -4442,6 +4470,7 @@ program __translate_json
         mata: _translate_json_import(st_local("using"), "`allstring'"!="",/*
             */ "`dots'"=="")
         drop _ID _CX _CY `GTYPE' // drop reserved names
+        if c(k)==0 qui gen str1 _GEOMETRY = "" // empty source
         qui compress
     }
     // translate geometries
@@ -5076,8 +5105,8 @@ void _grid_pos(string scalar mat, real scalar n, real scalar tissot,
     if (!tight) {
         if (max>min) { // apply some rounding
             if (radian) { // convert to degrees
-                min = min / pi() * 180
-                max = max / pi() * 180
+                min = round(min / pi() * 180, 1e-10)
+                max = round(max / pi() * 180, 1e-10)
             }
             rnd = (max-min) / max((n-1+2*tissot, 10))
             rnd = 10^(floor(log10(rnd)))
@@ -5917,7 +5946,12 @@ void _translate_target_frame(string scalar fn, string scalar source,
         }
     }
     else {
-        fn = pathrmsuffix(pathbasename(source))
+        fn = pathbasename(source)
+        if (pathsuffix(fn)==".json") {
+            fn = pathrmsuffix(fn)
+            if (pathsuffix(fn)==".geo") fn = pathrmsuffix(fn) // .geo.json
+        }
+        else fn = pathrmsuffix(fn)
         if (fn!="") fn = ustrtoname(fn) // ustrtoname("") may crash Stata
     }
     if (fn=="") {
@@ -5948,7 +5982,12 @@ void _translate_target_file(string scalar fn, string scalar source,
     }
     // if path only
     else {
-        bn = pathrmsuffix(pathbasename(source))
+        bn = pathbasename(source)
+        if (pathsuffix(bn)==".json") {
+            bn = pathrmsuffix(bn)
+            if (pathsuffix(bn)==".geo") bn = pathrmsuffix(bn) // .geo.json
+        }
+        else bn = pathrmsuffix(bn)
         fn = pathjoin(fn, bn)
     }
     // check directory and name

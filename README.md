@@ -169,6 +169,17 @@ Inset.
 
 Main changes:
 
+    08sep2026
+    geoframe:
+    - -geoframe grid- and -geoframe tissot- now use default limits for X and Y if
+      no information on coordinates is available; if -radian- is specified, these
+      defaults are +/-pi for X and +/-pi/2 for Y, else these default are +/-180 for
+      X and +/-90 for Y
+    - -geoframe translate json- now treats ".geo.json" as file suffix (rather than
+       ".json") if the name of the source file ends in ".geo.json"
+    - -geoframe translate json- returned error if the source file contained no
+      items; this is fixed
+    
     03sep2026
     geoplot:
     - option -coordinates()- in layer type -symbol- caused error; this is fixed
